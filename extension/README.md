@@ -54,10 +54,8 @@ Pick a model that supports **images** and **tool calling**. Good options:
 
 [OmniRoute](https://github.com/diegosouzapw/OmniRoute) is an open-source AI gateway you run on your own machine. It exposes one OpenAI-compatible endpoint and routes each request to 150+ free providers automatically, falling back when a quota runs out.
 
-#### Step 1: Install OmniRoute from the Official GitHub
-OmniRoute is maintained at [github.com/diegosouzapw/OmniRoute](https://github.com/diegosouzapw/OmniRoute). You can install it via:
-* **npm:** `npm install -g omniroute && omniroute`
-* **Official source:** `git clone https://github.com/diegosouzapw/OmniRoute.git && cd OmniRoute && npm install && npm start`
+#### Step 1: Install OmniRoute
+Follow the install and start instructions in the official repository, [github.com/diegosouzapw/OmniRoute](https://github.com/diegosouzapw/OmniRoute). Enki links to the same page from Settings, so the steps stay correct as upstream changes them.
 
 #### Step 2: Configure OmniRoute for Enki
 1. **Docker with Playwright (Recommended for Docker users):** The official Docker image is minimal and lacks Chromium/Playwright binaries, causing `Playwright is not available` 502 errors on browser-based model routes. Use the included setup:
@@ -65,7 +63,7 @@ OmniRoute is maintained at [github.com/diegosouzapw/OmniRoute](https://github.co
    docker compose up -d --build
    ```
    *(See [`docker/README.md`](docker/README.md) for full guide).*
-2. **Connect in Enki:** In Settings ⚙️, choose **OmniRoute**, verify `http://localhost:20128/v1`, set model to `auto` (or `openrouter/auto`, `tr/auto`), press the refresh button, and save.
+2. **Connect in Enki:** In Settings ⚙️, choose **OmniRoute**, verify `http://localhost:20128/v1`, set model to `auto` (alternatives: `auto/cheap`, `auto/fast`, `auto/best-free`), press the refresh button, and save.
 3. The free pool has no reliable vision models, so the OmniRoute preset turns off image support automatically and works from the page DOM. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
 
 ### Why no "log in with my Claude / ChatGPT subscription"?

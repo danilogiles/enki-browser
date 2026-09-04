@@ -19,8 +19,12 @@ export type Preset = {
   keyUrl?: string;
   keyOptional?: boolean;
   hint?: string;
-  /** Shell command that installs and starts a local server for this preset. */
-  setup?: string;
+  /**
+   * Official install/run instructions for a preset that needs a local server.
+   * A link rather than a copyable command: upstream install steps change, and a stale
+   * command baked into the panel is worse than none.
+   */
+  setupUrl?: string;
   /** Show the base URL field (local or self-hosted servers). */
   editableBaseUrl?: boolean;
   /** Free-tier or local option; highlighted in the picker. */
@@ -40,9 +44,9 @@ export const PRESETS: Preset[] = [
     free: true,
     editableBaseUrl: true,
     noVision: true,
-    setup: "npm install -g omniroute && omniroute",
+    setupUrl: "https://github.com/diegosouzapw/OmniRoute",
     hint:
-      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Model \"auto\" picks the best free model; \"auto/cheap\", \"auto/fast\" and \"auto/best-free\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). The free pool has no reliable vision models, so image support is turned off for this preset; Enki works from the page DOM instead. Re-enable it below if you added your own vision-capable keys to OmniRoute.",
+      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Install and start it first, then come back here. Model \"auto\" picks the best free model; \"auto/cheap\", \"auto/fast\" and \"auto/best-free\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). The free pool has no reliable vision models, so image support is turned off for this preset; Enki works from the page DOM instead. Re-enable it below if you added your own vision-capable keys to OmniRoute.",
   },
   {
     id: "ollama",
@@ -53,9 +57,9 @@ export const PRESETS: Preset[] = [
     keyOptional: true,
     free: true,
     editableBaseUrl: true,
-    setup: "ollama pull qwen3-vl",
+    setupUrl: "https://github.com/ollama/ollama",
     hint:
-      "Runs on your machine, free. Pick a vision-capable model with tool support. Start Ollama with OLLAMA_ORIGINS=chrome-extension://* so the extension is allowed to call it.",
+      "Runs on your machine, free. Pick a vision-capable model with tool support. Ollama must be started with OLLAMA_ORIGINS=chrome-extension://* so it accepts calls from the extension.",
   },
   {
     id: "anthropic",

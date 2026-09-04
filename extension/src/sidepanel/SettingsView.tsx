@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Bot,
   Check,
-  Copy,
   Eye,
   EyeOff,
   ExternalLink,
@@ -51,10 +50,12 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
       setStatus({ kind: "ok", text: `Connected. ${list.length} models available.` });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const offline = /Failed to fetch|NetworkError|ECONNREFUSED/i.test(msg) && preset.setup;
+      const offline = /Failed to fetch|NetworkError|ECONNREFUSED/i.test(msg) && preset.setupUrl;
       setStatus({
         kind: "error",
-        text: offline ? `Could not reach ${draft.baseUrl}. Is it running? Start it with: ${preset.setup}` : msg,
+        text: offline
+          ? `Could not reach ${draft.baseUrl}. Make sure ${preset.label.replace(/\s*\(.*\)\s*$/, "")} is installed and running — see the install instructions above.`
+          : msg,
       });
     } finally {
       setLoadingModels(false);
@@ -127,21 +128,15 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               ))}
             </select>
             {preset.hint && <p className="text-xs text-zinc-500">{preset.hint}</p>}
-            {preset.setup && (
-              <div className="rounded-md border border-ink-700 bg-ink-900/70 px-2.5 py-2 text-xs">
-                <div className="mb-1 text-zinc-500">Install and start it from a terminal:</div>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 select-all break-all font-mono text-enki-400">{preset.setup}</code>
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard.writeText(preset.setup!)}
-                    className="shrink-0 rounded border border-ink-700 px-1.5 py-0.5 text-zinc-400 hover:text-zinc-100"
-                    title="Copy"
-                  >
-                    <Copy size={12} />
-                  </button>
-                </div>
-              </div>
+            {preset.setupUrl && (
+              <a
+                href={preset.setupUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-enki-400 hover:underline"
+              >
+                Install instructions <ExternalLink size={11} />
+              </a>
             )}
 
             <label className="mt-3 block text-xs text-zinc-400">
