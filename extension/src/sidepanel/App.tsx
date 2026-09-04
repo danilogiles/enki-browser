@@ -221,21 +221,28 @@ export function App() {
         { id: uid(), role: "assistant", segments: [], streaming: true },
       ]);
 
-      await runTurn({
-        provider: createProvider(settings),
-        model: settings.model,
-        system: buildSystemPrompt(mode, settings.customInstructions),
-        history: historyRef.current,
-        tools: toolsForMode(mode, settings.vision),
-        executor,
-        maxSteps: settings.maxSteps,
-        autoApprove: settings.autoApprove,
-        requestApproval,
-        onEvent: handleEvent,
-        signal: controller.signal,
-      });
-      setRunning(false);
-      abortRef.current = null;
+      if (mode === "act") {
+        await executor.setActiveOverlay(true, "Enki is controlling this tab…");
+      }
+      try {
+        await runTurn({
+          provider: createProvider(settings),
+          model: settings.model,
+          system: buildSystemPrompt(mode, settings.customInstructions),
+          history: historyRef.current,
+          tools: toolsForMode(mode, settings.vision),
+          executor,
+          maxSteps: settings.maxSteps,
+          autoApprove: settings.autoApprove,
+          requestApproval,
+          onEvent: handleEvent,
+          signal: controller.signal,
+        });
+      } finally {
+        await executor.setActiveOverlay(false);
+        setRunning(false);
+        abortRef.current = null;
+      }
     },
     [settings, running, mode, requestApproval, handleEvent],
   );

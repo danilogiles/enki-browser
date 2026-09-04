@@ -138,8 +138,21 @@ export class BrowserExecutor {
     return chrome.debugger.sendCommand({ tabId }, method, params) as unknown as Promise<T>;
   }
 
-  /** Detach the debugger from every tab. Call when a turn ends so the info bar goes away. */
+  /** Shows or hides the glowing Comet-style border and badge over the controlled page. */
+  async setActiveOverlay(active: boolean, label?: string): Promise<void> {
+    try {
+      const tab = await this.currentTab();
+      if (tab?.id && !isRestrictedUrl(tab.url)) {
+        await this.send(tab.id, { type: "enki:set_active", active, label }).catch(() => undefined);
+      }
+    } catch {
+      /* ignore if no tab is active */
+    }
+  }
+
+  /** Detach the debugger from every tab and remove the active visual overlay. */
   async release(): Promise<void> {
+    await this.setActiveOverlay(false).catch(() => undefined);
     for (const tabId of [...this.attached]) {
       await chrome.debugger.detach({ tabId }).catch(() => undefined);
       this.attached.delete(tabId);

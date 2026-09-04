@@ -233,7 +233,7 @@ function snapshot(filter: "interactive" | "all", maxChars: number): string {
       if (node.nodeType !== Node.ELEMENT_NODE) continue;
       const el = node as Element;
       if (SKIP_TAGS.has(el.tagName)) continue;
-      if (el.id === "__enki_overlay") continue;
+      if (el.id === "__enki_overlay" || el.id === "__enki_comet_container") continue;
       if (!isVisible(el)) continue;
       if (seen.has(el)) continue;
       seen.add(el);
@@ -482,6 +482,76 @@ function flash(x: number, y: number): void {
   setTimeout(() => ring.remove(), 700);
 }
 
+let activeCometOverlay: HTMLElement | null = null;
+
+function setActiveOverlay(active: boolean, label?: string): boolean {
+  if (!document.getElementById("__enki_style")) {
+    const style = document.createElement("style");
+    style.id = "__enki_style";
+    style.textContent = `
+      @keyframes __enki_pulse { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+      @keyframes __enki_glow_pulse { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.45; } }
+      @keyframes __enki_dot_pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: 0.6; } }
+    `;
+    document.head.appendChild(style);
+  }
+
+  if (active) {
+    if (!activeCometOverlay) {
+      const container = document.createElement("div");
+      container.id = "__enki_comet_container";
+      container.style.cssText =
+        "position:fixed;inset:0;pointer-events:none;z-index:2147483646;transition:opacity 0.3s ease;opacity:0;";
+
+      // Glowing viewport border (Perplexity Comet style)
+      const frame = document.createElement("div");
+      frame.id = "__enki_comet_frame";
+      frame.style.cssText =
+        "position:absolute;inset:0;box-shadow:inset 0 0 0 3px #14b8a6, inset 0 0 28px rgba(20,184,166,0.35);animation:__enki_glow_pulse 2.2s infinite ease-in-out;";
+
+      // Top floating pill badge
+      const badge = document.createElement("div");
+      badge.id = "__enki_comet_badge";
+      badge.style.cssText =
+        "position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;" +
+        "background:rgba(13,17,23,0.92);backdrop-filter:blur(12px);color:#f0fdfa;border:1px solid rgba(45,212,191,0.6);" +
+        "border-radius:9999px;padding:6px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;" +
+        "font-size:12px;font-weight:600;letter-spacing:0.02em;box-shadow:0 8px 30px rgba(0,0,0,0.4);";
+
+      const dot = document.createElement("span");
+      dot.style.cssText =
+        "width:8px;height:8px;border-radius:50%;background:#2dd4bf;box-shadow:0 0 10px #2dd4bf;animation:__enki_dot_pulse 1.2s infinite ease-in-out;";
+
+      const textNode = document.createElement("span");
+      textNode.id = "__enki_comet_text";
+      textNode.textContent = label || "Enki is controlling this tab…";
+
+      badge.appendChild(dot);
+      badge.appendChild(textNode);
+      container.appendChild(frame);
+      container.appendChild(badge);
+
+      (document.body ?? document.documentElement).appendChild(container);
+      activeCometOverlay = container;
+      requestAnimationFrame(() => {
+        if (activeCometOverlay) activeCometOverlay.style.opacity = "1";
+      });
+    } else {
+      const textNode = document.getElementById("__enki_comet_text");
+      if (textNode && label) textNode.textContent = label;
+      activeCometOverlay.style.opacity = "1";
+    }
+  } else {
+    if (activeCometOverlay) {
+      activeCometOverlay.style.opacity = "0";
+      const toRemove = activeCometOverlay;
+      activeCometOverlay = null;
+      setTimeout(() => toRemove.remove(), 320);
+    }
+  }
+  return true;
+}
+
 function handle(req: ContentRequest): unknown {
   switch (req.type) {
     case "enki:ping":
@@ -512,6 +582,8 @@ function handle(req: ContentRequest): unknown {
     case "enki:flash":
       flash(req.x, req.y);
       return true;
+    case "enki:set_active":
+      return setActiveOverlay(req.active, req.label);
   }
 }
 

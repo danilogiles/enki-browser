@@ -52,27 +52,21 @@ Pick a model that supports **images** and **tool calling**. Good options:
 
 ### Free models with OmniRoute
 
-[OmniRoute](https://github.com/diegosouzapw/OmniRoute) is an MIT-licensed AI gateway you run on your own machine. It exposes one OpenAI-compatible endpoint and routes each request to the best available free provider, falling back automatically when a quota runs out. No account or key is needed for the free pool.
+[OmniRoute](https://github.com/diegosouzapw/OmniRoute) is an open-source AI gateway you run on your own machine. It exposes one OpenAI-compatible endpoint and routes each request to 150+ free providers automatically, falling back when a quota runs out.
 
-#### Option A: Run with Docker Compose (Recommended)
+#### Step 1: Install OmniRoute from the Official GitHub
+OmniRoute is maintained at [github.com/diegosouzapw/OmniRoute](https://github.com/diegosouzapw/OmniRoute). You can install it via:
+* **npm:** `npm install -g omniroute && omniroute`
+* **Official source:** `git clone https://github.com/diegosouzapw/OmniRoute.git && cd OmniRoute && npm install && npm start`
 
-The repository includes a pre-configured Docker setup with Playwright and Chromium dependencies pre-installed (preventing `Playwright is not available` upstream errors):
-
-```bash
-docker compose up -d --build
-```
-
-See [`docker/README.md`](docker/README.md) for full Docker setup instructions and options.
-
-#### Option B: Run with npm CLI
-
-```bash
-npm install -g omniroute && omniroute
-```
-
-Then in Enki's Settings pick **OmniRoute**, keep the model as `auto` (or `openrouter/auto`, `tr/auto`), press the refresh button to check the connection, and save. The dashboard at `http://localhost:20128` lets you add your own keys to the same endpoint later.
-
-The free pool currently has no reliable vision models, so picking the OmniRoute preset turns off "Model supports images" automatically. Enki then works from the page DOM (accessibility snapshot, find, page text), which covers most tasks. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
+#### Step 2: Configure OmniRoute for Enki
+1. **Docker with Playwright (Recommended for Docker users):** The official Docker image is minimal and lacks Chromium/Playwright binaries, causing `Playwright is not available` 502 errors on browser-based model routes. Use the included setup:
+   ```bash
+   docker compose up -d --build
+   ```
+   *(See [`docker/README.md`](docker/README.md) for full guide).*
+2. **Connect in Enki:** In Settings ⚙️, choose **OmniRoute**, verify `http://localhost:20128/v1`, set model to `auto` (or `openrouter/auto`, `tr/auto`), press the refresh button, and save.
+3. The free pool has no reliable vision models, so the OmniRoute preset turns off image support automatically and works from the page DOM. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
 
 ### Why no "log in with my Claude / ChatGPT subscription"?
 

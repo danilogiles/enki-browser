@@ -1,57 +1,71 @@
-# Running OmniRoute with Docker (Enki Companion)
+# OmniRoute Setup Guide for Enki
 
-This guide explains how to run **OmniRoute** in Docker with full **Playwright & Chromium** support to power the Enki Browser Assistant with free or self-hosted AI models.
+This guide explains how to install **OmniRoute** from its official repository and configure it for **Enki Browser Assistant**.
 
 ---
 
-## 1. Quick Start
+## Step 1: Install OmniRoute from the Official Repository
 
-Run the following command from the repository root:
+OmniRoute is an open-source AI gateway that provides an OpenAI-compatible endpoint routing to 150+ free models automatically.
+
+* **Official GitHub Repository:** [https://github.com/diegosouzapw/OmniRoute](https://github.com/diegosouzapw/OmniRoute)
+* **Author:** Diego Souza ([@diegosouzapw](https://github.com/diegosouzapw))
+
+### Official Installation Options:
+
+#### Option A: Via npm CLI (Easiest)
+```bash
+npm install -g omniroute
+omniroute
+```
+
+#### Option B: Clone Official Source
+```bash
+git clone https://github.com/diegosouzapw/OmniRoute.git
+cd OmniRoute
+npm install
+npm start
+```
+
+Once running, OmniRoute will be accessible at `http://localhost:20128`.
+
+---
+
+## Step 2: Configure OmniRoute for Enki
+
+To get optimal stability and avoid common upstream issues when using OmniRoute with Enki, apply the following configurations:
+
+### 1. Docker Deployment with Playwright (Recommended for Docker Users)
+The official Docker image (`diegosouzapw/omniroute:latest`) is minimal and lacks Playwright and Chromium binaries. When OmniRoute routes requests to providers that require headless browser sessions (such as Cloudflare Playground), it can fail with:
+```text
+[502]: Cloudflare Playground browser session failed: Playwright is not available.
+```
+
+To resolve this permanently, use the pre-configured `docker-compose.yml` and `docker/Dockerfile.omniroute` included in this repository:
 
 ```bash
 docker compose up -d --build
 ```
 
-This will:
-1. Build the custom OmniRoute image containing Playwright, Chromium, and all Linux system dependencies.
-2. Launch the gateway container mapped to `http://localhost:20128`.
-3. Persist keys, models, and cache in the `omniroute-data` Docker volume.
+This Dockerfile automatically builds on top of the official image and pre-installs:
+- `playwright` npm package
+- Headless Chromium and FFmpeg in `/ms-playwright`
+- All necessary Linux OS dependencies (`install-deps`)
+- Persistent volume storage (`omniroute-data`)
 
-To view logs:
-```bash
-docker compose logs -f
-```
-
-To stop the container:
-```bash
-docker compose down
-```
-
----
-
-## 2. Connecting Enki to OmniRoute
-
-1. Open **Enki** in your Chromium browser (press `Ctrl+Shift+E` or `Cmd+Shift+E`).
+### 2. Configure Enki Settings
+1. Open the **Enki** side panel in your Chromium browser (`Ctrl+Shift+E` or `Cmd+Shift+E`).
 2. Click the **Settings ⚙️** icon in the top right.
-3. Under **Provider**, select **OmniRoute (free models, local gateway)**.
-4. Keep the **Base URL** as `http://localhost:20128/v1`.
-5. Under **Model**, keep `auto` (or pick `openrouter/auto`, `tr/auto`).
-6. Click the **Refresh 🔄** button to verify the connection.
+3. Select **OmniRoute (free models, local gateway)** in the Provider list.
+4. Set **Base URL** to `http://localhost:20128/v1`.
+5. Set **Model** to:
+   - `auto` (default auto-routing)
+   - `openrouter/auto` or `tr/auto` (direct API routes without browser dependencies)
+6. Click the **Refresh 🔄** button to test the connection.
 7. Click **Save**.
 
----
-
-## 3. Why This Custom Image Is Needed
-
-The official default `diegosouzapw/omniroute` Docker image is minimal and lacks Playwright/Chromium binaries. When OmniRoute routes requests to providers that require browser sessions (like Cloudflare Playground or scraping-based endpoints), it fails with:
-
-```text
-[502]: Cloudflare Playground browser session failed: Playwright is not available.
-```
-
-The included `docker/Dockerfile.omniroute` solves this permanently by pre-installing:
-- `playwright` npm package
-- Headless Chromium and FFmpeg binaries in `/ms-playwright`
-- All required Linux graphics/audio libraries (`install-deps`)
-
-Even if you restart your machine or recreate the container, your setup will remain stable.
+### 3. Dashboard Customization (Optional)
+Visit `http://localhost:20128` in your browser to:
+- View real-time request logs and token metrics.
+- Add personal paid keys (OpenAI, Anthropic, Gemini, Groq) to route alongside free models.
+- Disable specific providers if desired.

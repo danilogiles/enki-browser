@@ -14,7 +14,8 @@ export type ContentRequest =
   | { type: "enki:dom_click"; ref: string }
   | { type: "enki:set_value"; ref: string; text: string }
   | { type: "enki:scroll"; direction: ScrollDirection; amount: number; ref?: string }
-  | { type: "enki:flash"; x: number; y: number };
+  | { type: "enki:flash"; x: number; y: number }
+  | { type: "enki:set_active"; active: boolean; label?: string };
 
 export type PageInfo = {
   url: string;
