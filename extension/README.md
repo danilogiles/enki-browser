@@ -81,6 +81,16 @@ Turn on **Developer mode** in Settings → Behavior. A 🐞 **Logs** button appe
 
 Copy the whole log with one button when reporting a bug. API keys are never recorded.
 
+### If Enki says it has no tools
+
+Free gateway pools rotate between providers, and some of them are backed by other agent
+harnesses that ignore the `tools` parameter entirely. When that happens the model either says it
+has no way to browse, or prints a call belonging to its own harness (`mcp__puppeteer_core__…`)
+as plain text. Enki recovers what it safely can: a call naming one of its own tools is executed
+even when written as text, a call naming another system's tool is never executed, and either way
+you get a note explaining that the provider ignored the tool definitions. Sending the message
+again usually lands on a different provider; pinning a specific model avoids it entirely.
+
 ### If a model stalls or replies with nothing
 
 Small free and local models sometimes stop mid-task or write their whole answer into the reasoning channel. Enki handles the common cases: reasoning-only replies are shown as the answer, inline `<think>` tags are folded into the reasoning block, and a provider that goes silent fails with a message and a **Try again** button instead of spinning forever.

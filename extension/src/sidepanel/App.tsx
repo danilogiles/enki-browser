@@ -122,6 +122,9 @@ export function App() {
         case "thinking":
           patchLast((m) => ({ ...m, thinking: (m.thinking ?? "") + e.delta }));
           break;
+        case "notice":
+          patchLast((m) => ({ ...m, note: m.note ? `${m.note} ${e.message}` : e.message }));
+          break;
         case "retract_text":
           patchSegments((segs) => {
             const i = segs.map((s) => s.kind).lastIndexOf("text");
@@ -171,8 +174,11 @@ export function App() {
           patchLast((m) => ({
             ...m,
             streaming: false,
+            // Keep any notice already attached to this turn (parenthesised: `??` binds tighter
+            // than `?:`, so without these the note itself became the condition).
             note:
-              e.reason === "max_steps"
+              m.note ??
+              (e.reason === "max_steps"
                 ? "Stopped: reached the step limit. Send another message to continue."
                 : e.reason === "aborted"
                   ? "Stopped."
@@ -182,7 +188,7 @@ export function App() {
                       ? "The model returned an empty reply twice. Try again, rephrase, or pick another model in Settings."
                       : e.reason === "max_tokens"
                         ? "The reply was cut off at the token limit."
-                        : undefined,
+                        : undefined),
           }));
           break;
         case "error":

@@ -110,7 +110,35 @@ try {
     `tab=${movedTo} | ${liar.split("\n").filter(Boolean).slice(-3).join(" | ")}`,
   );
 
-  // 4. Repeated page reads must not pile up: only the newest observations stay in context.
+  // 4a. A provider that ignores tool definitions must be reported, and another system's tool
+  //     call must never be executed.
+  const noTools = await ask("mock-no-tools", "abre meu gmail", { mode: "act" });
+  const foreign = await send("abre o site do gmail eu ja estou logado");
+  const stillHere = await panel.evaluate(
+    async (w) => (await chrome.tabs.query({ active: true, windowId: w }))[0]?.url,
+    wid,
+  );
+  check(
+    "a provider ignoring tool definitions is reported, foreign tools are not run",
+    /answered as if Enki's tools did not exist/.test(noTools) &&
+      /mcp__puppeteer_core__evaluate_javascript/.test(foreign) &&
+      !/mail\.google\.com/.test(stillHere ?? ""),
+    `tab=${stillHere} | first="${noTools.split("\n").filter(Boolean).slice(-3).join(" | ")}"`,
+  );
+
+  // 4b. A call to a real Enki tool written as text should still be honoured.
+  const viaText = await ask("mock-text-toolcall", "open the test page", { mode: "act" });
+  const movedByText = await panel.evaluate(
+    async (w) => (await chrome.tabs.query({ active: true, windowId: w }))[0]?.url,
+    wid,
+  );
+  check(
+    "a tool call written as text is recovered and executed",
+    /viatext=1/.test(movedByText ?? "") && !/<tool_call>/.test(viaText),
+    `tab=${movedByText} | ${viaText.split("\n").filter(Boolean).slice(-3).join(" | ")}`,
+  );
+
+  // 5. Repeated page reads must not pile up: only the newest observations stay in context.
   await panel.evaluate(
     async ({ wid, mock }) => {
       const [t] = await chrome.tabs.query({ active: true, windowId: wid });
@@ -139,7 +167,7 @@ try {
     `peak=${peak} freedInOneStep=${freed} (3 unpruned snapshots would exceed 40000)`,
   );
 
-  // 5. A wedged gateway must fail with a message instead of spinning forever. The response
+  // 6. A wedged gateway must fail with a message instead of spinning forever. The response
   //    timeout is set to 6s here so the test does not sit through the 180s default.
   const started = Date.now();
   const stalled = await ask("mock-stall", "hello", { timeout: 40000, requestTimeoutSec: 6 });

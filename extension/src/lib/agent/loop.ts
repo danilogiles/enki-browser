@@ -10,6 +10,7 @@ import type {
 import type { BrowserExecutor, ToolOutput } from "../tools/executor";
 import { log } from "../debug";
 import { compactHistory, historySize } from "./context";
+import { CLAIMS_NO_TOOLS, extractTextToolCalls } from "./toolcall-text";
 
 export type AgentEvent =
   | { type: "assistant_start" }
@@ -19,6 +20,8 @@ export type AgentEvent =
   | { type: "promote_thinking" }
   /** Drop the text streamed so far — it claimed something that never happened. */
   | { type: "retract_text" }
+  /** Something worth telling the user that is not an error. */
+  | { type: "notice"; message: string }
   | { type: "tool_start"; call: ToolCallPart; label: string; sensitive: boolean }
   | { type: "approval_request"; call: ToolCallPart; label: string }
   | { type: "tool_result"; call: ToolCallPart; result: ToolResultPart; declined?: boolean }
@@ -104,6 +107,34 @@ export async function runTurn(o: RunOptions): Promise<void> {
           case "done":
             stop = ev.stopReason;
             break;
+        }
+      }
+
+      // Providers that ignore the tools parameter print the call instead of emitting it.
+      // Honour calls that name one of our tools; never execute another harness's.
+      if (!calls.length && textAcc.trim()) {
+        const allowed = new Set(o.tools.map((t) => t.name));
+        const recovered = extractTextToolCalls(textAcc, allowed);
+        if (recovered.calls.length) {
+          log.warn("agent", "Recovered tool calls written as text", {
+            names: recovered.calls.map((c) => c.name),
+          });
+          onEvent({ type: "retract_text" });
+          textAcc = recovered.cleaned;
+          if (textAcc) onEvent({ type: "text", delta: textAcc });
+          calls.push(...recovered.calls);
+        } else if (recovered.foreign.length || CLAIMS_NO_TOOLS.test(textAcc)) {
+          log.warn("agent", "Provider ignored the tool definitions", {
+            foreignTools: recovered.foreign,
+            reply: textAcc.slice(0, 200),
+          });
+          onEvent({
+            type: "notice",
+            message:
+              "This model answered as if Enki's tools did not exist" +
+              (recovered.foreign.length ? ` (it tried to use ${recovered.foreign[0]}, which belongs to another tool)` : "") +
+              ". Free gateway pools rotate between providers and some ignore tool definitions — send the message again, or pick a specific model in Settings.",
+          });
         }
       }
 

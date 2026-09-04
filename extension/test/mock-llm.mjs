@@ -101,6 +101,30 @@ const server = http.createServer((req, res) => {
         res.write("data: [DONE]\n\n");
         return res.end();
       }
+      // Ignores the tools parameter the way harness-backed free providers do: first it claims
+      // to have no tools, then it prints another system's MCP call as plain text.
+      if (model === "mock-no-tools") {
+        const second = messages.filter((m) => m.role === "user" && Array.isArray(m.content)).length > 1;
+        if (second) {
+          return streamText(
+            res,
+            'Sure:\n```json\n{ "name": "mcp__puppeteer_core__evaluate_javascript", "arguments": { "script": "() => window.open(\'https://mail.google.com\')" } }\n```',
+          );
+        }
+        return streamText(
+          res,
+          "Não tenho ferramentas disponíveis para navegar em sites ou abrir URLs. Por favor, me informe se há outra maneira.",
+        );
+      }
+      // Writes a call to a REAL Enki tool as text rather than emitting it properly.
+      if (model === "mock-text-toolcall") {
+        const done = messages.some((m) => m.role === "tool");
+        if (done) return streamText(res, "Done.");
+        return streamText(
+          res,
+          `I'll do that.\n<tool_call>\n{"name": "navigate", "arguments": {"url": "http://127.0.0.1:${port}/page?viatext=1"}}\n</tool_call>`,
+        );
+      }
       // Reads the page once per turn, so repeated turns pile up page observations.
       if (model === "mock-reader") {
         const last = messages[messages.length - 1];
