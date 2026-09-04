@@ -1,3 +1,4 @@
+import { log } from "../debug";
 import type {
   ChatProvider,
   ChatRequest,
@@ -50,18 +51,33 @@ export class OpenAICompatProvider implements ChatProvider {
     if (req.tools.length) body.tools = toOpenAITools(req.tools);
     if (!isGemini) body.stream_options = { include_usage: true };
 
-    const res = await fetch(this.url("/chat/completions"), {
+    const url = this.url("/chat/completions");
+    const payload = JSON.stringify(body);
+    const started = Date.now();
+    log.info("provider", `POST ${url}`, {
+      model: req.model,
+      messages: req.messages.length,
+      tools: req.tools.length,
+      hasKey: !!this.opts.apiKey,
+      requestBytes: payload.length,
+      idleTimeoutMs: this.opts.idleTimeoutMs ?? 180_000,
+    });
+
+    const res = await fetch(url, {
       method: "POST",
       headers: this.headers(),
-      body: JSON.stringify(body),
+      body: payload,
       signal: req.signal,
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
       const detail = errorText(text);
+      log.error("provider", `HTTP ${res.status} ${res.statusText}`, { body: text.slice(0, 1000) });
       let hint = "";
       if (res.status === 401) {
-        hint = " (Check your API key in Settings ⚙️).";
+        hint = this.opts.apiKey
+          ? " (The provider rejected this API key — check it in Settings ⚙️)."
+          : " (This endpoint wants an API key and none is set. A local OmniRoute started with NODE_ENV=production gates its API: create a key in its dashboard at http://localhost:20128 and paste it into Settings ⚙️).";
       } else if (res.status === 429) {
         hint = " (Rate limit or credits exhausted. Try switching models in Settings ⚙️).";
       } else if (res.status === 502 || res.status === 503) {
@@ -77,8 +93,10 @@ export class OpenAICompatProvider implements ChatProvider {
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("text/event-stream")) {
       const text = await res.text().catch(() => "");
+      log.error("provider", "Response was not an event stream", { contentType, body: text.slice(0, 1000) });
       throw new Error(`Provider did not stream a response: ${errorText(text) || contentType || "empty body"}`);
     }
+    log.info("provider", `Streaming (${Date.now() - started}ms to headers)`, { contentType });
 
     const calls = new Map<number, { id: string; name: string; args: string }>();
     let finish: string | null = null;
@@ -97,8 +115,10 @@ export class OpenAICompatProvider implements ChatProvider {
         continue;
       }
       if (chunk.error) {
+        log.error("provider", "Error event inside the stream", chunk.error);
         throw new Error(typeof chunk.error === "string" ? chunk.error : chunk.error.message ?? JSON.stringify(chunk.error));
       }
+      if (chunks === 1) log.info("provider", `First chunk after ${Date.now() - started}ms`, { servedBy: chunk.model });
       if (chunk.usage) {
         usage = {
           inputTokens: chunk.usage.prompt_tokens ?? 0,
@@ -128,9 +148,17 @@ export class OpenAICompatProvider implements ChatProvider {
 
     for (const ev of think.flush()) yield ev;
 
+    log.info("provider", `Stream ended after ${Date.now() - started}ms`, {
+      chunks,
+      finishReason: finish,
+      toolCalls: [...calls.values()].map((c) => c.name),
+      usage,
+    });
+
     if (chunks === 0) {
       // Gateways like OmniRoute close the stream with only "[DONE]" when every upstream provider
       // failed or is rate-limited. Surface that instead of reporting an empty reply.
+      log.error("provider", "Stream closed without a single chunk");
       throw new Error(
         "The provider closed the stream without sending anything. The model is probably rate-limited or unavailable right now; try again in a minute or pick another model.",
       );
@@ -175,6 +203,8 @@ type OpenAIChunk = {
   }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
   error?: { message?: string } | string;
+  /** Gateways report which upstream model actually served the request. */
+  model?: string;
 };
 
 /** Pull a readable message out of an error body, JSON or plain text. */

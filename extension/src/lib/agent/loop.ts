@@ -8,6 +8,7 @@ import type {
   ToolResultPart,
 } from "../types";
 import type { BrowserExecutor, ToolOutput } from "../tools/executor";
+import { log } from "../debug";
 
 export type AgentEvent =
   | { type: "assistant_start" }
@@ -45,6 +46,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
   try {
     for (let step = 0; step < o.maxSteps; step++) {
       if (o.signal.aborted) return void onEvent({ type: "done", reason: "aborted" });
+      log.info("agent", `Step ${step + 1}/${o.maxSteps}`, { model: o.model, historyMessages: o.history.length });
       onEvent({ type: "assistant_start" });
 
       let textAcc = "";
@@ -89,6 +91,11 @@ export async function runTurn(o: RunOptions): Promise<void> {
       if (!parts.length) {
         // Weaker models often write the whole answer into the reasoning channel and leave
         // content empty. Show that rather than discarding the turn.
+        log.warn("agent", "Turn produced no text and no tool call", {
+          reasoningChars: thinkingAcc.length,
+          stopReason: stop,
+          alreadyNudged: nudged,
+        });
         const salvaged = thinkingAcc.trim();
         if (salvaged) {
           onEvent({ type: "promote_thinking" });
@@ -128,6 +135,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             onEvent({ type: "tool_result", call, result: r });
             continue;
           }
+          log.info("tool", `${call.name}: ${plan.label}`, { input: call.input, sensitive: plan.sensitive });
           onEvent({ type: "tool_start", call, label: plan.label, sensitive: plan.sensitive });
           if (plan.sensitive && !o.autoApprove) {
             onEvent({ type: "approval_request", call, label: plan.label });
@@ -145,9 +153,13 @@ export async function runTurn(o: RunOptions): Promise<void> {
             out = await plan.run();
           } catch (e) {
             if (o.signal.aborted) throw e;
+            log.error("tool", `${call.name} failed`, { error: errMsg(e) });
             out = { content: [{ type: "text", text: `Error: ${errMsg(e)}` }], isError: true };
           }
           const r = result(call, out);
+          log.info("tool", `${call.name} → ${out.isError ? "error" : "ok"}`, {
+            output: out.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n").slice(0, 600),
+          });
           results.push(r);
           onEvent({ type: "tool_result", call, result: r });
         }
@@ -164,6 +176,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
     if (o.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) {
       onEvent({ type: "done", reason: "aborted" });
     } else {
+      log.error("agent", "Turn failed", { error: errMsg(e) });
       onEvent({ type: "error", message: errMsg(e) });
     }
   } finally {

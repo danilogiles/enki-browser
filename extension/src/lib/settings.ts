@@ -146,6 +146,8 @@ export type Settings = {
   maxSteps: number;
   /** Give up if the provider sends nothing for this long. Large local models need more. */
   requestTimeoutSec: number;
+  /** Show the Logs view and mirror every diagnostic entry to the console. */
+  devMode: boolean;
   /** Extra instructions appended to the system prompt. */
   customInstructions: string;
 };
@@ -161,6 +163,7 @@ export const DEFAULT_SETTINGS: Settings = {
   attachScreenshot: true,
   maxSteps: 30,
   requestTimeoutSec: 180,
+  devMode: false,
   customInstructions: "",
 };
 

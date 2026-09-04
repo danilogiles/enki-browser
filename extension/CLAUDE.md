@@ -13,4 +13,5 @@
 - **Browser Executor:** `src/lib/tools/executor.ts` dispatches hardware events via Chrome DevTools Protocol (`chrome.debugger`) with DOM fallback.
 - **Safety First:** Hard block on password fields, strict URL navigation whitelisting (`http://` and `https://` only), and confirmation modals for sensitive actions (`SENSITIVE_ACTION`).
 - **No Heavy SDKs for OpenAI:** `src/lib/providers/openai-compat.ts` uses native `fetch` + SSE streaming. Keep it dependency-free.
+- **Diagnostics:** `src/lib/debug.ts` is a ring-buffer logger read by the Logs view (`src/sidepanel/LogsView.tsx`), gated behind the `devMode` setting. Instrument new provider or tool code with `log.info/warn/error`; never pass API keys or Authorization headers into it.
 - **Documentation:** See `docs/PRD.md`, `docs/ARCHITECTURE.md`, and `docs/SECURITY.md`.

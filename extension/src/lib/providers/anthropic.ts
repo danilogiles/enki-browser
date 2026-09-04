@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { log } from "../debug";
 import type {
   ChatProvider,
   ChatRequest,
@@ -43,6 +44,13 @@ export class AnthropicProvider implements ChatProvider {
       params.thinking = { type: "adaptive", display: "summarized" };
     }
 
+    const started = Date.now();
+    log.info("provider", `Anthropic ${req.model}`, {
+      messages: req.messages.length,
+      tools: req.tools.length,
+      thinking: !!params.thinking,
+    });
+
     const stream = this.client.messages.stream(params, { signal: req.signal });
 
     // Accumulate tool_use input JSON per content block index.
@@ -85,6 +93,10 @@ export class AnthropicProvider implements ChatProvider {
     }
 
     const final = await stream.finalMessage();
+    log.info("provider", `Anthropic stream ended after ${Date.now() - started}ms`, {
+      stopReason: final.stop_reason,
+      usage: final.usage,
+    });
     yield {
       type: "usage",
       inputTokens:

@@ -64,7 +64,14 @@ Follow the install and start instructions in the official repository, [github.co
    ```
    *(See [`docker/README.md`](docker/README.md) for full guide).*
 2. **Connect in Enki:** In Settings ⚙️, choose **OmniRoute**, verify `http://localhost:20128/v1`, set model to `auto` (alternatives: `auto/cheap`, `auto/fast`, `auto/best-free`), press the refresh button, and save.
-3. The free pool has no reliable vision models, so the OmniRoute preset turns off image support automatically and works from the page DOM. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
+3. **If the connection test says 401:** running OmniRoute in Docker with `NODE_ENV=production` gates its API, so `GET /v1/models` answers `401 Authentication required` while `POST /v1/chat/completions` still works without a key. Enki detects this — the test falls back to a one-token chat probe and reports *"Chat works; this endpoint needs a key only to list models"*. Type the model id (`auto`) by hand, or create a key in the dashboard at `http://localhost:20128` to get the model list too.
+4. The free pool has no reliable vision models, so the OmniRoute preset turns off image support automatically and works from the page DOM. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
+
+### Debugging: developer mode
+
+Turn on **Developer mode** in Settings → Behavior. A 🐞 **Logs** button appears in the header showing every provider request (endpoint, model, message and tool counts, request size, time to first chunk, finish reason, token usage), every tool call and its result, and every error. The same entries stream to the browser console — right-click the panel and choose *Inspect* to watch them live.
+
+Copy the whole log with one button when reporting a bug. API keys are never recorded.
 
 ### If a model stalls or replies with nothing
 

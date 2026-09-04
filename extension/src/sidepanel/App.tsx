@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Eye, MousePointerClick, Plus, Settings as SettingsIcon } from "lucide-react";
+import { Bug, Eye, MousePointerClick, Plus, Settings as SettingsIcon } from "lucide-react";
 import logo from "../assets/logo.svg";
 import type { ImagePart, Message, TextPart, ToolCallPart } from "../lib/types";
 import { loadSettings, onSettingsChange, presetOf, saveSettings, type Settings } from "../lib/settings";
@@ -11,13 +11,15 @@ import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
 import { Chat } from "./Chat";
 import { Composer } from "./Composer";
 import { SettingsView } from "./SettingsView";
+import { LogsView } from "./LogsView";
+import { setDevMode } from "../lib/debug";
 import { uid, type Segment, type TabInfo, type UiMessage } from "./types";
 
 const MODE_KEY = "enki:mode";
 
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [view, setView] = useState<"chat" | "settings">("chat");
+  const [view, setView] = useState<"chat" | "settings" | "logs">("chat");
   const [mode, setMode] = useState<Mode>("ask");
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [running, setRunning] = useState(false);
@@ -47,6 +49,8 @@ export function App() {
       document.documentElement.setAttribute("data-theme", settings.theme);
     }
   }, [settings?.theme]);
+
+  useEffect(() => setDevMode(!!settings?.devMode), [settings?.devMode]);
 
   const changeMode = (m: Mode) => {
     setMode(m);
@@ -294,6 +298,8 @@ export function App() {
 
   if (!settings) return null;
 
+  if (view === "logs") return <LogsView onClose={() => setView("chat")} />;
+
   if (view === "settings") {
     return (
       <SettingsView
@@ -325,6 +331,11 @@ export function App() {
         </button>
         <div className="ml-auto flex items-center gap-1">
           <ModeToggle mode={mode} onChange={changeMode} disabled={running} />
+          {settings.devMode && (
+            <IconButton title="Logs" onClick={() => setView("logs")}>
+              <Bug size={16} />
+            </IconButton>
+          )}
           <IconButton title="New chat" onClick={newChat}>
             <Plus size={16} />
           </IconButton>

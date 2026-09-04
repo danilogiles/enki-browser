@@ -67,8 +67,10 @@ try {
     await panel.waitForTimeout(600);
     await panel.fill("textarea", text);
     await panel.press("textarea", "Enter");
-    await panel.waitForSelector("button[title='Stop']", { timeout: 20000 });
-    await panel.waitForSelector("button[title='Stop']", { state: "detached", timeout });
+    // A fast mock can finish between polls, so anchor on the sent message appearing rather
+    // than on catching the Stop button while it exists.
+    await panel.waitForFunction((t) => document.body.innerText.includes(t), text, { timeout: 20000 });
+    await panel.waitForFunction(() => !document.querySelector("button[title='Stop']"), null, { timeout });
     await panel.waitForTimeout(400);
     return panel.evaluate(() => document.body.innerText);
   };

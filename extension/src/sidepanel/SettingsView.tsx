@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { PRESETS, presetOf, THEMES, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
+import { log } from "../lib/debug";
 
 type Props = {
   settings: Settings;
@@ -45,11 +46,27 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
     setLoadingModels(true);
     setStatus(null);
     try {
+      log.info("settings", `Testing ${draft.baseUrl}`, { preset: draft.preset, hasKey: !!draft.apiKey });
       const list = await createProvider(draft).listModels();
       setModels(list);
+      log.info("settings", `Connected, ${list.length} models`, { sample: list.slice(0, 15) });
       setStatus({ kind: "ok", text: `Connected. ${list.length} models available.` });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      log.error("settings", "Model listing failed", { error: msg });
+      // Some gateways (OmniRoute in Docker, for one) require a key to list models but serve
+      // chat without one. A failed listing is not proof the endpoint is unusable, so ask the
+      // model directly before declaring it broken.
+      if (/\b(401|403)\b/.test(msg) && draft.model.trim()) {
+        if (await chatWorks(draft)) {
+          log.info("settings", "Model listing is gated but chat works");
+          setStatus({
+            kind: "ok",
+            text: "Chat works. This endpoint needs a key only to list models — type the model id by hand.",
+          });
+          return;
+        }
+      }
       const offline = /Failed to fetch|NetworkError|ECONNREFUSED/i.test(msg) && preset.setupUrl;
       setStatus({
         kind: "error",
@@ -295,6 +312,15 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               </p>
             </Section>
 
+            <Section title="Developer">
+              <Toggle
+                label="Developer mode"
+                hint="Adds a Logs button to the header and mirrors every request, tool call and error to the browser console."
+                checked={draft.devMode}
+                onChange={(v) => set("devMode", v)}
+              />
+            </Section>
+
             <Section title="Custom instructions">
               <textarea
                 value={draft.customInstructions}
@@ -347,6 +373,26 @@ function TabButton({
       {label}
     </button>
   );
+}
+
+/** Sends the smallest possible request to see whether the endpoint answers at all. */
+async function chatWorks(draft: Settings): Promise<boolean> {
+  try {
+    for await (const ev of createProvider(draft).stream({
+      model: draft.model.trim(),
+      system: "Reply with the single word: ok",
+      messages: [{ role: "user", parts: [{ type: "text", text: "ok" }] }],
+      tools: [],
+      maxTokens: 16,
+    })) {
+      if (ev.type === "text_delta" || ev.type === "thinking_delta" || ev.type === "tool_call") return true;
+      if (ev.type === "done") return true;
+    }
+    return false;
+  } catch (e) {
+    log.error("settings", "Chat probe failed", { error: e instanceof Error ? e.message : String(e) });
+    return false;
+  }
 }
 
 const inputCls =
