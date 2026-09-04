@@ -58,7 +58,7 @@ function refFor(snapshot, pattern) {
 }
 
 const server = http.createServer((req, res) => {
-  if (req.method === "GET" && req.url === "/page") {
+  if (req.method === "GET" && req.url.startsWith("/page")) {
     res.writeHead(200, { "Content-Type": "text/html" });
     return res.end(PAGE);
   }
@@ -94,6 +94,19 @@ const server = http.createServer((req, res) => {
         sse(res, { choices: [{ delta: {}, finish_reason: "stop" }] });
         res.write("data: [DONE]\n\n");
         return res.end();
+      }
+      // Reports a completed navigation without calling any tool — the "it says it did but the
+      // page never moved" failure. Once corrected, it performs the navigation for real.
+      if (model === "mock-liar") {
+        const corrected = messages.some(
+          (m) =>
+            m.role === "user" &&
+            (Array.isArray(m.content) ? m.content : [{ text: m.content }]).some((c) =>
+              /You called no tool/.test(c?.text ?? ""),
+            ),
+        );
+        if (corrected) return streamToolCall(res, "navigate", { url: `http://127.0.0.1:${port}/page?moved=1` });
+        return streamText(res, "Done - I have opened your Google Drive.");
       }
       // Emits <think> tags inline in content, the way many local/free models do.
       if (model === "mock-think-tags") {

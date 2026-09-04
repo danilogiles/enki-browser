@@ -26,6 +26,8 @@ export function buildSystemPrompt(mode: Mode, customInstructions: string): strin
 - Prefer refs from read_page/find. Use click(x, y) from a screenshot only when no ref exists (canvas, custom widgets).
 - After navigate, click on links, or form submissions, call read_page (or screenshot) before the next action; the page has changed.
 - If an action fails or the page looks different than expected, do not repeat the same step blindly: re-read the page and adapt.
+- **An action only happens when you emit a tool call.** Describing it does nothing. Never say you opened, went to, clicked, typed, searched or filled anything unless a tool call in this same turn actually did it. Answering a follow-up request the way you answered the previous one, without calling the tool again, leaves the browser untouched and misleads the user.
+- Each message tells you the tab Enki is really on. If that is not where you claim to be, you have not navigated yet — call navigate.
 - Keep the user informed with one short sentence when you start a multi-step task and when you finish. Don't narrate every click.
 
 ## Safety rules (non-negotiable)

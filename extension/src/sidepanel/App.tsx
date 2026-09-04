@@ -122,6 +122,12 @@ export function App() {
         case "thinking":
           patchLast((m) => ({ ...m, thinking: (m.thinking ?? "") + e.delta }));
           break;
+        case "retract_text":
+          patchSegments((segs) => {
+            const i = segs.map((s) => s.kind).lastIndexOf("text");
+            return i === -1 ? segs : [...segs.slice(0, i), ...segs.slice(i + 1)];
+          });
+          break;
         case "promote_thinking":
           patchLast((m) => {
             const t = (m.thinking ?? "").trim();
@@ -249,6 +255,7 @@ export function App() {
         await runTurn({
           provider: createProvider(settings),
           model: settings.model,
+          mode,
           system: buildSystemPrompt(mode, settings.customInstructions),
           history: historyRef.current,
           tools: toolsForMode(mode, settings.vision),

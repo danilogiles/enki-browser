@@ -32,9 +32,9 @@ try {
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extId}/src/sidepanel/index.html`);
 
-  const configure = async (model, requestTimeoutSec = 60) =>
+  const configure = async (model, requestTimeoutSec = 60, mode = "ask") =>
     panel.evaluate(
-      ({ mock, model, requestTimeoutSec }) =>
+      ({ mock, model, requestTimeoutSec, mode }) =>
         chrome.storage.local.set({
           "enki:settings": {
             preset: "custom",
@@ -47,11 +47,12 @@ try {
             attachScreenshot: false,
             maxSteps: 5,
             requestTimeoutSec,
+            devMode: true,
             customInstructions: "",
           },
-          "enki:mode": "ask",
+          "enki:mode": mode,
         }),
-      { mock: MOCK, model, requestTimeoutSec },
+      { mock: MOCK, model, requestTimeoutSec, mode },
     );
 
   await configure("mock-echo");
@@ -60,8 +61,8 @@ try {
   );
   const panelUrl = `chrome-extension://${extId}/src/sidepanel/index.html?window=${wid}`;
 
-  const ask = async (model, text, { timeout = 60000, requestTimeoutSec = 60 } = {}) => {
-    await configure(model, requestTimeoutSec);
+  const ask = async (model, text, { timeout = 60000, requestTimeoutSec = 60, mode = "ask" } = {}) => {
+    await configure(model, requestTimeoutSec, mode);
     await panel.goto(panelUrl);
     await panel.waitForSelector("textarea", { timeout: 10000 });
     await panel.waitForTimeout(600);
@@ -91,7 +92,19 @@ try {
     think.split("\n").filter(Boolean).slice(-3).join(" | "),
   );
 
-  // 3. A wedged gateway must fail with a message instead of spinning forever. The response
+  // 3. A model that reports success without calling a tool must be caught, not believed.
+  const liar = await ask("mock-liar", "open my drive", { mode: "act" });
+  const movedTo = await panel.evaluate(
+    async (w) => (await chrome.tabs.query({ active: true, windowId: w }))[0]?.url,
+    wid,
+  );
+  check(
+    "a claimed-but-unperformed action is retracted and retried",
+    !/opened your Google Drive/i.test(liar) && /moved=1/.test(movedTo ?? ""),
+    `tab=${movedTo} | ${liar.split("\n").filter(Boolean).slice(-3).join(" | ")}`,
+  );
+
+  // 4. A wedged gateway must fail with a message instead of spinning forever. The response
   //    timeout is set to 6s here so the test does not sit through the 180s default.
   const started = Date.now();
   const stalled = await ask("mock-stall", "hello", { timeout: 40000, requestTimeoutSec: 6 });
