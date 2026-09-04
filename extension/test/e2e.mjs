@@ -33,6 +33,12 @@ try {
   const extId = new URL(sw.url()).host;
   console.log("extension id", extId);
 
+  // The background must be the real service worker (not a mis-bundled content script) and must
+  // have registered the action-click behavior.
+  await new Promise((r) => setTimeout(r, 500));
+  const behavior = await sw.evaluate(() => chrome.sidePanel.getPanelBehavior());
+  check("background: icon click opens the side panel", behavior?.openPanelOnActionClick === true, JSON.stringify(behavior));
+
   // Panel opened as a tab; it will control a separate window via ?window=<id>.
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extId}/src/sidepanel/index.html`);

@@ -23,14 +23,16 @@ export default defineManifest({
   side_panel: {
     default_path: "src/sidepanel/index.html",
   },
+  // Entry basenames must be unique: CRXJS keys build outputs by file name, and two `index.ts`
+  // entries made the service worker import the content script bundle.
   background: {
-    service_worker: "src/background/index.ts",
+    service_worker: "src/background/service-worker.ts",
     type: "module",
   },
   content_scripts: [
     {
       matches: ["<all_urls>"],
-      js: ["src/content/index.ts"],
+      js: ["src/content/content-script.ts"],
       run_at: "document_idle",
       all_frames: false,
     },
