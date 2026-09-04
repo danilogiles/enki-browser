@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ArrowLeft, Copy, Eye, EyeOff, ExternalLink, Loader2, RefreshCw } from "lucide-react";
-import { PRESETS, presetOf, type PresetId, type Settings } from "../lib/settings";
+import { PRESETS, presetOf, THEMES, type PresetId, type Settings, type ThemeId } from "../lib/settings";
 import { createProvider } from "../lib/providers";
 
 type Props = {
@@ -164,6 +164,28 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           )}
           <p className="text-xs text-zinc-500">
             Pick a model that supports images and tool calling. Press the refresh button to list what your key can access.
+          </p>
+        </Section>
+
+        <Section title="Aparência / Theme">
+          <label className="block text-xs text-zinc-400">Tema visual</label>
+          <select
+            value={draft.theme || "dark"}
+            onChange={(e) => {
+              const nextTheme = e.target.value as ThemeId;
+              set("theme", nextTheme);
+              document.documentElement.setAttribute("data-theme", nextTheme);
+            }}
+            className={inputCls}
+          >
+            {THEMES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-zinc-500">
+            {THEMES.find((t) => t.id === (draft.theme || "dark"))?.description}
           </p>
         </Section>
 

@@ -1,18 +1,181 @@
 @import "tailwindcss";
 
 @theme {
-  --color-enki-400: #2dd4bf;
-  --color-enki-500: #14b8a6;
-  --color-enki-600: #0d9488;
-  --color-ink-950: #0b1220;
-  --color-ink-900: #111a2b;
-  --color-ink-800: #18233a;
-  --color-ink-700: #243149;
+  --color-enki-400: var(--enki-400, #2dd4bf);
+  --color-enki-500: var(--enki-500, #14b8a6);
+  --color-enki-600: var(--enki-600, #0d9488);
+  --color-ink-950: var(--ink-950, #0b1220);
+  --color-ink-900: var(--ink-900, #111a2b);
+  --color-ink-800: var(--ink-800, #18233a);
+  --color-ink-700: var(--ink-700, #243149);
+
+  --color-zinc-100: var(--zinc-100, #f4f4f5);
+  --color-zinc-200: var(--zinc-200, #e4e4e7);
+  --color-zinc-300: var(--zinc-300, #d4d4d8);
+  --color-zinc-400: var(--zinc-400, #a1a1aa);
+  --color-zinc-500: var(--zinc-500, #71717a);
+  --color-zinc-600: var(--zinc-600, #52525b);
+
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
 }
 
-:root {
+/* Default Theme: Enki Dark (mantem o que existe hoje) */
+:root,
+[data-theme="dark"] {
   color-scheme: dark;
+  --enki-400: #2dd4bf;
+  --enki-500: #14b8a6;
+  --enki-600: #0d9488;
+  --ink-950: #0b1220;
+  --ink-900: #111a2b;
+  --ink-800: #18233a;
+  --ink-700: #243149;
+
+  --zinc-100: #f4f4f5;
+  --zinc-200: #e4e4e7;
+  --zinc-300: #d4d4d8;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+
+  --app-bg: #0b1220;
+  --app-text: #e5e7eb;
+}
+
+/* White / Light Theme */
+[data-theme="light"],
+[data-theme="white"] {
+  color-scheme: light;
+  --enki-400: #0d9488;
+  --enki-500: #0f766e;
+  --enki-600: #115e59;
+  --ink-950: #ffffff;
+  --ink-900: #f8fafc;
+  --ink-800: #f1f5f9;
+  --ink-700: #cbd5e1;
+
+  --zinc-100: #0f172a;
+  --zinc-200: #1e293b;
+  --zinc-300: #334155;
+  --zinc-400: #64748b;
+  --zinc-500: #94a3b8;
+  --zinc-600: #94a3b8;
+
+  --app-bg: #ffffff;
+  --app-text: #0f172a;
+}
+
+/* System Theme (Auto) */
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    color-scheme: light;
+    --enki-400: #0d9488;
+    --enki-500: #0f766e;
+    --enki-600: #115e59;
+    --ink-950: #ffffff;
+    --ink-900: #f8fafc;
+    --ink-800: #f1f5f9;
+    --ink-700: #cbd5e1;
+
+    --zinc-100: #0f172a;
+    --zinc-200: #1e293b;
+    --zinc-300: #334155;
+    --zinc-400: #64748b;
+    --zinc-500: #94a3b8;
+    --zinc-600: #94a3b8;
+
+    --app-bg: #ffffff;
+    --app-text: #0f172a;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    color-scheme: dark;
+    --enki-400: #2dd4bf;
+    --enki-500: #14b8a6;
+    --enki-600: #0d9488;
+    --ink-950: #0b1220;
+    --ink-900: #111a2b;
+    --ink-800: #18233a;
+    --ink-700: #243149;
+
+    --zinc-100: #f4f4f5;
+    --zinc-200: #e4e4e7;
+    --zinc-300: #d4d4d8;
+    --zinc-400: #a1a1aa;
+    --zinc-500: #71717a;
+    --zinc-600: #52525b;
+
+    --app-bg: #0b1220;
+    --app-text: #e5e7eb;
+  }
+}
+
+/* Custom Theme: Midnight (OLED Black + Indigo) */
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --enki-400: #818cf8;
+  --enki-500: #6366f1;
+  --enki-600: #4f46e5;
+  --ink-950: #000000;
+  --ink-900: #09090b;
+  --ink-800: #18181b;
+  --ink-700: #27272a;
+
+  --zinc-100: #fafafa;
+  --zinc-200: #f4f4f5;
+  --zinc-300: #e4e4e7;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+
+  --app-bg: #000000;
+  --app-text: #fafafa;
+}
+
+/* Custom Theme: Nord (Arctic Frost) */
+[data-theme="nord"] {
+  color-scheme: dark;
+  --enki-400: #88c0d0;
+  --enki-500: #81a1c1;
+  --enki-600: #5e81ac;
+  --ink-950: #242933;
+  --ink-900: #2e3440;
+  --ink-800: #3b4252;
+  --ink-700: #434c5e;
+
+  --zinc-100: #eceff4;
+  --zinc-200: #e5e9f0;
+  --zinc-300: #d8dee9;
+  --zinc-400: #9aa5b8;
+  --zinc-500: #7b889b;
+  --zinc-600: #4c566a;
+
+  --app-bg: #242933;
+  --app-text: #eceff4;
+}
+
+/* Custom Theme: Cyberpunk (Obsidian & Amber Gold) */
+[data-theme="cyberpunk"] {
+  color-scheme: dark;
+  --enki-400: #fbbf24;
+  --enki-500: #f59e0b;
+  --enki-600: #d97706;
+  --ink-950: #0c0a09;
+  --ink-900: #1c1917;
+  --ink-800: #292524;
+  --ink-700: #44403c;
+
+  --zinc-100: #fef3c7;
+  --zinc-200: #fde68a;
+  --zinc-300: #fcd34d;
+  --zinc-400: #a8a29e;
+  --zinc-500: #78716c;
+  --zinc-600: #57534e;
+
+  --app-bg: #0c0a09;
+  --app-text: #fef3c7;
 }
 
 html,
@@ -23,8 +186,8 @@ body,
 }
 
 body {
-  background: var(--color-ink-950);
-  color: #e5e7eb;
+  background: var(--app-bg, var(--color-ink-950));
+  color: var(--app-text, #e5e7eb);
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;

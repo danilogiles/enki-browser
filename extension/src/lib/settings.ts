@@ -109,11 +109,29 @@ export const PRESETS: Preset[] = [
   },
 ];
 
+export type ThemeId = "dark" | "light" | "system" | "midnight" | "nord" | "cyberpunk";
+
+export type ThemeOption = {
+  id: ThemeId;
+  label: string;
+  description: string;
+};
+
+export const THEMES: ThemeOption[] = [
+  { id: "dark", label: "Enki Dark (Padrão)", description: "Tema escuro padrão em tons de ardósia e azul petróleo (atual)." },
+  { id: "light", label: "White / Claro", description: "Fundo branco limpo com texto e contrastes escuros." },
+  { id: "system", label: "Sistema (Auto)", description: "Alterna automaticamente conforme o tema do seu sistema operacional." },
+  { id: "midnight", label: "Midnight (OLED)", description: "Preto absoluto com detalhes em índigo e alto contraste para telas OLED." },
+  { id: "nord", label: "Nord Frost", description: "Paleta nórdica suave com tons de azul ártico." },
+  { id: "cyberpunk", label: "Cyberpunk", description: "Fundo obsidiana com detalhes em âmbar e dourado neon." },
+];
+
 export type Settings = {
   preset: PresetId;
   apiKey: string;
   baseUrl: string;
   model: string;
+  theme: ThemeId;
   /** Skip the confirmation card for sensitive actions (send, buy, delete...). */
   autoApprove: boolean;
   /** The model accepts images. When false, no screenshots are sent and the screenshot tool is hidden. */
@@ -131,6 +149,7 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   baseUrl: presetOf("anthropic").baseUrl,
   model: presetOf("anthropic").defaultModel,
+  theme: "dark",
   autoApprove: false,
   vision: true,
   attachScreenshot: true,

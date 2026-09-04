@@ -42,6 +42,12 @@ export function App() {
     return onSettingsChange(setSettings);
   }, []);
 
+  useEffect(() => {
+    if (settings?.theme) {
+      document.documentElement.setAttribute("data-theme", settings.theme);
+    }
+  }, [settings?.theme]);
+
   const changeMode = (m: Mode) => {
     setMode(m);
     chrome.storage.local.set({ [MODE_KEY]: m });
