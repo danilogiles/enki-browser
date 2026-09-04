@@ -76,8 +76,8 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           >
             {PRESETS.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.free ? "🆓 " : ""}
                 {p.label}
+                {p.free ? " · free" : ""}
               </option>
             ))}
           </select>

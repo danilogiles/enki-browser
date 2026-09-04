@@ -31,6 +31,33 @@ export type Preset = {
 
 export const PRESETS: Preset[] = [
   {
+    id: "omniroute",
+    label: "OmniRoute (free models, local gateway)",
+    kind: "openai-compatible",
+    baseUrl: "http://localhost:20128/v1",
+    defaultModel: "auto",
+    keyOptional: true,
+    free: true,
+    editableBaseUrl: true,
+    noVision: true,
+    setup: "npm install -g omniroute && omniroute",
+    hint:
+      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Model \"auto\" picks the best free model; \"auto/cheap\", \"auto/fast\" and \"auto/best-free\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). The free pool has no reliable vision models, so image support is turned off for this preset; Enki works from the page DOM instead. Re-enable it below if you added your own vision-capable keys to OmniRoute.",
+  },
+  {
+    id: "ollama",
+    label: "Ollama (local)",
+    kind: "openai-compatible",
+    baseUrl: "http://localhost:11434/v1",
+    defaultModel: "qwen3-vl",
+    keyOptional: true,
+    free: true,
+    editableBaseUrl: true,
+    setup: "ollama pull qwen3-vl",
+    hint:
+      "Runs on your machine, free. Pick a vision-capable model with tool support. Start Ollama with OLLAMA_ORIGINS=chrome-extension://* so the extension is allowed to call it.",
+  },
+  {
     id: "anthropic",
     label: "Anthropic (Claude)",
     kind: "anthropic",
@@ -72,33 +99,6 @@ export const PRESETS: Preset[] = [
     keyUrl: "https://openrouter.ai/keys",
   },
   {
-    id: "omniroute",
-    label: "OmniRoute (free models, local gateway)",
-    kind: "openai-compatible",
-    baseUrl: "http://localhost:20128/v1",
-    defaultModel: "auto",
-    keyOptional: true,
-    free: true,
-    editableBaseUrl: true,
-    noVision: true,
-    setup: "npm install -g omniroute && omniroute",
-    hint:
-      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Model \"auto\" picks the best free model; \"auto/cheap\", \"auto/fast\" and \"auto/best-free\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). The free pool has no reliable vision models, so image support is turned off for this preset; Enki works from the page DOM instead. Re-enable it below if you added your own vision-capable keys to OmniRoute.",
-  },
-  {
-    id: "ollama",
-    label: "Ollama (local)",
-    kind: "openai-compatible",
-    baseUrl: "http://localhost:11434/v1",
-    defaultModel: "qwen3-vl",
-    keyOptional: true,
-    free: true,
-    editableBaseUrl: true,
-    setup: "ollama pull qwen3-vl",
-    hint:
-      "Runs on your machine, free. Pick a vision-capable model with tool support. Start Ollama with OLLAMA_ORIGINS=chrome-extension://* so the extension is allowed to call it.",
-  },
-  {
     id: "custom",
     label: "Custom (OpenAI-compatible)",
     kind: "openai-compatible",
@@ -129,8 +129,8 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = {
   preset: "anthropic",
   apiKey: "",
-  baseUrl: PRESETS[0].baseUrl,
-  model: PRESETS[0].defaultModel,
+  baseUrl: presetOf("anthropic").baseUrl,
+  model: presetOf("anthropic").defaultModel,
   autoApprove: false,
   vision: true,
   attachScreenshot: true,
