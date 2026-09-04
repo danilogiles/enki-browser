@@ -25,6 +25,8 @@ export type Preset = {
   editableBaseUrl?: boolean;
   /** Free-tier or local option; highlighted in the picker. */
   free?: boolean;
+  /** Selecting this preset turns image support off (models behind it usually reject images). */
+  noVision?: boolean;
 };
 
 export const PRESETS: Preset[] = [
@@ -78,9 +80,10 @@ export const PRESETS: Preset[] = [
     keyOptional: true,
     free: true,
     editableBaseUrl: true,
+    noVision: true,
     setup: "npm install -g omniroute && omniroute",
     hint:
-      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Model \"auto\" picks the best free model; \"auto/cheap\" and \"auto/fast\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). If a routed model rejects images, turn off screenshots below.",
+      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Model \"auto\" picks the best free model; \"auto/cheap\", \"auto/fast\" and \"auto/best-free\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). The free pool has no reliable vision models, so image support is turned off for this preset; Enki works from the page DOM instead. Re-enable it below if you added your own vision-capable keys to OmniRoute.",
   },
   {
     id: "ollama",
@@ -113,7 +116,9 @@ export type Settings = {
   model: string;
   /** Skip the confirmation card for sensitive actions (send, buy, delete...). */
   autoApprove: boolean;
-  /** Attach a screenshot of the current tab with every user message. */
+  /** The model accepts images. When false, no screenshots are sent and the screenshot tool is hidden. */
+  vision: boolean;
+  /** Attach a screenshot of the current tab with every user message (requires vision). */
   attachScreenshot: boolean;
   /** Max tool-call rounds per user request. */
   maxSteps: number;
@@ -127,6 +132,7 @@ export const DEFAULT_SETTINGS: Settings = {
   baseUrl: PRESETS[0].baseUrl,
   model: PRESETS[0].defaultModel,
   autoApprove: false,
+  vision: true,
   attachScreenshot: true,
   maxSteps: 30,
   customInstructions: "",

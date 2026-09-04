@@ -22,7 +22,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
 
   const choosePreset = (id: PresetId) => {
     const p = presetOf(id);
-    setDraft((d) => ({ ...d, preset: id, baseUrl: p.baseUrl, model: p.defaultModel }));
+    setDraft((d) => ({ ...d, preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision }));
     setModels([]);
     setStatus(null);
   };
@@ -169,9 +169,16 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
 
         <Section title="Behavior">
           <Toggle
+            label="Model supports images"
+            hint="Turn off for text-only models. Enki then works from the page DOM and hides the screenshot tool."
+            checked={draft.vision}
+            onChange={(v) => set("vision", v)}
+          />
+          <Toggle
             label="Attach a screenshot to every message"
             hint="Lets Enki see what you see. Costs a few hundred tokens per message."
-            checked={draft.attachScreenshot}
+            checked={draft.vision && draft.attachScreenshot}
+            disabled={!draft.vision}
             onChange={(v) => set("attachScreenshot", v)}
           />
           <Toggle
@@ -230,13 +237,25 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 py-1">
+    <label className={`flex items-start gap-3 py-1 ${disabled ? "opacity-40" : "cursor-pointer"}`}>
       <span
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
+        onClick={() => !disabled && onChange(!checked)}
         className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-enki-500" : "bg-ink-700"}`}
       >
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${checked ? "left-4.5" : "left-0.5"}`} />

@@ -8,12 +8,13 @@ type Props = {
   onSend: (text: string) => void;
   onStop: () => void;
   attachScreenshot: boolean;
+  vision: boolean;
   onToggleScreenshot: () => void;
   mode: Mode;
   usage: { input: number; output: number };
 };
 
-export function Composer({ disabled, running, onSend, onStop, attachScreenshot, onToggleScreenshot, mode, usage }: Props) {
+export function Composer({ disabled, running, onSend, onStop, attachScreenshot, vision, onToggleScreenshot, mode, usage }: Props) {
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -51,8 +52,15 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
         <button
           type="button"
           onClick={onToggleScreenshot}
-          title={attachScreenshot ? "Screenshot attached to each message (click to turn off)" : "Screenshot off (click to attach)"}
-          className={`rounded-md p-1.5 transition ${attachScreenshot ? "text-enki-400 hover:bg-ink-800" : "text-zinc-500 hover:bg-ink-800 hover:text-zinc-300"}`}
+          disabled={!vision}
+          title={
+            !vision
+              ? "This model does not accept images (change in Settings)"
+              : attachScreenshot
+                ? "Screenshot attached to each message (click to turn off)"
+                : "Screenshot off (click to attach)"
+          }
+          className={`rounded-md p-1.5 transition disabled:opacity-30 ${attachScreenshot ? "text-enki-400 hover:bg-ink-800" : "text-zinc-500 hover:bg-ink-800 hover:text-zinc-300"}`}
         >
           {attachScreenshot ? <Camera size={16} /> : <CameraOff size={16} />}
         </button>

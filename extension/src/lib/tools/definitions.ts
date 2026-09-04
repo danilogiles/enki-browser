@@ -158,6 +158,7 @@ export const ACT_TOOLS: ToolDefinition[] = [
 
 export const ALL_TOOLS: ToolDefinition[] = [...READ_TOOLS, ...ACT_TOOLS];
 
-export function toolsForMode(mode: "ask" | "act"): ToolDefinition[] {
-  return mode === "act" ? ALL_TOOLS : READ_TOOLS;
+export function toolsForMode(mode: "ask" | "act", vision = true): ToolDefinition[] {
+  const tools = mode === "act" ? ALL_TOOLS : READ_TOOLS;
+  return vision ? tools : tools.filter((t) => t.name !== "screenshot");
 }

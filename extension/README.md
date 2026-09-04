@@ -60,7 +60,7 @@ npm install -g omniroute && omniroute
 
 Then in Enki's Settings pick **OmniRoute**, keep the model as `auto` (or `auto/cheap`, `auto/fast`), press the refresh button to check the connection, and save. The dashboard at `http://localhost:20128` lets you add your own paid keys to the same endpoint later.
 
-Free models vary in quality and some do not accept images. If a request fails because of the screenshot, turn off "Attach a screenshot" in Settings; Enki still reads the page through the DOM tools.
+The free pool currently has no reliable vision models, so picking the OmniRoute preset turns off "Model supports images" automatically. Enki then works from the page DOM (accessibility snapshot, find, page text), which covers most tasks. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
 
 ### Why no "log in with my Claude / ChatGPT subscription"?
 

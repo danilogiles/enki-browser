@@ -58,20 +58,31 @@ export class OpenAICompatProvider implements ChatProvider {
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
-      throw new Error(`${res.status} ${res.statusText}${text ? `: ${text.slice(0, 500)}` : ""}`);
+      throw new Error(`${res.status} ${res.statusText}${text ? `: ${errorText(text)}` : ""}`);
+    }
+    // Some gateways answer 200 with a JSON error body instead of an event stream.
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.includes("text/event-stream")) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Provider did not stream a response: ${errorText(text) || contentType || "empty body"}`);
     }
 
     const calls = new Map<number, { id: string; name: string; args: string }>();
     let finish: string | null = null;
     let usage: { inputTokens: number; outputTokens: number } | null = null;
+    let chunks = 0;
 
     for await (const data of sseLines(res.body)) {
       if (data === "[DONE]") break;
+      chunks++;
       let chunk: OpenAIChunk;
       try {
         chunk = JSON.parse(data) as OpenAIChunk;
       } catch {
         continue;
+      }
+      if (chunk.error) {
+        throw new Error(typeof chunk.error === "string" ? chunk.error : chunk.error.message ?? JSON.stringify(chunk.error));
       }
       if (chunk.usage) {
         usage = {
@@ -98,6 +109,14 @@ export class OpenAICompatProvider implements ChatProvider {
         calls.set(idx, cur);
       }
       if (choice.finish_reason) finish = choice.finish_reason;
+    }
+
+    if (chunks === 0) {
+      // Gateways like OmniRoute close the stream with only "[DONE]" when every upstream provider
+      // failed or is rate-limited. Surface that instead of reporting an empty reply.
+      throw new Error(
+        "The provider closed the stream without sending anything. The model is probably rate-limited or unavailable right now; try again in a minute or pick another model.",
+      );
     }
 
     for (const [idx, c] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
@@ -138,7 +157,22 @@ type OpenAIChunk = {
     finish_reason?: string | null;
   }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+  error?: { message?: string } | string;
 };
+
+/** Pull a readable message out of an error body, JSON or plain text. */
+function errorText(body: string): string {
+  try {
+    const j = JSON.parse(body) as { error?: { message?: string } | string; message?: string };
+    const e = j.error;
+    if (typeof e === "string") return e;
+    if (e?.message) return e.message;
+    if (j.message) return j.message;
+  } catch {
+    /* not JSON */
+  }
+  return body.slice(0, 500);
+}
 
 async function* sseLines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const reader = body.getReader();

@@ -17,7 +17,7 @@ export type AgentEvent =
   | { type: "approval_request"; call: ToolCallPart; label: string }
   | { type: "tool_result"; call: ToolCallPart; result: ToolResultPart; declined?: boolean }
   | { type: "usage"; inputTokens: number; outputTokens: number }
-  | { type: "done"; reason: StopReason | "max_steps" | "aborted" }
+  | { type: "done"; reason: StopReason | "max_steps" | "aborted" | "empty" }
   | { type: "error"; message: string };
 
 export type RunOptions = {
@@ -39,6 +39,7 @@ const DECLINED_TEXT = "The user declined this action. Stop and ask them how they
 
 export async function runTurn(o: RunOptions): Promise<void> {
   const { onEvent } = o;
+  let nudged = false;
   try {
     for (let step = 0; step < o.maxSteps; step++) {
       if (o.signal.aborted) return void onEvent({ type: "done", reason: "aborted" });
@@ -76,9 +77,23 @@ export async function runTurn(o: RunOptions): Promise<void> {
       }
 
       const parts: Array<TextPart | ToolCallPart> = [];
-      if (textAcc) parts.push({ type: "text", text: textAcc });
+      if (textAcc.trim()) parts.push({ type: "text", text: textAcc });
       parts.push(...calls);
-      if (parts.length) o.history.push({ role: "assistant", parts });
+
+      // Some (mostly free) models end a turn with no text and no tool call, typically after
+      // reasoning or tool results. Nudge once; if it happens again, surface it to the user.
+      if (!parts.length) {
+        if (!nudged) {
+          nudged = true;
+          o.history.push({
+            role: "user",
+            parts: [{ type: "text", text: "(Your last reply was empty. Answer the request now in plain text.)" }],
+          });
+          continue;
+        }
+        return void onEvent({ type: "done", reason: "empty" });
+      }
+      o.history.push({ role: "assistant", parts });
 
       if (!calls.length) return void onEvent({ type: "done", reason: stop });
 

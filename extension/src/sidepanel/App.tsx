@@ -151,7 +151,11 @@ export function App() {
                   ? "Stopped."
                   : e.reason === "refusal"
                     ? "The model declined to continue with this request."
-                    : undefined,
+                    : e.reason === "empty"
+                      ? "The model returned an empty reply twice. Try again, rephrase, or pick another model in Settings."
+                      : e.reason === "max_tokens"
+                        ? "The reply was cut off at the token limit."
+                        : undefined,
           }));
           break;
         case "error":
@@ -201,7 +205,7 @@ export function App() {
 
       const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${context}\n\n${trimmed}` }];
       let thumb: string | undefined;
-      if (settings.attachScreenshot && !restricted) {
+      if (settings.vision && settings.attachScreenshot && !restricted) {
         try {
           const shot = await executor.screenshot();
           parts.push({ type: "image", mediaType: shot.mediaType, data: shot.data });
@@ -222,7 +226,7 @@ export function App() {
         model: settings.model,
         system: buildSystemPrompt(mode, settings.customInstructions),
         history: historyRef.current,
-        tools: toolsForMode(mode),
+        tools: toolsForMode(mode, settings.vision),
         executor,
         maxSteps: settings.maxSteps,
         autoApprove: settings.autoApprove,
@@ -247,7 +251,7 @@ export function App() {
   };
 
   const toggleScreenshot = async () => {
-    if (!settings) return;
+    if (!settings || !settings.vision) return;
     const next = { ...settings, attachScreenshot: !settings.attachScreenshot };
     setSettings(next);
     await saveSettings(next);
@@ -324,7 +328,8 @@ export function App() {
         running={running}
         onSend={send}
         onStop={stop}
-        attachScreenshot={settings.attachScreenshot}
+        attachScreenshot={settings.vision && settings.attachScreenshot}
+        vision={settings.vision}
         onToggleScreenshot={toggleScreenshot}
         mode={mode}
         usage={usage}
