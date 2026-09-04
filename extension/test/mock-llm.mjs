@@ -58,6 +58,12 @@ function refFor(snapshot, pattern) {
 }
 
 const server = http.createServer((req, res) => {
+  if (req.method === "GET" && req.url.startsWith("/heavy")) {
+    // A page big enough that a stale snapshot is expensive to keep around.
+    const rows = Array.from({ length: 400 }, (_, i) => `<p><a href="/x${i}">Item number ${i} with some descriptive text</a></p>`).join("");
+    res.writeHead(200, { "Content-Type": "text/html" });
+    return res.end(`<!doctype html><title>Heavy page</title><body><h1>Heavy</h1>${rows}</body>`);
+  }
   if (req.method === "GET" && req.url.startsWith("/page")) {
     res.writeHead(200, { "Content-Type": "text/html" });
     return res.end(PAGE);
@@ -94,6 +100,12 @@ const server = http.createServer((req, res) => {
         sse(res, { choices: [{ delta: {}, finish_reason: "stop" }] });
         res.write("data: [DONE]\n\n");
         return res.end();
+      }
+      // Reads the page once per turn, so repeated turns pile up page observations.
+      if (model === "mock-reader") {
+        const last = messages[messages.length - 1];
+        if (last?.role === "tool") return streamText(res, "Read it.");
+        return streamToolCall(res, "read_page", { filter: "all" });
       }
       // Reports a completed navigation without calling any tool — the "it says it did but the
       // page never moved" failure. Once corrected, it performs the navigation for real.

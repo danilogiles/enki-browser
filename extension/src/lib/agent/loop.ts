@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import type { BrowserExecutor, ToolOutput } from "../tools/executor";
 import { log } from "../debug";
+import { compactHistory, historySize } from "./context";
 
 export type AgentEvent =
   | { type: "assistant_start" }
@@ -59,7 +60,18 @@ export async function runTurn(o: RunOptions): Promise<void> {
   try {
     for (let step = 0; step < o.maxSteps; step++) {
       if (o.signal.aborted) return void onEvent({ type: "done", reason: "aborted" });
-      log.info("agent", `Step ${step + 1}/${o.maxSteps}`, { model: o.model, historyMessages: o.history.length });
+      // Drop superseded page observations so the model sees one current browser state rather
+      // than several contradictory ones from earlier steps and turns.
+      const before = historySize(o.history);
+      const compacted = compactHistory(o.history);
+      log.info("agent", `Step ${step + 1}/${o.maxSteps}`, {
+        model: o.model,
+        historyMessages: o.history.length,
+        contextChars: historySize(o.history),
+        ...(compacted.observations + compacted.screenshots + compacted.headers > 0
+          ? { compacted, freedChars: before - historySize(o.history) }
+          : {}),
+      });
       onEvent({ type: "assistant_start" });
 
       let textAcc = "";

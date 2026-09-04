@@ -67,6 +67,14 @@ Follow the install and start instructions in the official repository, [github.co
 3. **If the connection test says 401:** running OmniRoute in Docker with `NODE_ENV=production` gates its API, so `GET /v1/models` answers `401 Authentication required` while `POST /v1/chat/completions` still works without a key. Enki detects this — the test falls back to a one-token chat probe and reports *"Chat works; this endpoint needs a key only to list models"*. Type the model id (`auto`) by hand, or create a key in the dashboard at `http://localhost:20128` to get the model list too.
 4. The free pool has no reliable vision models, so the OmniRoute preset turns off image support automatically and works from the page DOM. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
 
+### How Enki keeps track of the browser
+
+A page snapshot is true only for the instant it was taken. Left in the transcript they pile up — each `read_page` is several thousand tokens — and they contradict each other, so by the third request the model is looking at several versions of "the page" and can answer from a stale one or believe it is somewhere it no longer is. That is the usual reason a browser agent works on the first request and drifts afterwards.
+
+Before every request Enki collapses superseded observations to a one-line marker, drops older screenshots, and keeps the live tab header on the newest message only. The model therefore sees exactly one authoritative view of the browser: the current one. Turn the Logs on to watch it — each step reports `contextChars` and how much a compaction freed.
+
+Conversations live in the side panel and are lost when it closes; persistent history is on the roadmap.
+
 ### Debugging: developer mode
 
 Turn on **Developer mode** in Settings → Behavior. A 🐞 **Logs** button appears in the header showing every provider request (endpoint, model, message and tool counts, request size, time to first chunk, finish reason, token usage), every tool call and its result, and every error. The same entries stream to the browser console — right-click the panel and choose *Inspect* to watch them live.

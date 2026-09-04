@@ -61,11 +61,8 @@ try {
   );
   const panelUrl = `chrome-extension://${extId}/src/sidepanel/index.html?window=${wid}`;
 
-  const ask = async (model, text, { timeout = 60000, requestTimeoutSec = 60, mode = "ask" } = {}) => {
-    await configure(model, requestTimeoutSec, mode);
-    await panel.goto(panelUrl);
-    await panel.waitForSelector("textarea", { timeout: 10000 });
-    await panel.waitForTimeout(600);
+  /** Sends one message into the conversation already on screen. */
+  const send = async (text, timeout = 60000) => {
     await panel.fill("textarea", text);
     await panel.press("textarea", "Enter");
     // A fast mock can finish between polls, so anchor on the sent message appearing rather
@@ -74,6 +71,15 @@ try {
     await panel.waitForFunction(() => !document.querySelector("button[title='Stop']"), null, { timeout });
     await panel.waitForTimeout(400);
     return panel.evaluate(() => document.body.innerText);
+  };
+
+  /** Starts a fresh conversation with the given model, then sends one message. */
+  const ask = async (model, text, { timeout = 60000, requestTimeoutSec = 60, mode = "ask" } = {}) => {
+    await configure(model, requestTimeoutSec, mode);
+    await panel.goto(panelUrl);
+    await panel.waitForSelector("textarea", { timeout: 10000 });
+    await panel.waitForTimeout(600);
+    return send(text, timeout);
   };
 
   // 1. A model that only ever fills the reasoning channel must still show an answer.
@@ -104,7 +110,36 @@ try {
     `tab=${movedTo} | ${liar.split("\n").filter(Boolean).slice(-3).join(" | ")}`,
   );
 
-  // 4. A wedged gateway must fail with a message instead of spinning forever. The response
+  // 4. Repeated page reads must not pile up: only the newest observations stay in context.
+  await panel.evaluate(
+    async ({ wid, mock }) => {
+      const [t] = await chrome.tabs.query({ active: true, windowId: wid });
+      await chrome.tabs.update(t.id, { url: `${mock}/heavy` });
+      await new Promise((r) => setTimeout(r, 2500));
+    },
+    { wid, mock: MOCK },
+  );
+  const sizes = [];
+  panel.on("console", (m) => {
+    const s = /contextChars: (\d+)/.exec(m.text());
+    const f = /freedChars: (\d+)/.exec(m.text());
+    if (s) sizes.push({ chars: Number(s[1]), freed: f ? Number(f[1]) : 0 });
+  });
+  // One conversation, three messages — reloading the panel would start over.
+  await ask("mock-reader", "read the page 0", { mode: "act" });
+  await send("read the page 1");
+  await send("read the page 2");
+  // Each read of /heavy is ~14k chars. Three of them unpruned would push the context past 40k;
+  // compaction should collapse the superseded ones and hold it well below that.
+  const peak = Math.max(...sizes.map((s) => s.chars), 0);
+  const freed = Math.max(...sizes.map((s) => s.freed), 0);
+  check(
+    "repeated page reads are compacted instead of accumulating",
+    freed > 8000 && peak < 40000,
+    `peak=${peak} freedInOneStep=${freed} (3 unpruned snapshots would exceed 40000)`,
+  );
+
+  // 5. A wedged gateway must fail with a message instead of spinning forever. The response
   //    timeout is set to 6s here so the test does not sit through the 180s default.
   const started = Date.now();
   const stalled = await ask("mock-stall", "hello", { timeout: 40000, requestTimeoutSec: 6 });
