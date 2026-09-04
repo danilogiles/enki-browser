@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  RotateCw,
   ShieldAlert,
   X,
 } from "lucide-react";
@@ -19,6 +20,7 @@ type Props = {
   mode: Mode;
   model: string;
   onSuggest: (text: string) => void;
+  onRetry?: () => void;
 };
 
 const SUGGESTIONS: Record<Mode, string[]> = {
@@ -26,7 +28,7 @@ const SUGGESTIONS: Record<Mode, string[]> = {
   act: ["Search this site for…", "Fill in the form with…", "Open the pricing page", "Find and click the sign-in button"],
 };
 
-export function Chat({ messages, approval, mode, model, onSuggest }: Props) {
+export function Chat({ messages, approval, mode, model, onSuggest, onRetry }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -63,8 +65,13 @@ export function Chat({ messages, approval, mode, model, onSuggest }: Props) {
   return (
     <div className="flex-1 overflow-y-auto px-3 py-3">
       <div className="flex flex-col gap-4">
-        {messages.map((m) => (
-          <MessageView key={m.id} message={m} approval={approval} />
+        {messages.map((m, idx) => (
+          <MessageView
+            key={m.id}
+            message={m}
+            approval={approval}
+            onRetry={idx === messages.length - 1 ? onRetry : undefined}
+          />
         ))}
       </div>
       <div ref={bottomRef} />
@@ -72,7 +79,15 @@ export function Chat({ messages, approval, mode, model, onSuggest }: Props) {
   );
 }
 
-function MessageView({ message, approval }: { message: UiMessage; approval: Props["approval"] }) {
+function MessageView({
+  message,
+  approval,
+  onRetry,
+}: {
+  message: UiMessage;
+  approval: Props["approval"];
+  onRetry?: () => void;
+}) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
@@ -118,9 +133,22 @@ function MessageView({ message, approval }: { message: UiMessage; approval: Prop
         </div>
       )}
       {message.error && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-          <span className="break-words">{message.error}</span>
+        <div className="flex flex-col gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span className="break-words">{message.error}</span>
+          </div>
+          {onRetry && (
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={onRetry}
+                className="inline-flex items-center gap-1 rounded border border-red-500/30 bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-100 transition hover:bg-red-500/30 hover:text-white"
+              >
+                <RotateCw size={11} /> Tentar novamente
+              </button>
+            </div>
+          )}
         </div>
       )}
       {message.note && <div className="text-xs text-zinc-500">{message.note}</div>}

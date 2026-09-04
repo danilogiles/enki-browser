@@ -54,11 +54,23 @@ Pick a model that supports **images** and **tool calling**. Good options:
 
 [OmniRoute](https://github.com/diegosouzapw/OmniRoute) is an MIT-licensed AI gateway you run on your own machine. It exposes one OpenAI-compatible endpoint and routes each request to the best available free provider, falling back automatically when a quota runs out. No account or key is needed for the free pool.
 
+#### Option A: Run with Docker Compose (Recommended)
+
+The repository includes a pre-configured Docker setup with Playwright and Chromium dependencies pre-installed (preventing `Playwright is not available` upstream errors):
+
+```bash
+docker compose up -d --build
+```
+
+See [`docker/README.md`](docker/README.md) for full Docker setup instructions and options.
+
+#### Option B: Run with npm CLI
+
 ```bash
 npm install -g omniroute && omniroute
 ```
 
-Then in Enki's Settings pick **OmniRoute**, keep the model as `auto` (or `auto/cheap`, `auto/fast`), press the refresh button to check the connection, and save. The dashboard at `http://localhost:20128` lets you add your own paid keys to the same endpoint later.
+Then in Enki's Settings pick **OmniRoute**, keep the model as `auto` (or `openrouter/auto`, `tr/auto`), press the refresh button to check the connection, and save. The dashboard at `http://localhost:20128` lets you add your own keys to the same endpoint later.
 
 The free pool currently has no reliable vision models, so picking the OmniRoute preset turns off "Model supports images" automatically. Enki then works from the page DOM (accessibility snapshot, find, page text), which covers most tasks. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
 

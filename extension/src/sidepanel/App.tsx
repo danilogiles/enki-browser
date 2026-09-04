@@ -242,6 +242,17 @@ export function App() {
 
   const stop = () => abortRef.current?.abort();
 
+  const retry = useCallback(() => {
+    const lastUser = [...historyRef.current].reverse().find((m) => m.role === "user");
+    if (!lastUser) return;
+    const textPart = lastUser.parts.find((p) => p.type === "text") as { text: string } | undefined;
+    if (!textPart) return;
+    const raw = textPart.text;
+    const idx = raw.indexOf("\n\n");
+    const userPrompt = idx !== -1 ? raw.slice(idx + 2) : raw;
+    send(userPrompt);
+  }, [send]);
+
   const newChat = () => {
     stop();
     historyRef.current = [];
@@ -280,6 +291,14 @@ export function App() {
       <header className="flex items-center gap-2 border-b border-ink-700 px-3 py-2">
         <img src={logo} alt="" className="h-6 w-6 rounded-md" />
         <span className="font-semibold tracking-tight">Enki</span>
+        <button
+          type="button"
+          onClick={() => setView("settings")}
+          title={`Active model: ${settings.model} (${presetOf(settings.preset).label}). Click to open settings.`}
+          className="max-w-[120px] truncate rounded bg-ink-800/80 px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-ink-700 hover:text-zinc-200"
+        >
+          {settings.model || settings.preset}
+        </button>
         <div className="ml-auto flex items-center gap-1">
           <ModeToggle mode={mode} onChange={changeMode} disabled={running} />
           <IconButton title="New chat" onClick={newChat}>
@@ -310,6 +329,7 @@ export function App() {
         approval={approval}
         mode={mode}
         onSuggest={send}
+        onRetry={retry}
         model={settings.model}
       />
 
