@@ -1,6 +1,14 @@
 export type ProviderKind = "anthropic" | "openai-compatible";
 
-export type PresetId = "anthropic" | "openai" | "gemini" | "groq" | "openrouter" | "ollama" | "custom";
+export type PresetId =
+  | "anthropic"
+  | "openai"
+  | "gemini"
+  | "groq"
+  | "openrouter"
+  | "omniroute"
+  | "ollama"
+  | "custom";
 
 export type Preset = {
   id: PresetId;
@@ -11,6 +19,12 @@ export type Preset = {
   keyUrl?: string;
   keyOptional?: boolean;
   hint?: string;
+  /** Shell command that installs and starts a local server for this preset. */
+  setup?: string;
+  /** Show the base URL field (local or self-hosted servers). */
+  editableBaseUrl?: boolean;
+  /** Free-tier or local option; highlighted in the picker. */
+  free?: boolean;
 };
 
 export const PRESETS: Preset[] = [
@@ -56,13 +70,30 @@ export const PRESETS: Preset[] = [
     keyUrl: "https://openrouter.ai/keys",
   },
   {
+    id: "omniroute",
+    label: "OmniRoute (free models, local gateway)",
+    kind: "openai-compatible",
+    baseUrl: "http://localhost:20128/v1",
+    defaultModel: "auto",
+    keyOptional: true,
+    free: true,
+    editableBaseUrl: true,
+    setup: "npm install -g omniroute && omniroute",
+    hint:
+      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Model \"auto\" picks the best free model; \"auto/cheap\" and \"auto/fast\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). If a routed model rejects images, turn off screenshots below.",
+  },
+  {
     id: "ollama",
     label: "Ollama (local)",
     kind: "openai-compatible",
     baseUrl: "http://localhost:11434/v1",
     defaultModel: "qwen3-vl",
     keyOptional: true,
-    hint: "Runs on your machine, free. Pick a vision-capable model with tool support.",
+    free: true,
+    editableBaseUrl: true,
+    setup: "ollama pull qwen3-vl",
+    hint:
+      "Runs on your machine, free. Pick a vision-capable model with tool support. Start Ollama with OLLAMA_ORIGINS=chrome-extension://* so the extension is allowed to call it.",
   },
   {
     id: "custom",
@@ -71,6 +102,7 @@ export const PRESETS: Preset[] = [
     baseUrl: "",
     defaultModel: "",
     keyOptional: true,
+    editableBaseUrl: true,
   },
 ];
 

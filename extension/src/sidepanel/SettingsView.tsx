@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ArrowLeft, Eye, EyeOff, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Copy, Eye, EyeOff, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { PRESETS, presetOf, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
 
@@ -35,7 +35,12 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
       setModels(list);
       setStatus({ kind: "ok", text: `Connected. ${list.length} models available.` });
     } catch (e) {
-      setStatus({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+      const msg = e instanceof Error ? e.message : String(e);
+      const offline = /Failed to fetch|NetworkError|ECONNREFUSED/i.test(msg) && preset.setup;
+      setStatus({
+        kind: "error",
+        text: offline ? `Could not reach ${draft.baseUrl}. Is it running? Start it with: ${preset.setup}` : msg,
+      });
     } finally {
       setLoadingModels(false);
     }
@@ -71,11 +76,28 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           >
             {PRESETS.map((p) => (
               <option key={p.id} value={p.id}>
+                {p.free ? "🆓 " : ""}
                 {p.label}
               </option>
             ))}
           </select>
           {preset.hint && <p className="text-xs text-zinc-500">{preset.hint}</p>}
+          {preset.setup && (
+            <div className="rounded-md border border-ink-700 bg-ink-900/70 px-2.5 py-2 text-xs">
+              <div className="mb-1 text-zinc-500">Install and start it from a terminal:</div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 select-all break-all font-mono text-enki-400">{preset.setup}</code>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(preset.setup!)}
+                  className="shrink-0 rounded border border-ink-700 px-1.5 py-0.5 text-zinc-400 hover:text-zinc-100"
+                  title="Copy"
+                >
+                  <Copy size={12} />
+                </button>
+              </div>
+            </div>
+          )}
 
           <label className="mt-3 block text-xs text-zinc-400">
             API key {preset.keyOptional && <span className="text-zinc-600">(optional)</span>}
@@ -103,7 +125,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
             Keys are stored locally in this browser and sent only to the provider above.
           </p>
 
-          {(preset.id === "custom" || preset.id === "ollama") && (
+          {preset.editableBaseUrl && (
             <>
               <label className="mt-3 block text-xs text-zinc-400">Base URL</label>
               <input

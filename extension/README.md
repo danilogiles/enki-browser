@@ -47,11 +47,24 @@ Pick a model that supports **images** and **tool calling**. Good options:
 | Google Gemini | `gemini-2.5-flash` | Free tier available through AI Studio. |
 | Groq | a vision + tools model | Very fast, cheap. |
 | OpenRouter | anything with vision and tools | One key, many models. |
+| OmniRoute | `auto` | Free. Local gateway that routes to 150+ free providers automatically. See below. |
 | Ollama | `qwen3-vl` or another vision model with tools | Runs locally, free. Start Ollama with `OLLAMA_ORIGINS=chrome-extension://*` so the extension can reach it. |
+
+### Free models with OmniRoute
+
+[OmniRoute](https://github.com/diegosouzapw/OmniRoute) is an MIT-licensed AI gateway you run on your own machine. It exposes one OpenAI-compatible endpoint and routes each request to the best available free provider, falling back automatically when a quota runs out. No account or key is needed for the free pool.
+
+```bash
+npm install -g omniroute && omniroute
+```
+
+Then in Enki's Settings pick **OmniRoute**, keep the model as `auto` (or `auto/cheap`, `auto/fast`), press the refresh button to check the connection, and save. The dashboard at `http://localhost:20128` lets you add your own paid keys to the same endpoint later.
+
+Free models vary in quality and some do not accept images. If a request fails because of the screenshot, turn off "Attach a screenshot" in Settings; Enki still reads the page through the DOM tools.
 
 ### Why no "log in with my Claude / ChatGPT subscription"?
 
-Anthropic and OpenAI only allow subscription (OAuth) access from their own apps. Third-party tools like Enki must use API keys, which are billed per token. Cheaper options are Gemini's free tier, Groq, or a local Ollama model.
+Anthropic and OpenAI only allow subscription (OAuth) access from their own apps. Third-party tools like Enki must use API keys, which are billed per token. Free or cheap options are OmniRoute, Gemini's free tier, Groq, or a local Ollama model.
 
 ## Development
 
