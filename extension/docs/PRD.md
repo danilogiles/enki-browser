@@ -94,4 +94,5 @@ Unlike web search engines or cloud-based browser sandbox automation tools, Enki 
 - [ ] **User Recipe Library:** Save custom reusable automation workflows (e.g., "Extract product prices to CSV").
 - [ ] **Form Autofill Profile:** Safe user-approved profile for non-sensitive data (name, email, shipping address).
 - [ ] **Tab Group Awareness:** Group and manage tabs opened by autonomous agents.
-- [ ] **Dark / Light Theme Sync:** Match host browser system theme automatically.
+- [x] **Dark / Light Theme Sync:** Match host browser system theme automatically. *(Shipped: the "System (auto)" theme.)*
+- [ ] **Companion Mode (phase 2):** Passive observer that watches browsing and offers proactive suggestions.
