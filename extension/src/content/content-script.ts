@@ -352,6 +352,17 @@ function getRef(ref: string): Element {
   return el;
 }
 
+function isPasswordField(el: Element): boolean {
+  if (el instanceof HTMLInputElement) {
+    if (el.type.toLowerCase() === "password") return true;
+    const auto = (el.getAttribute("autocomplete") ?? "").toLowerCase();
+    if (auto.includes("password") || auto.includes("cc-csc") || auto.includes("current-password") || auto.includes("new-password")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function locate(ref: string): LocatedElement {
   const el = getRef(ref);
   el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" as ScrollBehavior });
@@ -368,6 +379,7 @@ function locate(ref: string): LocatedElement {
     role,
     name,
     sensitive: SENSITIVE_ACTION.test(name) || (isSubmit && !/search|buscar|pesquisar/i.test(name)),
+    isPassword: isPasswordField(el),
   };
 }
 
@@ -379,7 +391,7 @@ function describePoint(x: number, y: number): LocatedElement {
     if (!inner || inner === el) break;
     el = inner;
   }
-  if (!el) return { x, y, tag: "?", role: "?", name: "", sensitive: false };
+  if (!el) return { x, y, tag: "?", role: "?", name: "", sensitive: false, isPassword: false };
   // Prefer the closest interactive ancestor for naming/sensitivity.
   let cur: Element | null = el;
   while (cur && !isInteractive(cur, roleOf(cur)) && cur !== document.body) cur = cur.parentElement;
@@ -393,6 +405,7 @@ function describePoint(x: number, y: number): LocatedElement {
     role,
     name,
     sensitive: SENSITIVE_ACTION.test(name),
+    isPassword: isPasswordField(target),
   };
 }
 

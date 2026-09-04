@@ -32,6 +32,8 @@ export type LocatedElement = {
   name: string;
   /** Looks like an irreversible / outward-facing action (send, buy, delete...). */
   sensitive: boolean;
+  /** Whether this element is a password or credential input field. */
+  isPassword?: boolean;
 };
 
 export type ContentResponse<T = unknown> = { ok: true; data: T } | { ok: false; error: string };

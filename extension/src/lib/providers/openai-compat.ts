@@ -58,7 +58,20 @@ export class OpenAICompatProvider implements ChatProvider {
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
-      throw new Error(`${res.status} ${res.statusText}${text ? `: ${errorText(text)}` : ""}`);
+      const detail = errorText(text);
+      let hint = "";
+      if (res.status === 401) {
+        hint = " (Check your API key in Settings ⚙️).";
+      } else if (res.status === 429) {
+        hint = " (Rate limit or credits exhausted. Try switching models in Settings ⚙️).";
+      } else if (res.status === 502 || res.status === 503) {
+        if (/playwright/i.test(detail)) {
+          hint = " (The provider gateway requires Playwright/Chromium dependencies or failed upstream. Try switching model in Settings ⚙️).";
+        } else {
+          hint = " (The upstream provider is temporarily unavailable. Check your local gateway or pick another model in Settings ⚙️).";
+        }
+      }
+      throw new Error(`${res.status} ${res.statusText}${detail ? `: ${detail}` : ""}${hint}`);
     }
     // Some gateways answer 200 with a JSON error body instead of an event stream.
     const contentType = res.headers.get("content-type") ?? "";

@@ -79,6 +79,16 @@ Other scripts:
 - `npm run build` - typecheck and produce `dist/`.
 - `npm run typecheck` - TypeScript only.
 - `npm run icons` - regenerate the PNG icons from the inline SVG logo.
+- `npm run test:e2e` - run automated end-to-end tests.
+
+## Documentation
+
+Comprehensive project documentation is available in [`docs/`](docs/):
+
+- 📄 **[Product Requirements Document (PRD)](docs/PRD.md)** — Vision, personas, functional requirements, and roadmap.
+- 🏗️ **[System Architecture](docs/ARCHITECTURE.md)** — Deep dive into the side panel runtime, Chrome MV3 lifecycle, and CDP execution pipeline.
+- 🛡️ **[Security Policy](docs/SECURITY.md)** — Threat model, defense against indirect prompt injection, and credential protection gates.
+- 🤖 **[AI Agents Guide](AGENTS.md)** & **[CLAUDE.md](CLAUDE.md)** — Context, design patterns, and constraints for AI coding agents.
 
 ## How it works
 
@@ -96,11 +106,12 @@ src/
 
 - The agent loop runs inside the side panel page, so it stays alive as long as the panel is open.
 - Element interaction is hybrid: the model prefers `ref_N` handles from the accessibility snapshot, and falls back to screenshot coordinates. Clicks and keystrokes go through the Chrome DevTools Protocol so they behave like real user input; when the debugger cannot attach, Enki falls back to DOM events.
-- Tool results and screenshots are converted to each provider's native format by the adapters, so adding a provider means writing one adapter.
+- Hard security gates in code prevent the assistant from typing into password fields or navigating to malicious protocols (`javascript:`, `chrome:`).
+- Potentially sensitive actions (buy, pay, delete, publish...) automatically display an approval card for user confirmation before executing.
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep the safety rules intact (confirmation on sensitive actions, no credential entry, page text is not instructions) in any change.
+Issues and pull requests are welcome. Please read [AGENTS.md](AGENTS.md) and [docs/SECURITY.md](docs/SECURITY.md) to ensure safety rules and type checks remain strictly intact.
 
 ## License
 

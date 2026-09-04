@@ -17,11 +17,21 @@ export type ToolPlan = {
   run: () => Promise<ToolOutput>;
 };
 
-const RESTRICTED_URL = /^(chrome|edge|brave|opera|vivaldi|arc|about|chrome-extension|devtools|view-source|file):/i;
+const RESTRICTED_URL = /^(chrome|edge|brave|opera|vivaldi|arc|about|chrome-extension|devtools|view-source|file|javascript|data):/i;
 
 export function isRestrictedUrl(url: string | undefined): boolean {
   if (!url) return true;
-  return RESTRICTED_URL.test(url) || url.startsWith("https://chromewebstore.google.com");
+  const trimmed = url.trim();
+  return RESTRICTED_URL.test(trimmed) || trimmed.startsWith("https://chromewebstore.google.com");
+}
+
+export function isValidWebNavigationUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") && !isRestrictedUrl(url);
+  } catch {
+    return false;
+  }
 }
 
 const text = (t: string): TextPart => ({ type: "text", text: t });
@@ -290,7 +300,13 @@ export class BrowserExecutor {
       case "navigate": {
         let url = (str("url") ?? "").trim();
         const isHistory = url === "back" || url === "forward";
-        if (!isHistory && url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+        if (!isHistory) {
+          if (!url) throw new Error("url is required.");
+          if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+          if (!isValidWebNavigationUrl(url)) {
+            throw new Error(`Security restriction: Cannot navigate to "${url}". Only standard http/https web URLs are allowed.`);
+          }
+        }
         return {
           label: isHistory ? `Go ${url}` : `Go to ${url}`,
           sensitive: false,
@@ -298,7 +314,6 @@ export class BrowserExecutor {
             const tabId = await this.currentTabId();
             if (url === "back") await chrome.tabs.goBack(tabId);
             else if (url === "forward") await chrome.tabs.goForward(tabId);
-            else if (!url) throw new Error("url is required.");
             else await chrome.tabs.update(tabId, { url });
             await this.waitForLoad(tabId);
             const tab = await chrome.tabs.get(tabId);
@@ -341,6 +356,9 @@ export class BrowserExecutor {
         const tabId = await this.currentTabId();
         let target: LocatedElement | null = null;
         if (ref) target = await this.send<LocatedElement>(tabId, { type: "enki:locate", ref });
+        if (target?.isPassword) {
+          throw new Error("Security restriction: Enki is prevented from typing into password or credential fields for safety. Please enter credentials manually.");
+        }
         const preview = value.length > 40 ? value.slice(0, 40) + "…" : value;
         const label = `Type "${preview}"${target?.name ? ` into "${target.name}"` : ""}${submit ? " and press Enter" : ""}`;
         return {
@@ -421,12 +439,18 @@ export class BrowserExecutor {
       }
       case "new_tab": {
         let url = (str("url") ?? "").trim();
-        if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+        if (url) {
+          if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+          if (!isValidWebNavigationUrl(url)) {
+            throw new Error(`Security restriction: Cannot open new tab with "${url}". Only standard http/https web URLs are allowed.`);
+          }
+        }
+        const targetUrl = url || "https://google.com";
         return {
-          label: `Open new tab: ${url}`,
+          label: `Open new tab: ${targetUrl}`,
           sensitive: false,
           run: async () => {
-            const tab = await chrome.tabs.create({ url: url || "about:blank", windowId: this.windowId, active: true });
+            const tab = await chrome.tabs.create({ url: targetUrl, windowId: this.windowId, active: true });
             if (tab.id) await this.waitForLoad(tab.id);
             const fresh = tab.id ? await chrome.tabs.get(tab.id) : tab;
             return ok(`Opened "${fresh.title ?? ""}" — ${fresh.url ?? ""} in a new tab (id ${fresh.id}).`);
