@@ -91,8 +91,14 @@ npm run build
 # Regenerate icons from inline SVG
 npm run icons
 
-# Run e2e test suite
+# Start the mock provider the tests talk to (separate terminal)
+npm run mock
+
+# Agent loop, tools and safety gates
 npm run test:e2e
+
+# Behaviour under badly-behaved models (stalled stream, reasoning-only reply, <think> tags)
+npm run test:resilience
 ```
 
 ---

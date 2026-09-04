@@ -66,6 +66,12 @@ Follow the install and start instructions in the official repository, [github.co
 2. **Connect in Enki:** In Settings ⚙️, choose **OmniRoute**, verify `http://localhost:20128/v1`, set model to `auto` (alternatives: `auto/cheap`, `auto/fast`, `auto/best-free`), press the refresh button, and save.
 3. The free pool has no reliable vision models, so the OmniRoute preset turns off image support automatically and works from the page DOM. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
 
+### If a model stalls or replies with nothing
+
+Small free and local models sometimes stop mid-task or write their whole answer into the reasoning channel. Enki handles the common cases: reasoning-only replies are shown as the answer, inline `<think>` tags are folded into the reasoning block, and a provider that goes silent fails with a message and a **Try again** button instead of spinning forever.
+
+If a big local model on modest hardware keeps timing out, raise **Response timeout** in Settings → Behavior (default 180s), or turn off "Attach a screenshot" so each request carries far fewer tokens. Models that repeatedly stop after the first tool call are usually too small for multi-step tool use — `auto/best-free` on OmniRoute, Gemini Flash or Groq handle it better.
+
 ### Why no "log in with my Claude / ChatGPT subscription"?
 
 Anthropic and OpenAI only allow subscription (OAuth) access from their own apps. Third-party tools like Enki must use API keys, which are billed per token. Free or cheap options are OmniRoute, Gemini's free tier, Groq, or a local Ollama model.

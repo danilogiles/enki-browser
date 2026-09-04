@@ -144,6 +144,8 @@ export type Settings = {
   attachScreenshot: boolean;
   /** Max tool-call rounds per user request. */
   maxSteps: number;
+  /** Give up if the provider sends nothing for this long. Large local models need more. */
+  requestTimeoutSec: number;
   /** Extra instructions appended to the system prompt. */
   customInstructions: string;
 };
@@ -158,6 +160,7 @@ export const DEFAULT_SETTINGS: Settings = {
   vision: true,
   attachScreenshot: true,
   maxSteps: 30,
+  requestTimeoutSec: 180,
   customInstructions: "",
 };
 

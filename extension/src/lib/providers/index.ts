@@ -9,5 +9,9 @@ export function createProvider(settings: Settings): ChatProvider {
   if (preset.kind === "anthropic") {
     return new AnthropicProvider({ apiKey: settings.apiKey, baseUrl });
   }
-  return new OpenAICompatProvider({ apiKey: settings.apiKey, baseUrl });
+  return new OpenAICompatProvider({
+    apiKey: settings.apiKey,
+    baseUrl,
+    idleTimeoutMs: Math.max(5, settings.requestTimeoutSec || 180) * 1000,
+  });
 }

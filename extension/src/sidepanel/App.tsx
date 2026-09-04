@@ -118,6 +118,17 @@ export function App() {
         case "thinking":
           patchLast((m) => ({ ...m, thinking: (m.thinking ?? "") + e.delta }));
           break;
+        case "promote_thinking":
+          patchLast((m) => {
+            const t = (m.thinking ?? "").trim();
+            if (!t) return m;
+            return {
+              ...m,
+              thinking: undefined,
+              segments: [...(m.segments ?? []).filter((s) => !(s.kind === "text" && !s.text)), { kind: "text", text: t }],
+            };
+          });
+          break;
         case "tool_start":
           patchSegments((segs) => [
             ...segs.filter((s) => !(s.kind === "text" && !s.text)),

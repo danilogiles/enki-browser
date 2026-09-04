@@ -4,7 +4,7 @@
 - **Dev Server:** `npm run dev` (Runs Vite with hot reloading for unpacked extension)
 - **Typecheck:** `npm run typecheck` (Runs `tsc --noEmit`)
 - **Build:** `npm run build` (Runs `tsc --noEmit && vite build`, outputs to `dist/`)
-- **Tests:** `npm run test:e2e`
+- **Tests:** `npm run test:e2e` (agent loop, tools, safety gates) and `npm run test:resilience` (badly-behaved models: stalled streams, reasoning-only replies, inline `<think>` tags). Both need `npm run mock` running in another terminal.
 - **Icon Generation:** `npm run icons`
 
 ## Architecture & Code Conventions

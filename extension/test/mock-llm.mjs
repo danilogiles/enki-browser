@@ -81,6 +81,28 @@ const server = http.createServer((req, res) => {
       if (model === "mock-echo") {
         return streamText(res, `Echo: ${userText.replace(/\s+/g, " ").slice(0, 120)} | image=${hasImage}`);
       }
+      // Opens the stream and then goes silent forever, like a wedged gateway.
+      if (model === "mock-stall") {
+        res.write(": waiting\n\n");
+        return; // never ends
+      }
+      // Puts the whole answer in the reasoning channel and emits no content and no tool call.
+      if (model === "mock-reasoning-only") {
+        for (const w of "I should open Gmail and check the visa status.".split(" ")) {
+          sse(res, { choices: [{ delta: { reasoning_content: w + " " }, finish_reason: null }] });
+        }
+        sse(res, { choices: [{ delta: {}, finish_reason: "stop" }] });
+        res.write("data: [DONE]\n\n");
+        return res.end();
+      }
+      // Emits <think> tags inline in content, the way many local/free models do.
+      if (model === "mock-think-tags") {
+        const parts = ["<th", "ink>plan", "ning here</thi", "nk>The ", "answer ", "is 42."];
+        for (const p of parts) sse(res, { choices: [{ delta: { content: p }, finish_reason: null }] });
+        sse(res, { choices: [{ delta: {}, finish_reason: "stop" }] });
+        res.write("data: [DONE]\n\n");
+        return res.end();
+      }
       const snapshot = toolMsgs[0]?.content ?? "";
       switch (toolMsgs.length) {
         case 0:

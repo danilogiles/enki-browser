@@ -281,6 +281,18 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 onChange={(e) => set("maxSteps", Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
                 className={`${inputCls} w-24`}
               />
+              <label className="mt-3 block text-xs text-zinc-400">Response timeout (seconds)</label>
+              <input
+                type="number"
+                min={5}
+                max={900}
+                value={draft.requestTimeoutSec}
+                onChange={(e) => set("requestTimeoutSec", Math.max(5, Math.min(900, Number(e.target.value) || 180)))}
+                className={`${inputCls} w-24`}
+              />
+              <p className="text-xs text-zinc-500">
+                Give up if the model sends nothing for this long. Raise it for large local models on slower hardware.
+              </p>
             </Section>
 
             <Section title="Custom instructions">

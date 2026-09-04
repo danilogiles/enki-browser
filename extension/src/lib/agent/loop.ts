@@ -13,6 +13,8 @@ export type AgentEvent =
   | { type: "assistant_start" }
   | { type: "text"; delta: string }
   | { type: "thinking"; delta: string }
+  /** The turn produced only reasoning: show it as the answer instead of hiding it. */
+  | { type: "promote_thinking" }
   | { type: "tool_start"; call: ToolCallPart; label: string; sensitive: boolean }
   | { type: "approval_request"; call: ToolCallPart; label: string }
   | { type: "tool_result"; call: ToolCallPart; result: ToolResultPart; declined?: boolean }
@@ -46,6 +48,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
       onEvent({ type: "assistant_start" });
 
       let textAcc = "";
+      let thinkingAcc = "";
       const calls: ToolCallPart[] = [];
       let stop: StopReason = "end_turn";
 
@@ -62,6 +65,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             onEvent({ type: "text", delta: ev.text });
             break;
           case "thinking_delta":
+            thinkingAcc += ev.text;
             onEvent({ type: "thinking", delta: ev.text });
             break;
           case "tool_call":
@@ -83,6 +87,14 @@ export async function runTurn(o: RunOptions): Promise<void> {
       // Some (mostly free) models end a turn with no text and no tool call, typically after
       // reasoning or tool results. Nudge once; if it happens again, surface it to the user.
       if (!parts.length) {
+        // Weaker models often write the whole answer into the reasoning channel and leave
+        // content empty. Show that rather than discarding the turn.
+        const salvaged = thinkingAcc.trim();
+        if (salvaged) {
+          onEvent({ type: "promote_thinking" });
+          o.history.push({ role: "assistant", parts: [{ type: "text", text: salvaged }] });
+          return void onEvent({ type: "done", reason: stop });
+        }
         if (!nudged) {
           nudged = true;
           o.history.push({

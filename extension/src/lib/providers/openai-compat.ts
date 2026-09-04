@@ -16,7 +16,7 @@ import type {
 export class OpenAICompatProvider implements ChatProvider {
   readonly id = "openai-compatible";
 
-  constructor(private opts: { apiKey: string; baseUrl: string }) {}
+  constructor(private opts: { apiKey: string; baseUrl: string; idleTimeoutMs?: number }) {}
 
   private headers(): Record<string, string> {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -85,7 +85,9 @@ export class OpenAICompatProvider implements ChatProvider {
     let usage: { inputTokens: number; outputTokens: number } | null = null;
     let chunks = 0;
 
-    for await (const data of sseLines(res.body)) {
+    const think = new ThinkTagSplitter();
+
+    for await (const data of sseLines(res.body, this.opts.idleTimeoutMs ?? 180_000)) {
       if (data === "[DONE]") break;
       chunks++;
       let chunk: OpenAIChunk;
@@ -107,7 +109,7 @@ export class OpenAICompatProvider implements ChatProvider {
       if (!choice) continue;
       const delta = choice.delta ?? {};
       if (typeof delta.content === "string" && delta.content) {
-        yield { type: "text_delta", text: delta.content };
+        for (const ev of think.feed(delta.content)) yield ev;
       }
       const reasoning = delta.reasoning_content ?? delta.reasoning;
       if (typeof reasoning === "string" && reasoning) {
@@ -123,6 +125,8 @@ export class OpenAICompatProvider implements ChatProvider {
       }
       if (choice.finish_reason) finish = choice.finish_reason;
     }
+
+    for (const ev of think.flush()) yield ev;
 
     if (chunks === 0) {
       // Gateways like OmniRoute close the stream with only "[DONE]" when every upstream provider
@@ -187,22 +191,100 @@ function errorText(body: string): string {
   return body.slice(0, 500);
 }
 
-async function* sseLines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+/**
+ * Reads an SSE body, giving up if the server goes quiet for `idleMs`. Without this a wedged
+ * gateway leaves the panel spinning forever, since fetch has no timeout of its own and a
+ * stalled stream never resolves `read()`.
+ */
+async function* sseLines(body: ReadableStream<Uint8Array>, idleMs: number): AsyncGenerator<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, nl).replace(/\r$/, "");
-      buf = buf.slice(nl + 1);
-      if (line.startsWith("data:")) yield line.slice(5).trim();
+  try {
+    while (true) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const stalled = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `The provider sent nothing for ${Math.round(idleMs / 1000)}s and the request was cancelled. ` +
+                  "The model may be overloaded or too slow for this machine — try again, or pick a smaller/faster model in Settings.",
+              ),
+            ),
+          idleMs,
+        );
+      });
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await Promise.race([reader.read(), stalled]);
+      } finally {
+        clearTimeout(timer);
+      }
+      if (chunk.done) break;
+      buf += decoder.decode(chunk.value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).replace(/\r$/, "");
+        buf = buf.slice(nl + 1);
+        if (line.startsWith("data:")) yield line.slice(5).trim();
+      }
+    }
+    if (buf.startsWith("data:")) yield buf.slice(5).trim();
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+/**
+ * Many local and free models write their reasoning inline as `<think>…</think>` instead of
+ * using the `reasoning_content` field. This routes those spans to the reasoning channel so the
+ * answer stays clean, tolerating tags split across streaming chunks.
+ */
+class ThinkTagSplitter {
+  private buf = "";
+  private inside = false;
+
+  feed(chunk: string): StreamEvent[] {
+    this.buf += chunk;
+    const out: StreamEvent[] = [];
+    for (;;) {
+      const tag = this.inside ? /<\/(?:think|thinking)>/i : /<(?:think|thinking)>/i;
+      const m = tag.exec(this.buf);
+      if (m) {
+        const before = this.buf.slice(0, m.index);
+        if (before) out.push(this.emit(before));
+        this.buf = this.buf.slice(m.index + m[0].length);
+        this.inside = !this.inside;
+        continue;
+      }
+      // Hold back a trailing fragment that might still grow into a tag.
+      const safe = this.safeLength();
+      if (safe > 0) {
+        out.push(this.emit(this.buf.slice(0, safe)));
+        this.buf = this.buf.slice(safe);
+      }
+      return out;
     }
   }
-  if (buf.startsWith("data:")) yield buf.slice(5).trim();
+
+  flush(): StreamEvent[] {
+    if (!this.buf) return [];
+    const out = [this.emit(this.buf)];
+    this.buf = "";
+    return out;
+  }
+
+  private emit(text: string): StreamEvent {
+    return this.inside ? { type: "thinking_delta", text } : { type: "text_delta", text };
+  }
+
+  private safeLength(): number {
+    const idx = this.buf.lastIndexOf("<");
+    if (idx === -1) return this.buf.length;
+    const tail = this.buf.slice(idx);
+    return /^<\/?(?:t(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?)?$/i.test(tail) ? idx : this.buf.length;
+  }
 }
 
 function safeParse(json: string): Record<string, unknown> {
