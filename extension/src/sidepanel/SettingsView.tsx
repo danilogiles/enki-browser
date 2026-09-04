@@ -72,10 +72,16 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
 
   const canSave = !!draft.model.trim() && (!!draft.apiKey.trim() || !!preset.keyOptional) && !!draft.baseUrl.trim();
 
+  /** Themes preview live, so leaving without saving must put the saved theme back. */
+  const close = () => {
+    document.documentElement.setAttribute("data-theme", settings.theme || "dark");
+    onClose();
+  };
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-2 border-b border-ink-700 px-3 py-2">
-        <button type="button" onClick={onClose} className="rounded-md p-1.5 text-zinc-400 hover:bg-ink-800 hover:text-zinc-100" title="Back">
+        <button type="button" onClick={close} className="rounded-md p-1.5 text-zinc-400 hover:bg-ink-800 hover:text-zinc-100" title="Back">
           <ArrowLeft size={16} />
         </button>
         <span className="font-semibold">Settings</span>
@@ -87,19 +93,19 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           active={activeTab === "model"}
           onClick={() => setActiveTab("model")}
           icon={<Bot size={14} />}
-          label="Modelo"
+          label="Model"
         />
         <TabButton
           active={activeTab === "appearance"}
           onClick={() => setActiveTab("appearance")}
           icon={<Palette size={14} />}
-          label="Aparência"
+          label="Appearance"
         />
         <TabButton
           active={activeTab === "behavior"}
           onClick={() => setActiveTab("behavior")}
           icon={<Sliders size={14} />}
-          label="Comportamento"
+          label="Behavior"
         />
       </div>
 
@@ -202,16 +208,17 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               <p className={`text-xs ${status.kind === "ok" ? "text-enki-400" : "text-red-300"}`}>{status.text}</p>
             )}
             <p className="text-xs text-zinc-500">
-              Pick a model that supports images and tool calling. Press the refresh button to list what your key can access.
+              Pick a model that supports tool calling{draft.vision ? " and images" : ""}. Press the refresh button to
+              list what your key can access.
             </p>
           </Section>
         )}
 
-        {/* TAB 2: APARÊNCIA & TEMAS */}
+        {/* TAB 2: APPEARANCE & THEMES */}
         {activeTab === "appearance" && (
-          <Section title="Temas Visuais">
+          <Section title="Themes">
             <p className="text-xs text-zinc-400 mb-2">
-              Selecione o tema da interface. A pré-visualização é imediata.
+              Pick the panel's theme. The preview is immediate; press Save to keep it.
             </p>
             <div className="grid grid-cols-1 gap-2.5">
               {THEMES.map((t) => {
@@ -247,7 +254,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           </Section>
         )}
 
-        {/* TAB 3: COMPORTAMENTO & INSTRUÇÕES */}
+        {/* TAB 3: BEHAVIOR & INSTRUCTIONS */}
         {activeTab === "behavior" && (
           <>
             <Section title="Browsing Behavior">

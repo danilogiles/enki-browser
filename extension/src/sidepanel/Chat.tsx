@@ -145,7 +145,7 @@ function MessageView({
                 onClick={onRetry}
                 className="inline-flex items-center gap-1 rounded border border-red-500/30 bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-100 transition hover:bg-red-500/30 hover:text-white"
               >
-                <RotateCw size={11} /> Tentar novamente
+                <RotateCw size={11} /> Try again
               </button>
             </div>
           )}

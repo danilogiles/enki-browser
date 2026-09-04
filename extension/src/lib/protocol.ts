@@ -10,6 +10,7 @@ export type ContentRequest =
   | { type: "enki:text"; maxChars?: number }
   | { type: "enki:locate"; ref: string }
   | { type: "enki:describe_point"; x: number; y: number }
+  | { type: "enki:focused" }
   | { type: "enki:focus"; ref: string; clear: boolean }
   | { type: "enki:dom_click"; ref: string }
   | { type: "enki:set_value"; ref: string; text: string }

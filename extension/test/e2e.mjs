@@ -85,7 +85,8 @@ try {
   });
   await panel.reload();
   await panel.waitForSelector("textarea", { timeout: 10000 });
-  await panel.click("button[title*='Act']");
+  // Anchor on "Act:" — a bare "Act" substring also matches the "Active model" badge.
+  await panel.click("button[title^='Act:']");
   await panel.fill("textarea", "Search for hello and buy it");
   await panel.press("textarea", "Enter");
 
@@ -110,6 +111,45 @@ try {
   }, targetWindowId);
   check("act: text typed via CDP fired input events", tabState.echo === "typed: hello enki", JSON.stringify(tabState));
   check("act: click reached the page", tabState.title === "BOUGHT:hello enki", tabState.title);
+
+  // The active-tab glow must be gone once the turn ends.
+  const overlayGone = await panel.evaluate(async (wid) => {
+    const [t] = await chrome.tabs.query({ active: true, windowId: wid });
+    const [r] = await chrome.scripting.executeScript({
+      target: { tabId: t.id },
+      func: () => {
+        const el = document.getElementById("__enki_comet_container");
+        return !el || el.style.opacity === "0";
+      },
+    });
+    return r.result;
+  }, targetWindowId);
+  check("act: control overlay removed after turn", overlayGone === true);
+
+  // ---- Safety: typing into a password field is refused, with and without a ref ----
+  const passwordBlocked = await panel.evaluate(async (wid) => {
+    const [t] = await chrome.tabs.query({ active: true, windowId: wid });
+    await chrome.scripting.executeScript({
+      target: { tabId: t.id },
+      func: () => {
+        const i = document.createElement("input");
+        i.type = "password";
+        i.id = "pw";
+        document.body.appendChild(i);
+        i.focus();
+      },
+    });
+    const send = (msg) => chrome.tabs.sendMessage(t.id, msg);
+    const snapshot = await send({ type: "enki:snapshot", filter: "interactive" });
+    const ref = /\[(ref_\d+)\] textbox[^\n]*type=password/.exec(snapshot.data)?.[1];
+    const focused = await send({ type: "enki:focused" });
+    return { ref, refSeen: !!ref, focusedIsPassword: focused.data?.isPassword === true };
+  }, targetWindowId);
+  check(
+    "safety: password field is detected by ref and by focus",
+    passwordBlocked.refSeen && passwordBlocked.focusedIsPassword,
+    JSON.stringify(passwordBlocked),
+  );
 
   // Playwright keeps its own CDP client attached, so `getTargets().attached` is not usable here.
   // The extension's own attachment is gone when detach() reports "not attached".

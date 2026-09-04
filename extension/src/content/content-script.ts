@@ -409,6 +409,28 @@ function describePoint(x: number, y: number): LocatedElement {
   };
 }
 
+/**
+ * Describes whatever currently has keyboard focus, so the executor can refuse to type into a
+ * password field even when the model types without a ref (into the already-focused element).
+ */
+function focusedInfo(): LocatedElement | null {
+  let el: Element | null = document.activeElement;
+  while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const r = el.getBoundingClientRect();
+  const role = roleOf(el);
+  const name = nameOf(el);
+  return {
+    x: Math.round(r.left + r.width / 2),
+    y: Math.round(r.top + r.height / 2),
+    tag: el.tagName.toLowerCase(),
+    role,
+    name,
+    sensitive: SENSITIVE_ACTION.test(name),
+    isPassword: isPasswordField(el),
+  };
+}
+
 function focusEl(ref: string, clear: boolean): void {
   const el = getRef(ref) as HTMLElement;
   el.focus({ preventScroll: false });
@@ -457,7 +479,25 @@ function scroll(direction: ScrollDirection, amount: number, ref?: string): PageI
   return pageInfo();
 }
 
+/**
+ * Injects every keyframe Enki's overlays need. Both the click ripple and the active-tab glow
+ * call this; keeping one complete stylesheet avoids whichever ran first winning with a
+ * partial set of animations.
+ */
+function ensureStyles(): void {
+  if (document.getElementById("__enki_style")) return;
+  const style = document.createElement("style");
+  style.id = "__enki_style";
+  style.textContent = `
+    @keyframes __enki_pulse { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+    @keyframes __enki_glow_pulse { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.45; } }
+    @keyframes __enki_dot_pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: 0.6; } }
+  `;
+  (document.head ?? document.documentElement).appendChild(style);
+}
+
 function flash(x: number, y: number): void {
+  ensureStyles();
   let overlay = document.getElementById("__enki_overlay");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -471,13 +511,6 @@ function flash(x: number, y: number): void {
     `position:absolute;left:${x - 14}px;top:${y - 14}px;width:28px;height:28px;border-radius:50%;` +
     "border:3px solid #2dd4bf;box-shadow:0 0 0 4px rgba(45,212,191,.25);" +
     "animation:__enki_pulse .6s ease-out forwards;";
-  if (!document.getElementById("__enki_style")) {
-    const style = document.createElement("style");
-    style.id = "__enki_style";
-    style.textContent =
-      "@keyframes __enki_pulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.6);opacity:0}}";
-    document.head.appendChild(style);
-  }
   overlay.appendChild(ring);
   setTimeout(() => ring.remove(), 700);
 }
@@ -485,16 +518,7 @@ function flash(x: number, y: number): void {
 let activeCometOverlay: HTMLElement | null = null;
 
 function setActiveOverlay(active: boolean, label?: string): boolean {
-  if (!document.getElementById("__enki_style")) {
-    const style = document.createElement("style");
-    style.id = "__enki_style";
-    style.textContent = `
-      @keyframes __enki_pulse { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
-      @keyframes __enki_glow_pulse { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.45; } }
-      @keyframes __enki_dot_pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: 0.6; } }
-    `;
-    document.head.appendChild(style);
-  }
+  ensureStyles();
 
   if (active) {
     if (!activeCometOverlay) {
@@ -568,6 +592,8 @@ function handle(req: ContentRequest): unknown {
       return locate(req.ref);
     case "enki:describe_point":
       return describePoint(req.x, req.y);
+    case "enki:focused":
+      return focusedInfo();
     case "enki:focus":
       focusEl(req.ref, req.clear);
       return true;

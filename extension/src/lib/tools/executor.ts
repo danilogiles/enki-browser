@@ -64,6 +64,10 @@ const KEY_CODES: Record<string, { code: string; vk: number; text?: string }> = {
 export class BrowserExecutor {
   private attached = new Set<number>();
   private screenshotScale = 1;
+  /** Tabs currently showing the "Enki is controlling this tab" overlay. */
+  private overlayTabs = new Set<number>();
+  private overlayActive = false;
+  private overlayLabel = "Enki is controlling this tab…";
 
   constructor(private readonly windowId: number) {
     chrome.debugger.onDetach.addListener((source) => {
@@ -119,6 +123,9 @@ export class BrowserExecutor {
       await sleep(250);
     }
     await sleep(400);
+    // A load replaces the document, taking the overlay with it. Put it back.
+    this.overlayTabs.delete(tabId);
+    await this.applyOverlay();
   }
 
   // ---------- CDP helpers ----------
@@ -138,15 +145,37 @@ export class BrowserExecutor {
     return chrome.debugger.sendCommand({ tabId }, method, params) as unknown as Promise<T>;
   }
 
-  /** Shows or hides the glowing Comet-style border and badge over the controlled page. */
+  /**
+   * Shows or hides the glowing Comet-style border and badge over the controlled page.
+   * The overlay is remembered for the whole turn: it is re-applied after navigation (which
+   * destroys it along with the old document) and after tab switches, and clearing it visits
+   * every tab that ever received it so no window is left glowing.
+   */
   async setActiveOverlay(active: boolean, label?: string): Promise<void> {
+    if (active) {
+      this.overlayLabel = label ?? this.overlayLabel;
+      this.overlayActive = true;
+      await this.applyOverlay();
+      return;
+    }
+    this.overlayActive = false;
+    for (const tabId of [...this.overlayTabs]) {
+      await this.send(tabId, { type: "enki:set_active", active: false }).catch(() => undefined);
+      this.overlayTabs.delete(tabId);
+    }
+  }
+
+  /** (Re)draws the overlay on the current tab when a turn is active. Safe to call often. */
+  private async applyOverlay(): Promise<void> {
+    if (!this.overlayActive) return;
     try {
       const tab = await this.currentTab();
       if (tab?.id && !isRestrictedUrl(tab.url)) {
-        await this.send(tab.id, { type: "enki:set_active", active, label }).catch(() => undefined);
+        await this.send(tab.id, { type: "enki:set_active", active: true, label: this.overlayLabel });
+        this.overlayTabs.add(tab.id);
       }
     } catch {
-      /* ignore if no tab is active */
+      /* no active tab, or the page cannot host the overlay */
     }
   }
 
@@ -369,8 +398,13 @@ export class BrowserExecutor {
         const tabId = await this.currentTabId();
         let target: LocatedElement | null = null;
         if (ref) target = await this.send<LocatedElement>(tabId, { type: "enki:locate", ref });
+        // Without a ref the text lands in whatever holds focus, so inspect that instead —
+        // otherwise the password guard below would be trivially bypassed.
+        else target = await this.send<LocatedElement | null>(tabId, { type: "enki:focused" }).catch(() => null);
         if (target?.isPassword) {
-          throw new Error("Security restriction: Enki is prevented from typing into password or credential fields for safety. Please enter credentials manually.");
+          throw new Error(
+            "Security restriction: Enki is prevented from typing into password or credential fields for safety. Please enter credentials manually.",
+          );
         }
         const preview = value.length > 40 ? value.slice(0, 40) + "…" : value;
         const label = `Type "${preview}"${target?.name ? ` into "${target.name}"` : ""}${submit ? " and press Enter" : ""}`;
@@ -446,6 +480,7 @@ export class BrowserExecutor {
           run: async () => {
             if (tabId === undefined) throw new Error("tab_id is required.");
             const tab = await chrome.tabs.update(tabId, { active: true });
+            await this.applyOverlay();
             return ok(`Switched to "${tab?.title ?? ""}" — ${tab?.url ?? ""}.`);
           },
         };

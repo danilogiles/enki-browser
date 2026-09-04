@@ -118,12 +118,12 @@ export type ThemeOption = {
 };
 
 export const THEMES: ThemeOption[] = [
-  { id: "dark", label: "Enki Dark (Padrão)", description: "Tema escuro padrão em tons de ardósia e azul petróleo (atual)." },
-  { id: "light", label: "White / Claro", description: "Fundo branco limpo com texto e contrastes escuros." },
-  { id: "system", label: "Sistema (Auto)", description: "Alterna automaticamente conforme o tema do seu sistema operacional." },
-  { id: "midnight", label: "Midnight (OLED)", description: "Preto absoluto com detalhes em índigo e alto contraste para telas OLED." },
-  { id: "nord", label: "Nord Frost", description: "Paleta nórdica suave com tons de azul ártico." },
-  { id: "cyberpunk", label: "Cyberpunk", description: "Fundo obsidiana com detalhes em âmbar e dourado neon." },
+  { id: "dark", label: "Enki Dark (default)", description: "The original slate and teal dark theme." },
+  { id: "light", label: "Light", description: "Clean white background with dark text and contrasts." },
+  { id: "system", label: "System (auto)", description: "Follows your operating system's light or dark setting." },
+  { id: "midnight", label: "Midnight (OLED)", description: "True black with indigo accents and high contrast for OLED screens." },
+  { id: "nord", label: "Nord Frost", description: "Soft nordic palette in arctic blues." },
+  { id: "cyberpunk", label: "Cyberpunk", description: "Obsidian background with amber and neon gold accents." },
 ];
 
 export type Settings = {
