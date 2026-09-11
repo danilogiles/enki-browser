@@ -77,6 +77,7 @@ const server = http.createServer((req, res) => {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       const { messages, model } = JSON.parse(body);
+      if (model === "mock-no-headers") return;
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
       const toolMsgs = messages.filter((m) => m.role === "tool");
       const lastUser = [...messages].reverse().find((m) => m.role === "user" && Array.isArray(m.content));
@@ -86,6 +87,13 @@ const server = http.createServer((req, res) => {
 
       if (model === "mock-echo") {
         return streamText(res, `Echo: ${userText.replace(/\s+/g, " ").slice(0, 120)} | image=${hasImage}`);
+      }
+      if (model === "mock-probe") return streamToolCall(res, "enki_connection_test", { nonce: "enki-probe" });
+      if (model === "mock-failure") return streamToolCall(res, "click", { ref: "ref_999999" });
+      if (model === "mock-lock") {
+        if (toolMsgs.length === 0) return setTimeout(() => streamToolCall(res, "read_page", { filter: "interactive" }), 1500);
+        if (toolMsgs.length === 1) return streamToolCall(res, "type", { ref: refFor(toolMsgs[0].content, /textbox/), text: "locked target" });
+        return streamText(res, "Finished the typing test.");
       }
       // Opens the stream and then goes silent forever, like a wedged gateway.
       if (model === "mock-stall") {

@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+:is(button, summary, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-enki-400);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @theme {
   --color-enki-400: var(--enki-400, #2dd4bf);
   --color-enki-500: var(--enki-500, #14b8a6);

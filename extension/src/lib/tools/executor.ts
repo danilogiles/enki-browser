@@ -62,6 +62,17 @@ const KEY_CODES: Record<string, { code: string; vk: number; text?: string }> = {
 };
 
 export class BrowserExecutor {
+  private lockedTabId: number | null = null;
+  /**
+   * Set only when an agent tool deliberately retargets the task (switch_tab / open_tab).
+   * The panel uses this to decide whether a tab choice should outlive the task: following
+   * the user's active tab is the default, and only the agent's own switch is sticky.
+   */
+  private agentTabId: number | null = null;
+  lockTab(tabId: number | null): void { this.lockedTabId = tabId; this.agentTabId = null; }
+  /** The tab the agent itself selected during this task, or null if it never switched. */
+  agentSelectedTab(): number | null { return this.agentTabId; }
+  private retarget(tabId: number): void { this.lockedTabId = tabId; this.agentTabId = tabId; }
   private attached = new Set<number>();
   private screenshotScale = 1;
   /** Tabs currently showing the "Enki is controlling this tab" overlay. */
@@ -78,6 +89,11 @@ export class BrowserExecutor {
   // ---------- tab helpers ----------
 
   async currentTab(): Promise<chrome.tabs.Tab> {
+    if (this.lockedTabId !== null) {
+      const tab = await chrome.tabs.get(this.lockedTabId).catch(() => null);
+      if (!tab || tab.windowId !== this.windowId) throw new Error("The controlled tab was closed or moved. Choose a tab before continuing.");
+      return tab;
+    }
     const [tab] = await chrome.tabs.query({ active: true, windowId: this.windowId });
     if (!tab?.id) throw new Error("No active tab in this window.");
     return tab;
@@ -249,6 +265,7 @@ export class BrowserExecutor {
 
   async screenshot(): Promise<ImagePart & { width: number; height: number }> {
     const tab = await this.currentTab();
+    if (!tab.active) throw new Error("Select the controlled tab before taking a screenshot. Enki will not capture a different tab.");
     const info = isRestrictedUrl(tab.url)
       ? null
       : await this.send<PageInfo>(tab.id!, { type: "enki:page_info" }).catch(() => null);
@@ -479,7 +496,10 @@ export class BrowserExecutor {
           sensitive: false,
           run: async () => {
             if (tabId === undefined) throw new Error("tab_id is required.");
+            const target = await chrome.tabs.get(tabId);
+            if (target.windowId !== this.windowId) throw new Error("Choose a tab in this window.");
             const tab = await chrome.tabs.update(tabId, { active: true });
+            this.retarget(tabId);
             await this.applyOverlay();
             return ok(`Switched to "${tab?.title ?? ""}" — ${tab?.url ?? ""}.`);
           },
@@ -499,6 +519,7 @@ export class BrowserExecutor {
           sensitive: false,
           run: async () => {
             const tab = await chrome.tabs.create({ url: targetUrl, windowId: this.windowId, active: true });
+            if (tab.id) this.retarget(tab.id);
             if (tab.id) await this.waitForLoad(tab.id);
             const fresh = tab.id ? await chrome.tabs.get(tab.id) : tab;
             return ok(`Opened "${fresh.title ?? ""}" — ${fresh.url ?? ""} in a new tab (id ${fresh.id}).`);

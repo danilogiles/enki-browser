@@ -9,10 +9,12 @@ import type {
 } from "../types";
 import type { BrowserExecutor, ToolOutput } from "../tools/executor";
 import { log } from "../debug";
-import { compactHistory, historySize } from "./context";
+import { budgetHistory, compactHistory, estimateTokens, historySize } from "./context";
 import { CLAIMS_NO_TOOLS, extractTextToolCalls } from "./toolcall-text";
 
 export type AgentEvent =
+  | { type: "status"; message: string; step: number; model?: string }
+  | { type: "summary"; outcome: "finished" | "needs_input" | "incomplete"; succeeded: number; failed: number; reason: string }
   | { type: "assistant_start" }
   | { type: "text"; delta: string }
   | { type: "thinking"; delta: string }
@@ -26,7 +28,7 @@ export type AgentEvent =
   | { type: "approval_request"; call: ToolCallPart; label: string }
   | { type: "tool_result"; call: ToolCallPart; result: ToolResultPart; declined?: boolean }
   | { type: "usage"; inputTokens: number; outputTokens: number }
-  | { type: "done"; reason: StopReason | "max_steps" | "aborted" | "empty" }
+  | { type: "done"; reason: StopReason | "max_steps" | "aborted" | "empty" | "repeated_failure" }
   | { type: "error"; message: string };
 
 export type RunOptions = {
@@ -43,7 +45,13 @@ export type RunOptions = {
   requestApproval: (label: string, call: ToolCallPart) => Promise<boolean>;
   onEvent: (e: AgentEvent) => void;
   signal: AbortSignal;
+  contextBudgetTokens?: number;
+  /** Cap on one step's reply. Keep it generous: the model cannot resume a truncated answer. */
+  maxOutputTokens?: number;
+  refreshPage?: boolean;
 };
+
+export const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 
 const DECLINED_TEXT = "The user declined this action. Stop and ask them how they want to proceed.";
 
@@ -56,17 +64,54 @@ const CLAIMED_ACTION =
   /\b(i(?:'ve| have)?\s+(?:just\s+)?(?:opened|navigated|clicked|typed|searched|filled|submitted|went|loaded)|(?:opened|navigated to|clicked on|taken you to)\s+your|abri(?:u|)\b|naveguei|cliquei|digitei|pesquisei|preenchi|acessei|carreguei|abrí|hice clic|escribí|busqué)/i;
 
 export async function runTurn(o: RunOptions): Promise<void> {
-  const { onEvent } = o;
+  let succeeded = 0;
+  let failed = 0;
+  let needsInput = false;
+  // Counts feed the end-of-turn summary, so only results for calls the *model* asked for may
+  // land here. Synthetic results (the Continue refresh, placeholders for interrupted calls) are
+  // emitted straight to o.onEvent so the transcript stays complete without inflating the score.
+  const onEvent = (e: AgentEvent) => {
+    if (e.type === "tool_result") {
+      if (e.result.isError) failed++; else succeeded++;
+      if (e.declined) needsInput = true;
+    }
+    if (e.type === "done" || e.type === "error") {
+      o.onEvent({ type: "summary", succeeded, failed,
+        outcome: needsInput ? "needs_input" : e.type === "done" && e.reason === "end_turn" && !failed ? "finished" : "incomplete",
+        reason: e.type === "error" ? "provider_error" : e.reason });
+    }
+    o.onEvent(e);
+  };
+  const failures = new Map<string, number>();
   let nudged = false;
   let claimCorrected = false;
   let toolCallsThisTurn = 0;
   try {
+    if (o.refreshPage) {
+      if (o.signal.aborted) return void onEvent({ type: "done", reason: "aborted" });
+      const call: ToolCallPart = { type: "tool_call", id: `refresh_${Date.now()}`, name: "read_page", input: { filter: "interactive" } };
+      onEvent({ type: "status", message: "Refreshing current page", step: 0 });
+      const plan = await o.executor.prepare(call);
+      o.history.push({ role: "assistant", parts: [call] });
+      onEvent({ type: "tool_start", call, label: plan.label, sensitive: false });
+      let out: ToolOutput;
+      try { out = await plan.run(); }
+      catch (e) { out = { content: [{ type: "text", text: errMsg(e) }], isError: true }; }
+      const r = result(call, out);
+      o.history.push({ role: "tool", parts: [r] });
+      o.onEvent({ type: "tool_result", call, result: r });
+      if (out.isError) throw new Error("Could not refresh the controlled page. Select an accessible tab before continuing.");
+    }
     for (let step = 0; step < o.maxSteps; step++) {
       if (o.signal.aborted) return void onEvent({ type: "done", reason: "aborted" });
       // Drop superseded page observations so the model sees one current browser state rather
       // than several contradictory ones from earlier steps and turns.
       const before = historySize(o.history);
       const compacted = compactHistory(o.history);
+      const budget = Math.max(2000, (o.contextBudgetTokens ?? 24000) - Math.ceil(o.system.length / 3) - 2000);
+      const summarized = budgetHistory(o.history, budget);
+      if (summarized) onEvent({ type: "notice", message: `Summarized ${summarized} older messages to stay within the context budget.` });
+      if (estimateTokens(o.history) > budget) throw new Error("The current request exceeds the context budget. Increase it in Settings, shorten the request, or start a new chat.");
       log.info("agent", `Step ${step + 1}/${o.maxSteps}`, {
         model: o.model,
         historyMessages: o.history.length,
@@ -76,6 +121,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
           : {}),
       });
       onEvent({ type: "assistant_start" });
+      onEvent({ type: "status", message: "Waiting for provider", step: step + 1 });
 
       let textAcc = "";
       let thinkingAcc = "";
@@ -87,10 +133,15 @@ export async function runTurn(o: RunOptions): Promise<void> {
         system: o.system,
         messages: o.history,
         tools: o.tools,
+        maxTokens: o.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
         signal: o.signal,
       })) {
         switch (ev.type) {
+          case "status":
+            onEvent({ type: "status", message: ev.phase === "connected" ? "Connected, waiting for model" : "Model responding", step: step + 1, model: ev.model });
+            break;
           case "text_delta":
+            if (!textAcc) onEvent({ type: "status", message: "Model responding", step: step + 1 });
             textAcc += ev.text;
             onEvent({ type: "text", delta: ev.text });
             break;
@@ -203,22 +254,37 @@ export async function runTurn(o: RunOptions): Promise<void> {
 
       o.history.push({ role: "assistant", parts });
 
+      if (stop === "max_tokens") {
+        onEvent({
+          type: "notice",
+          message: `This reply hit the ${o.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS}-token output cap and was cut off. Raise "Max output tokens" in Settings, or ask for a shorter answer.`,
+        });
+      }
       if (!calls.length) return void onEvent({ type: "done", reason: stop });
       toolCallsThisTurn += calls.length;
 
       const results: ToolResultPart[] = [];
       let declined = false;
+      let repeatedFailure = false;
       try {
         for (const call of calls) {
           if (o.signal.aborted) throw new DOMException("Aborted", "AbortError");
-          if (declined) {
-            results.push(result(call, { content: [{ type: "text", text: "Skipped: a previous action was declined." }], isError: true }));
+          if (declined || repeatedFailure) {
+            results.push(result(call, { content: [{ type: "text", text: "Skipped because this task has stopped." }], isError: true }));
             continue;
           }
           let plan;
+          const fingerprint = call.name + JSON.stringify(call.input, Object.keys(call.input).sort());
+          const recordFailure = () => {
+            const count = (failures.get(fingerprint) ?? 0) + 1;
+            failures.set(fingerprint, count);
+            repeatedFailure = count >= 3;
+          };
           try {
+            if (!o.tools.some((t) => t.name === call.name)) throw new Error(`Tool ${call.name} is unavailable in ${o.mode} mode.`);
             plan = await o.executor.prepare(call);
           } catch (e) {
+            recordFailure();
             const r = result(call, { content: [{ type: "text", text: `Error: ${errMsg(e)}` }], isError: true });
             results.push(r);
             onEvent({ type: "tool_start", call, label: call.name, sensitive: false });
@@ -227,9 +293,14 @@ export async function runTurn(o: RunOptions): Promise<void> {
           }
           log.info("tool", `${call.name}: ${plan.label}`, { input: call.input, sensitive: plan.sensitive });
           onEvent({ type: "tool_start", call, label: plan.label, sensitive: plan.sensitive });
+          onEvent({ type: "status", message: `Executing ${call.name}`, step: step + 1 });
           if (plan.sensitive && !o.autoApprove) {
             onEvent({ type: "approval_request", call, label: plan.label });
+            onEvent({ type: "status", message: "Waiting for your approval", step: step + 1 });
             const approved = await o.requestApproval(plan.label, call);
+            // Stop may resolve the approval while the user is deciding. Never run the
+            // pending action, even if an approval click raced with cancellation.
+            if (o.signal.aborted) throw new DOMException("Aborted", "AbortError");
             if (!approved) {
               declined = true;
               const r = result(call, { content: [{ type: "text", text: DECLINED_TEXT }], isError: true });
@@ -239,6 +310,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             }
           }
           let out: ToolOutput;
+          onEvent({ type: "status", message: `Executing ${call.name}`, step: step + 1 });
           try {
             out = await plan.run();
           } catch (e) {
@@ -247,6 +319,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             out = { content: [{ type: "text", text: `Error: ${errMsg(e)}` }], isError: true };
           }
           const r = result(call, out);
+          if (out.isError) recordFailure(); else failures.delete(fingerprint);
           log.info("tool", `${call.name} → ${out.isError ? "error" : "ok"}`, {
             output: out.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n").slice(0, 600),
           });
@@ -256,9 +329,15 @@ export async function runTurn(o: RunOptions): Promise<void> {
       } finally {
         // Keep the transcript valid even if we were interrupted mid-way: every tool call needs a result.
         for (const call of calls.slice(results.length)) {
-          results.push(result(call, { content: [{ type: "text", text: "Cancelled by the user." }], isError: true }));
+          const r = result(call, { content: [{ type: "text", text: "Interrupted. Outcome unknown; inspect the page before retrying." }], isError: true });
+          results.push(r);
+          o.onEvent({ type: "tool_result", call, result: r });
         }
         o.history.push({ role: "tool", parts: results });
+      }
+      if (repeatedFailure) {
+        onEvent({ type: "notice", message: "The same action failed three times. Read the page again or switch models before continuing." });
+        return void onEvent({ type: "done", reason: "repeated_failure" });
       }
     }
     onEvent({ type: "done", reason: "max_steps" });

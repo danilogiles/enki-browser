@@ -1,17 +1,16 @@
 // End-to-end smoke test: loads dist/ into Chromium, points Enki at the mock LLM, and runs
 // an Ask-mode question plus an Act-mode task (read_page -> type -> click with approval).
 //
-// Prereqs: `npm run build`, `node test/mock-llm.mjs` running, and Playwright available
-// (set PLAYWRIGHT_DIR to a folder where `npm i playwright && npx playwright install chromium` ran).
+// Prereqs: `npm run build`, `node test/mock-llm.mjs` running, and `npx playwright install chromium`
+// (stable Chrome refuses --load-extension, so these suites need Playwright's Chromium build).
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import os from "node:os";
+import { chromium } from "playwright";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.resolve(here, "..", "dist");
-const pwDir = process.env.PLAYWRIGHT_DIR ?? path.resolve(here, "..");
-const { chromium } = await import(pathToFileURL(path.join(pwDir, "node_modules", "playwright", "index.mjs")).href);
 
 const MOCK = "http://127.0.0.1:8787";
 const results = [];
@@ -55,6 +54,7 @@ try {
           attachScreenshot: true,
           maxSteps: 10,
           customInstructions: "",
+          saveConversations: false,
         },
         "enki:mode": "ask",
       }),

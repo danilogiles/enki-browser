@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Bot,
@@ -14,6 +14,7 @@ import {
 import { PRESETS, presetOf, THEMES, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
 import { log } from "../lib/debug";
+import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 
 type Props = {
   settings: Settings;
@@ -31,13 +32,25 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
   const [loadingModels, setLoadingModels] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [checks, setChecks] = useState<Diagnostic[]>([]);
+  const [probing, setProbing] = useState(false);
+  const probeRef = useRef<AbortController | null>(null);
+  useEffect(() => () => probeRef.current?.abort(), []);
+  const diagnose = async () => {
+    const controller = new AbortController();
+    probeRef.current = controller;
+    setProbing(true); setChecks([]);
+    const timer = setTimeout(() => controller.abort(), Math.min(draft.requestTimeoutSec, 60) * 1000);
+    try { setChecks(await diagnoseProvider(draft, controller.signal)); }
+    finally { clearTimeout(timer); setProbing(false); }
+  };
 
   const preset = presetOf(draft.preset);
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   const choosePreset = (id: PresetId) => {
     const p = presetOf(id);
-    setDraft((d) => ({ ...d, preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision }));
+    setDraft((d) => ({ ...d, preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision, favoriteModels: [], askModel: "", actModel: "" }));
     setModels([]);
     setStatus(null);
   };
@@ -50,7 +63,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
       const list = await createProvider(draft).listModels();
       setModels(list);
       log.info("settings", `Connected, ${list.length} models`, { sample: list.slice(0, 15) });
-      setStatus({ kind: "ok", text: `Connected. ${list.length} models available.` });
+      setStatus({ kind: "ok", text: `Model list reachable: ${list.length} models. Run diagnostics to verify chat and Act support.` });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log.error("settings", "Model listing failed", { error: msg });
@@ -82,7 +95,8 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
   const save = async () => {
     setSaving(true);
     try {
-      await onSave({ ...draft, baseUrl: draft.baseUrl.trim(), model: draft.model.trim(), apiKey: draft.apiKey.trim() });
+      await onSave({ ...draft, baseUrl: draft.baseUrl.trim(), model: draft.model.trim(), apiKey: draft.apiKey.trim(),
+        favoriteModels: [...new Set(draft.favoriteModels.map((m) => m.trim()).filter(Boolean))], askModel: draft.askModel.trim(), actModel: draft.actModel.trim() });
     } finally {
       setSaving(false);
     }
@@ -133,6 +147,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           <Section title="Model Provider Setup">
             <label className="block text-xs text-zinc-400">Provider</label>
             <select
+              disabled={probing}
               value={draft.preset}
               onChange={(e) => choosePreset(e.target.value as PresetId)}
               className={inputCls}
@@ -145,6 +160,12 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               ))}
             </select>
             {preset.hint && <p className="text-xs text-zinc-500">{preset.hint}</p>}
+            {draft.preset !== settings.preset && (
+              <p className="text-xs text-amber-200">
+                Model IDs are provider-specific, so changing provider clears your favorites and any preferred Ask/Act
+                models. Close Settings without saving to keep them.
+              </p>
+            )}
             {preset.setupUrl && (
               <a
                 href={preset.setupUrl}
@@ -223,6 +244,19 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               Pick a model that supports tool calling{draft.vision ? " and images" : ""}. Press the refresh button to
               list what your key can access.
             </p>
+            <div className="border-t border-ink-700 pt-3">
+              <button type="button" disabled={probing || !canSave} onClick={diagnose} className="rounded border border-ink-700 px-3 py-2 text-enki-400 disabled:opacity-50">{probing ? "Testing gateway and model…" : "Run connection diagnostics"}</button>
+              {probing && <button type="button" className="ml-2 underline" onClick={() => probeRef.current?.abort()}>Cancel test</button>}
+              <p className="mt-2 text-xs text-zinc-400">Sends one small synthetic request to the selected model. No page data or browser actions.</p>
+              <ul aria-live="polite" className="mt-2 space-y-2 text-xs">{checks.map((c) => <li key={c.label}><strong className={c.state === "pass" ? "text-enki-400" : c.state === "fail" ? "text-red-300" : "text-amber-200"}>{c.label}: {c.state === "unknown" ? "unverified" : c.state}</strong><div className="text-zinc-400">{c.detail}</div></li>)}</ul>
+            </div>
+            <label className="mt-3 block text-xs text-zinc-400" htmlFor="favorite-models">Favorite models (one per line)</label>
+            <textarea id="favorite-models" rows={3} value={draft.favoriteModels.join("\n")} onChange={(e) => set("favoriteModels", e.target.value.split("\n"))} className={inputCls} />
+            <label htmlFor="ask-model" className="block text-xs text-zinc-400">Preferred Ask model (optional)</label>
+            <input id="ask-model" list="enki-models" value={draft.askModel} onChange={(e) => set("askModel", e.target.value)} className={inputCls} />
+            <label htmlFor="act-model" className="block text-xs text-zinc-400">Preferred Act model (optional)</label>
+            <input id="act-model" list="enki-models" value={draft.actModel} onChange={(e) => set("actModel", e.target.value)} className={inputCls} />
+            <p className="text-xs text-zinc-400">Switching Ask/Act selects its preferred model on this provider. Blank keeps the current model.</p>
           </Section>
         )}
 
@@ -270,6 +304,15 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
         {activeTab === "behavior" && (
           <>
             <Section title="Browsing Behavior">
+              <Toggle label="Save conversations on this device" hint="Restores the latest conversation after closing Chrome. Screenshots and reasoning are not saved. Turning off removes the saved copy." checked={draft.saveConversations} onChange={(v) => set("saveConversations", v)} />
+              <label htmlFor="context-budget" className="block text-xs text-zinc-400">Input context budget (estimated tokens)</label>
+              <input id="context-budget" type="number" min={6000} max={200000} step={1000} value={draft.contextBudgetTokens} onChange={(e) => set("contextBudgetTokens", Math.max(6000, Math.min(200000, Number(e.target.value) || 24000)))} className={inputCls} />
+              <p className="text-xs text-zinc-400">Older exchanges are summarized locally. Tool calls stay paired with results. Leave room for the model's response within its context limit.</p>
+              <label htmlFor="max-output" className="block text-xs text-zinc-400">Max output tokens per step</label>
+              <input id="max-output" type="number" min={512} max={32000} step={512} value={draft.maxOutputTokens} onChange={(e) => set("maxOutputTokens", Math.max(512, Math.min(32000, Number(e.target.value) || 4096)))} className={inputCls} />
+              <p className="text-xs text-zinc-400">Caps a single reply. A truncated answer cannot be resumed, so Enki says when it hits this limit. Raise it for long summaries; lower it to keep free-tier costs down.</p>
+              <button type="button" className="text-enki-400 underline" onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}>Customize keyboard shortcuts</button>
+              <p className="text-xs text-zinc-400">Assign Open panel, Focus composer, Stop task, and New chat in Chrome. Escape stops a task while the panel has focus.</p>
               <Toggle
                 label="Model supports images"
                 hint="Turn off for text-only models. Enki then works from the page DOM and hides the screenshot tool."
@@ -386,7 +429,7 @@ async function chatWorks(draft: Settings): Promise<boolean> {
       maxTokens: 16,
     })) {
       if (ev.type === "text_delta" || ev.type === "thinking_delta" || ev.type === "tool_call") return true;
-      if (ev.type === "done") return true;
+      if (ev.type === "done") return false;
     }
     return false;
   } catch (e) {
@@ -424,14 +467,17 @@ function Toggle({
 }) {
   return (
     <label className={`flex items-start gap-3 py-1 ${disabled ? "opacity-40" : "cursor-pointer"}`}>
-      <span
+      <button
+        type="button"
+        aria-label={label}
+        disabled={disabled}
         role="switch"
         aria-checked={checked}
         onClick={() => !disabled && onChange(!checked)}
         className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-enki-500" : "bg-ink-700"}`}
       >
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${checked ? "left-4.5" : "left-0.5"}`} />
-      </span>
+      </button>
       <span className="flex-1">
         <span className="block text-sm text-zinc-200">{label}</span>
         {hint && <span className="block text-xs text-zinc-500">{hint}</span>}
