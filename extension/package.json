@@ -17,7 +17,7 @@
     "test:quality": "node test/quality.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.123.0",
+    "@anthropic-ai/sdk": "^0.125.0",
     "lucide-react": "^1.40.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -33,9 +33,9 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.1.1",
     "playwright": "^1.63.0",
-    "sharp": "^0.34.0",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.0",
+    "typescript": "^5.9.3",
     "vite": "^8.2.2"
   }
 }
