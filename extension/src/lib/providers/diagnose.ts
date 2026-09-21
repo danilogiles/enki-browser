@@ -27,10 +27,29 @@ export async function diagnoseProvider(settings: Settings, signal: AbortSignal):
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const auth = /\b(401|403)\b/.test(msg);
-    checks.push({ label: "Gateway", state: /\b[45]\d\d\b/.test(msg) ? "pass" : "unknown", detail: "Probe failed or was cancelled; inspect the gateway if needed." },
+    const http = /\b([45]\d\d)\b/.exec(msg);
+    const aborted = signal.aborted;
+
+    let gatewayState: Diagnostic["state"];
+    let gatewayDetail: string;
+    if (aborted) {
+      gatewayState = "unknown";
+      gatewayDetail = "Probe cancelled or timed out before the gateway answered.";
+    } else if (http) {
+      // An HTTP error means the endpoint was reachable — auth/model rows explain the failure.
+      gatewayState = "pass";
+      gatewayDetail = `Endpoint reachable (HTTP ${http[1]}). Auth or model checks below explain the failure.`;
+    } else {
+      gatewayState = "fail";
+      gatewayDetail = "Could not reach the endpoint. Check the base URL and that the gateway is running.";
+    }
+
+    checks.push(
+      { label: "Gateway", state: gatewayState, detail: gatewayDetail },
       { label: "Authentication", state: auth ? "fail" : "unknown", detail: auth ? "Credentials rejected. Check the API key." : "Not verified." },
-      { label: "Selected model", state: "fail", detail: signal.aborted ? "Probe cancelled or timed out." : "Request failed. Check model availability and gateway logs." },
-      { label: "Act tool support", state: "unknown", detail: "Not verified." });
+      { label: "Selected model", state: aborted ? "unknown" : "fail", detail: aborted ? "Probe cancelled or timed out." : "Request failed. Check model availability and gateway logs." },
+      { label: "Act tool support", state: "unknown", detail: "Not verified." },
+    );
   }
   return checks;
 }
