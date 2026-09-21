@@ -56,7 +56,12 @@ export class AnthropicProvider implements ChatProvider {
     // Accumulate tool_use input JSON per content block index.
     const pending = new Map<number, { id: string; name: string; json: string }>();
 
+    let firstEvent = true;
     for await (const event of stream) {
+      if (firstEvent) {
+        yield { type: "status", phase: "responding", model: req.model };
+        firstEvent = false;
+      }
       switch (event.type) {
         case "content_block_start": {
           const block = event.content_block;

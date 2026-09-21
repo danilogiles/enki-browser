@@ -93,21 +93,3 @@ export function onLogs(cb: (e: LogEntry[]) => void): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
 }
-
-/** Plain-text dump for pasting into a bug report. */
-export function formatLogs(): string {
-  const stamp = (t: number) => new Date(t).toISOString().slice(11, 23);
-  return entries
-    .map((e) => {
-      const head = `${stamp(e.time)} ${e.level.toUpperCase().padEnd(5)} [${e.scope}] ${e.message}`;
-      if (e.data === undefined) return head;
-      let body: string;
-      try {
-        body = JSON.stringify(e.data, null, 2);
-      } catch {
-        body = String(e.data);
-      }
-      return `${head}\n${body}`;
-    })
-    .join("\n");
-}

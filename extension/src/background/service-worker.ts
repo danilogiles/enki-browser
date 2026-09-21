@@ -40,7 +40,19 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command !== "open-panel") return;
   const win = await chrome.windows.getLastFocused();
-  await openPanel(win.id);
+  if (command === "open-panel") { await openPanel(win.id); return; }
+  if (!["focus-composer", "stop-task", "new-chat"].includes(command)) return;
+  // Focusing the composer should also open the panel if it is closed; the other two are only
+  // meaningful for a task that is already running. A freshly opened panel needs a moment to
+  // mount before its listener exists, so retry briefly instead of dropping the keystroke.
+  const attempts = command === "focus-composer" ? 5 : 1;
+  if (command === "focus-composer") await openPanel(win.id);
+  for (let i = 0; i < attempts; i++) {
+    const delivered = await chrome.runtime
+      .sendMessage({ type: "enki:command", command, windowId: win.id })
+      .then(() => true, () => false);
+    if (delivered) return;
+    await new Promise((r) => setTimeout(r, 150));
+  }
 });

@@ -34,7 +34,7 @@ export class OpenAICompatProvider implements ChatProvider {
   }
 
   async listModels(): Promise<string[]> {
-    const res = await fetch(this.url("/models"), { headers: this.headers() });
+    const res = await fetch(this.url("/models"), { headers: this.headers(), signal: AbortSignal.timeout(15000) });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const body = (await res.json()) as { data?: Array<{ id: string }> };
     return (body.data ?? []).map((m) => m.id).sort();
@@ -54,136 +54,165 @@ export class OpenAICompatProvider implements ChatProvider {
     const url = this.url("/chat/completions");
     const payload = JSON.stringify(body);
     const started = Date.now();
+    // One deadline for both stalls a gateway can produce: silence before headers, and silence
+    // between SSE events afterwards. They must not drift apart.
+    const idleMs = this.opts.idleTimeoutMs ?? 180_000;
     log.info("provider", `POST ${url}`, {
       model: req.model,
       messages: req.messages.length,
       tools: req.tools.length,
       hasKey: !!this.opts.apiKey,
       requestBytes: payload.length,
-      idleTimeoutMs: this.opts.idleTimeoutMs ?? 180_000,
+      idleTimeoutMs: idleMs,
     });
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: this.headers(),
-      body: payload,
-      signal: req.signal,
-    });
-    if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => "");
-      const detail = errorText(text);
-      log.error("provider", `HTTP ${res.status} ${res.statusText}`, { body: text.slice(0, 1000) });
-      let hint = "";
-      if (res.status === 401) {
-        hint = this.opts.apiKey
-          ? " (The provider rejected this API key — check it in Settings ⚙️)."
-          : " (This endpoint wants an API key and none is set. A local OmniRoute started with NODE_ENV=production gates its API: create a key in its dashboard at http://localhost:20128 and paste it into Settings ⚙️).";
-      } else if (res.status === 429) {
-        hint = " (Rate limit or credits exhausted. Try switching models in Settings ⚙️).";
-      } else if (res.status === 502 || res.status === 503) {
-        if (/playwright/i.test(detail)) {
-          hint = " (The provider gateway requires Playwright/Chromium dependencies or failed upstream. Try switching model in Settings ⚙️).";
-        } else {
-          hint = " (The upstream provider is temporarily unavailable. Check your local gateway or pick another model in Settings ⚙️).";
+    // A gateway can stall before sending headers, before the SSE idle timer exists.
+    const connection = new AbortController();
+    const abortConnection = () => connection.abort(req.signal?.reason);
+    req.signal?.addEventListener("abort", abortConnection, { once: true });
+    if (req.signal?.aborted) abortConnection();
+    const connectionTimer = setTimeout(() => connection.abort(new Error(
+      "The provider did not send response headers before the timeout. Check OmniRoute or try another model.",
+    )), idleMs);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: this.headers(),
+        body: payload,
+        signal: connection.signal,
+      });
+    } catch (error) {
+      clearTimeout(connectionTimer);
+      req.signal?.removeEventListener("abort", abortConnection);
+      throw error;
+    }
+    try {
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => "");
+        const detail = errorText(text);
+        log.error("provider", `HTTP ${res.status} ${res.statusText}`, { body: text.slice(0, 1000) });
+        let hint = "";
+        if (res.status === 401) {
+          hint = this.opts.apiKey
+            ? " (The provider rejected this API key — check it in Settings ⚙️)."
+            : " (This endpoint wants an API key and none is set. A local OmniRoute started with NODE_ENV=production gates its API: create a key in its dashboard at http://localhost:20128 and paste it into Settings ⚙️).";
+        } else if (res.status === 429) {
+          hint = " (Rate limit or credits exhausted. Try switching models in Settings ⚙️).";
+        } else if (res.status === 502 || res.status === 503) {
+          if (/playwright/i.test(detail)) {
+            hint = " (The provider gateway requires Playwright/Chromium dependencies or failed upstream. Try switching model in Settings ⚙️).";
+          } else {
+            hint = " (The upstream provider is temporarily unavailable. Check your local gateway or pick another model in Settings ⚙️).";
+          }
         }
+        throw new Error(`${res.status} ${res.statusText}${detail ? `: ${detail}` : ""}${hint}`);
       }
-      throw new Error(`${res.status} ${res.statusText}${detail ? `: ${detail}` : ""}${hint}`);
-    }
-    // Some gateways answer 200 with a JSON error body instead of an event stream.
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/event-stream")) {
-      const text = await res.text().catch(() => "");
-      log.error("provider", "Response was not an event stream", { contentType, body: text.slice(0, 1000) });
-      throw new Error(`Provider did not stream a response: ${errorText(text) || contentType || "empty body"}`);
-    }
-    log.info("provider", `Streaming (${Date.now() - started}ms to headers)`, { contentType });
-
-    const calls = new Map<number, { id: string; name: string; args: string }>();
-    let finish: string | null = null;
-    let usage: { inputTokens: number; outputTokens: number } | null = null;
-    let chunks = 0;
-
-    const think = new ThinkTagSplitter();
-
-    for await (const data of sseLines(res.body, this.opts.idleTimeoutMs ?? 180_000)) {
-      if (data === "[DONE]") break;
-      chunks++;
-      let chunk: OpenAIChunk;
-      try {
-        chunk = JSON.parse(data) as OpenAIChunk;
-      } catch {
-        continue;
+      // Some gateways answer 200 with a JSON error body instead of an event stream.
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("text/event-stream")) {
+        const text = await res.text().catch(() => "");
+        log.error("provider", "Response was not an event stream", { contentType, body: text.slice(0, 1000) });
+        throw new Error(`Provider did not stream a response: ${errorText(text) || contentType || "empty body"}`);
       }
-      if (chunk.error) {
-        log.error("provider", "Error event inside the stream", chunk.error);
-        throw new Error(typeof chunk.error === "string" ? chunk.error : chunk.error.message ?? JSON.stringify(chunk.error));
+      log.info("provider", `Streaming (${Date.now() - started}ms to headers)`, { contentType });
+      clearTimeout(connectionTimer);
+
+      yield { type: "status", phase: "connected" };
+      const calls = new Map<number, { id: string; name: string; args: string }>();
+      let finish: string | null = null;
+      let usage: { inputTokens: number; outputTokens: number } | null = null;
+      let chunks = 0;
+
+      const think = new ThinkTagSplitter();
+
+      for await (const data of sseLines(res.body, idleMs)) {
+        if (data === "[DONE]") break;
+        chunks++;
+        let chunk: OpenAIChunk;
+        try {
+          chunk = JSON.parse(data) as OpenAIChunk;
+        } catch {
+          continue;
+        }
+        if (chunk.error) {
+          log.error("provider", "Error event inside the stream", chunk.error);
+          throw new Error(typeof chunk.error === "string" ? chunk.error : chunk.error.message ?? JSON.stringify(chunk.error));
+        }
+        if (chunks === 1) {
+          log.info("provider", `First chunk after ${Date.now() - started}ms`, { servedBy: chunk.model });
+          yield { type: "status", phase: "responding", model: chunk.model };
+        }
+        if (chunk.usage) {
+          usage = {
+            inputTokens: chunk.usage.prompt_tokens ?? 0,
+            outputTokens: chunk.usage.completion_tokens ?? 0,
+          };
+        }
+        const choice = chunk.choices?.[0];
+        if (!choice) continue;
+        const delta = choice.delta ?? {};
+        if (typeof delta.content === "string" && delta.content) {
+          for (const ev of think.feed(delta.content)) yield ev;
+        }
+        const reasoning = delta.reasoning_content ?? delta.reasoning;
+        if (typeof reasoning === "string" && reasoning) {
+          yield { type: "thinking_delta", text: reasoning };
+        }
+        for (const tc of delta.tool_calls ?? []) {
+          const idx = tc.index ?? 0;
+          const cur = calls.get(idx) ?? { id: "", name: "", args: "" };
+          if (tc.id) cur.id = tc.id;
+          if (tc.function?.name) cur.name += tc.function.name;
+          if (tc.function?.arguments) cur.args += tc.function.arguments;
+          calls.set(idx, cur);
+        }
+        if (choice.finish_reason) finish = choice.finish_reason;
       }
-      if (chunks === 1) log.info("provider", `First chunk after ${Date.now() - started}ms`, { servedBy: chunk.model });
-      if (chunk.usage) {
-        usage = {
-          inputTokens: chunk.usage.prompt_tokens ?? 0,
-          outputTokens: chunk.usage.completion_tokens ?? 0,
+
+      for (const ev of think.flush()) yield ev;
+
+      log.info("provider", `Stream ended after ${Date.now() - started}ms`, {
+        chunks,
+        finishReason: finish,
+        toolCalls: [...calls.values()].map((c) => c.name),
+        usage,
+      });
+
+      if (chunks === 0) {
+        // Gateways like OmniRoute close the stream with only "[DONE]" when every upstream provider
+        // failed or is rate-limited. Surface that instead of reporting an empty reply.
+        log.error("provider", "Stream closed without a single chunk");
+        throw new Error(
+          "The provider closed the stream without sending anything. The model is probably rate-limited or unavailable right now; try again in a minute or pick another model.",
+        );
+      }
+
+      for (const [idx, c] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
+        const call: ToolCallPart = {
+          type: "tool_call",
+          id: c.id || `call_${Date.now()}_${idx}`,
+          name: c.name,
+          input: safeParse(c.args),
         };
+        yield { type: "tool_call", call };
       }
-      const choice = chunk.choices?.[0];
-      if (!choice) continue;
-      const delta = choice.delta ?? {};
-      if (typeof delta.content === "string" && delta.content) {
-        for (const ev of think.feed(delta.content)) yield ev;
-      }
-      const reasoning = delta.reasoning_content ?? delta.reasoning;
-      if (typeof reasoning === "string" && reasoning) {
-        yield { type: "thinking_delta", text: reasoning };
-      }
-      for (const tc of delta.tool_calls ?? []) {
-        const idx = tc.index ?? 0;
-        const cur = calls.get(idx) ?? { id: "", name: "", args: "" };
-        if (tc.id) cur.id = tc.id;
-        if (tc.function?.name) cur.name += tc.function.name;
-        if (tc.function?.arguments) cur.args += tc.function.arguments;
-        calls.set(idx, cur);
-      }
-      if (choice.finish_reason) finish = choice.finish_reason;
+
+      if (usage) yield { type: "usage", ...usage };
+      const stopReason =
+        calls.size > 0 || finish === "tool_calls"
+          ? "tool_use"
+          : finish === "length"
+            ? "max_tokens"
+            : finish === "content_filter"
+              ? "refusal"
+              : "end_turn";
+      yield { type: "done", stopReason };
+    } finally {
+      clearTimeout(connectionTimer);
+      req.signal?.removeEventListener("abort", abortConnection);
+      connection.abort();
     }
-
-    for (const ev of think.flush()) yield ev;
-
-    log.info("provider", `Stream ended after ${Date.now() - started}ms`, {
-      chunks,
-      finishReason: finish,
-      toolCalls: [...calls.values()].map((c) => c.name),
-      usage,
-    });
-
-    if (chunks === 0) {
-      // Gateways like OmniRoute close the stream with only "[DONE]" when every upstream provider
-      // failed or is rate-limited. Surface that instead of reporting an empty reply.
-      log.error("provider", "Stream closed without a single chunk");
-      throw new Error(
-        "The provider closed the stream without sending anything. The model is probably rate-limited or unavailable right now; try again in a minute or pick another model.",
-      );
-    }
-
-    for (const [idx, c] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
-      const call: ToolCallPart = {
-        type: "tool_call",
-        id: c.id || `call_${Date.now()}_${idx}`,
-        name: c.name,
-        input: safeParse(c.args),
-      };
-      yield { type: "tool_call", call };
-    }
-
-    if (usage) yield { type: "usage", ...usage };
-    const stopReason =
-      calls.size > 0 || finish === "tool_calls"
-        ? "tool_use"
-        : finish === "length"
-          ? "max_tokens"
-          : finish === "content_filter"
-            ? "refusal"
-            : "end_turn";
-    yield { type: "done", stopReason };
   }
 }
 
@@ -230,6 +259,7 @@ async function* sseLines(body: ReadableStream<Uint8Array>, idleMs: number): Asyn
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
+  let lastEvent = Date.now();
   try {
     while (true) {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -242,7 +272,7 @@ async function* sseLines(body: ReadableStream<Uint8Array>, idleMs: number): Asyn
                   "The model may be overloaded or too slow for this machine — try again, or pick a smaller/faster model in Settings.",
               ),
             ),
-          idleMs,
+          Math.max(0, idleMs - (Date.now() - lastEvent)),
         );
       });
       let chunk: ReadableStreamReadResult<Uint8Array>;
@@ -257,7 +287,10 @@ async function* sseLines(body: ReadableStream<Uint8Array>, idleMs: number): Asyn
       while ((nl = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, nl).replace(/\r$/, "");
         buf = buf.slice(nl + 1);
-        if (line.startsWith("data:")) yield line.slice(5).trim();
+        if (line.startsWith("data:")) {
+          lastEvent = Date.now();
+          yield line.slice(5).trim();
+        }
       }
     }
     if (buf.startsWith("data:")) yield buf.slice(5).trim();

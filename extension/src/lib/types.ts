@@ -43,6 +43,7 @@ export type ToolDefinition = {
 export type StopReason = "end_turn" | "tool_use" | "max_tokens" | "refusal" | "other";
 
 export type StreamEvent =
+  | { type: "status"; phase: "connected" | "responding"; model?: string }
   | { type: "text_delta"; text: string }
   | { type: "thinking_delta"; text: string }
   | { type: "tool_call"; call: ToolCallPart }

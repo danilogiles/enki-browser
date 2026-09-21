@@ -25,6 +25,7 @@ export type UiMessage = {
   error?: string;
   note?: string;
   streaming?: boolean;
+  summary?: { outcome: "finished" | "needs_input" | "incomplete"; succeeded: number; failed: number; reason: string };
 };
 
 export type TabInfo = { id: number; title: string; url: string; favIconUrl?: string };

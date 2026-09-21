@@ -150,6 +150,13 @@ export type Settings = {
   devMode: boolean;
   /** Extra instructions appended to the system prompt. */
   customInstructions: string;
+  contextBudgetTokens: number;
+  /** Cap on a single agent step's reply. Too low truncates answers mid-sentence. */
+  maxOutputTokens: number;
+  saveConversations: boolean;
+  favoriteModels: string[];
+  askModel: string;
+  actModel: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -165,6 +172,12 @@ export const DEFAULT_SETTINGS: Settings = {
   requestTimeoutSec: 180,
   devMode: false,
   customInstructions: "",
+  contextBudgetTokens: 24000,
+  maxOutputTokens: 4096,
+  saveConversations: true,
+  favoriteModels: [],
+  askModel: "",
+  actModel: "",
 };
 
 const KEY = "enki:settings";

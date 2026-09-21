@@ -38,6 +38,9 @@ export default defineManifest({
     },
   ],
   commands: {
+    "focus-composer": { description: "Focus Enki's message box" },
+    "stop-task": { description: "Stop the current Enki task" },
+    "new-chat": { description: "Start a new Enki conversation" },
     "open-panel": {
       suggested_key: { default: "Ctrl+Shift+E", mac: "Command+Shift+E" },
       description: "Open the Enki side panel",

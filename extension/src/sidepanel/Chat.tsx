@@ -145,13 +145,18 @@ function MessageView({
                 onClick={onRetry}
                 className="inline-flex items-center gap-1 rounded border border-red-500/30 bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-100 transition hover:bg-red-500/30 hover:text-white"
               >
-                <RotateCw size={11} /> Try again
+                <RotateCw size={11} /> Continue safely
               </button>
             </div>
           )}
         </div>
       )}
       {message.note && <div className="text-xs text-zinc-500">{message.note}</div>}
+      {message.summary && !message.streaming && <div className="border-t border-ink-800 pt-2 text-xs text-zinc-400">
+        <strong className="text-zinc-200">{message.summary.outcome === "finished" ? "Response finished" : message.summary.outcome === "needs_input" ? "Needs your input" : "Could not complete"}</strong>
+        <div>{message.summary.succeeded} tool results successful · {message.summary.failed} failed</div>
+        {message.summary.succeeded > 0 && <div className="mt-1">Tool results confirm execution; check the page to verify the intended outcome.</div>}
+      </div>}
     </div>
   );
 }

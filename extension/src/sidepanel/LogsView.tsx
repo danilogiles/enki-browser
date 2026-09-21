@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronRight, ClipboardCopy, Trash2 } from "lucide-react";
-import { clearLogs, formatLogs, getLogs, onLogs, type LogEntry } from "../lib/debug";
+import { clearLogs, getLogs, onLogs, type LogEntry } from "../lib/debug";
+import { diagnosticReport } from "../lib/diagnostics";
+import type { Settings } from "../lib/settings";
 
 const LEVEL_STYLE: Record<LogEntry["level"], string> = {
   info: "text-zinc-400",
@@ -8,14 +10,19 @@ const LEVEL_STYLE: Record<LogEntry["level"], string> = {
   error: "text-red-400",
 };
 
-export function LogsView({ onClose }: { onClose: () => void }) {
+export function LogsView({ settings, onClose }: { settings: Settings; onClose: () => void }) {
   const [entries, setEntries] = useState<LogEntry[]>(getLogs());
   const [copied, setCopied] = useState(false);
 
   useEffect(() => onLogs(setEntries), []);
 
   const copy = async () => {
-    await navigator.clipboard.writeText(formatLogs());
+    try { await navigator.clipboard.writeText(diagnosticReport(settings)); }
+    catch {
+      const url = URL.createObjectURL(new Blob([diagnosticReport(settings)], { type: "application/json" }));
+      const a = document.createElement("a"); a.href = url; a.download = "enki-diagnostics.json"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -37,7 +44,7 @@ export function LogsView({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={copy}
-            title="Copy all as text"
+            title="Copy safe diagnostics"
             className="rounded-md p-1.5 text-zinc-400 hover:bg-ink-800 hover:text-zinc-100"
           >
             <ClipboardCopy size={15} />
@@ -68,7 +75,7 @@ export function LogsView({ onClose }: { onClose: () => void }) {
       )}
 
       <div className="border-t border-ink-700 px-3 py-2 text-[11px] text-zinc-500">
-        API keys are never recorded. Copy this into a GitHub issue when reporting a bug.
+        Copy exports a safe diagnostic report without page content, URLs, prompts, credentials, or raw errors. The local log view may contain page data.
       </div>
     </div>
   );

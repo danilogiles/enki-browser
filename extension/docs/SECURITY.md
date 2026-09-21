@@ -55,6 +55,8 @@ For potentially destructive, financial, or outward-facing actions, execution is 
 - **Local Storage Isolation:** API keys are stored solely in `chrome.storage.local`.
 - **No Shared Content Access:** Content scripts injected into web pages cannot access `chrome.storage.local`. The API key is never transmitted to the web page DOM or third-party tracking endpoints.
 - **Direct Provider Connection:** Network requests travel directly from the user's browser extension to the configured LLM API (Anthropic, OpenAI, Google, Groq, or local gateway).
+- **Conversation Storage (since 0.2.0):** When *Save conversations on this device* is on (the default), the latest conversation is written to `chrome.storage.local` so the panel can restore it. This includes your prompts and the page text that tools returned. Screenshots and model reasoning are stripped before saving. The copy never leaves the device; turning the setting off or starting a new chat deletes it.
+- **Diagnostic Log Buffer:** `src/lib/debug.ts` always records a 400-entry in-memory ring buffer, which can contain URLs, tool arguments and page-text excerpts. It is never persisted and never sent anywhere. The Logs view that renders it is gated behind the **Developer mode** setting; the *Copy diagnostics* export is a separate, allowlisted report that excludes URLs, page content, prompts, credentials and raw error strings.
 
 ---
 

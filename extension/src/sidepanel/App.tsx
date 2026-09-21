@@ -14,6 +14,10 @@ import { SettingsView } from "./SettingsView";
 import { LogsView } from "./LogsView";
 import { setDevMode } from "../lib/debug";
 import { uid, type Segment, type TabInfo, type UiMessage } from "./types";
+import { CONVERSATION_KEY, restoreConversation, saveConversation, snapshotConversation } from "../lib/conversation";
+import { invalidateObservations } from "../lib/agent/context";
+import { diagnosticReport } from "../lib/diagnostics";
+import { QuickModels } from "./QuickModels";
 
 const MODE_KEY = "enki:mode";
 
@@ -26,6 +30,14 @@ export function App() {
   const [approval, setApproval] = useState<{ label: string; resolve: (ok: boolean) => void } | null>(null);
   const [tab, setTab] = useState<TabInfo | null>(null);
   const [usage, setUsage] = useState({ input: 0, output: 0 });
+  const [ready, setReady] = useState(false);
+  const [banner, setBanner] = useState("");
+  const [progress, setProgress] = useState({ message: "Ready", step: 0, model: "", since: Date.now() });
+  const [elapsed, setElapsed] = useState(0);
+  const [tabs, setTabs] = useState<TabInfo[]>([]);
+  const [selectedTab, setSelectedTab] = useState<number | null>(null);
+  const windowRef = useRef<number | undefined>(undefined);
+  const restoredRef = useRef(false);
 
   const historyRef = useRef<Message[]>([]);
   const executorRef = useRef<BrowserExecutor | null>(null);
@@ -33,8 +45,19 @@ export function App() {
 
   // ----- settings -----
   useEffect(() => {
-    loadSettings().then((s) => {
+    loadSettings().then(async (s) => {
       setSettings(s);
+      if (s.saveConversations) {
+        const stored = await chrome.storage.local.get(CONVERSATION_KEY);
+        const restored = restoreConversation(stored[CONVERSATION_KEY]);
+        if (restored) {
+          historyRef.current = restored.history;
+          restoredRef.current = true;
+          setMessages(restored.messages);
+          setBanner("Conversation restored locally. Page observations will be refreshed before continuing.");
+        }
+      }
+      setReady(true);
       const preset = presetOf(s.preset);
       if (!s.apiKey && !preset.keyOptional) setView("settings");
     });
@@ -52,9 +75,32 @@ export function App() {
 
   useEffect(() => setDevMode(!!settings?.devMode), [settings?.devMode]);
 
+  useEffect(() => {
+    if (!ready || !settings) return;
+    if (!settings.saveConversations) { void saveConversation(null); return; }
+    const persist = () => { void saveConversation(snapshotConversation(historyRef.current, messages)).catch(() => setBanner("Could not save this conversation. Browser storage may be full.")); };
+    // Avoid serializing storage writes for every streamed token. Tool boundaries save immediately.
+    const last = messages[messages.length - 1];
+    const segments = last?.segments ?? [];
+    const toolBoundary = segments[segments.length - 1]?.kind === "tool";
+    const timer = setTimeout(persist, running && !toolBoundary ? 250 : 0);
+    window.addEventListener("pagehide", persist);
+    return () => { clearTimeout(timer); window.removeEventListener("pagehide", persist); };
+  }, [messages, ready, running, settings?.saveConversations]);
+
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - progress.since) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [running, progress.since]);
+
   const changeMode = (m: Mode) => {
     setMode(m);
     chrome.storage.local.set({ [MODE_KEY]: m });
+    if (settings) {
+      const model = m === "ask" ? settings.askModel : settings.actModel;
+      if (model) void saveSettings({ ...settings, model });
+    }
   };
 
   // ----- current tab tracking -----
@@ -63,6 +109,8 @@ export function App() {
     const refresh = async () => {
       if (windowId === undefined) return;
       const [t] = await chrome.tabs.query({ active: true, windowId });
+      const list = await chrome.tabs.query({ windowId });
+      setTabs(list.filter((t) => t.id && !isRestrictedUrl(t.url)).map((t) => ({ id: t.id!, title: t.title ?? "", url: t.url ?? "" })));
       if (t?.id) setTab({ id: t.id, title: t.title ?? "", url: t.url ?? "", favIconUrl: t.favIconUrl });
     };
     // Normally the panel controls the window it is docked in. When the panel is opened as a
@@ -71,6 +119,7 @@ export function App() {
     const resolveWindow = override ? Promise.resolve({ id: override }) : chrome.windows.getCurrent();
     resolveWindow.then((w) => {
       windowId = w.id;
+      windowRef.current = w.id;
       if (w.id !== undefined) executorRef.current = new BrowserExecutor(w.id);
       refresh();
     });
@@ -106,6 +155,14 @@ export function App() {
   const handleEvent = useCallback(
     (e: AgentEvent) => {
       switch (e.type) {
+        case "status":
+          setProgress((p) => p.message === e.message && p.step === e.step ? { ...p, model: e.model ?? p.model }
+            : { message: e.message, step: e.step, model: e.model ?? p.model, since: Date.now() });
+          setElapsed(0);
+          break;
+        case "summary":
+          patchLast((m) => ({ ...m, summary: e }));
+          break;
         case "assistant_start":
           patchSegments((segs) => {
             const last = segs[segs.length - 1];
@@ -202,105 +259,127 @@ export function App() {
   const requestApproval = useCallback(
     (label: string, _call: ToolCallPart) =>
       new Promise<boolean>((resolve) => {
+        const signal = abortRef.current?.signal;
+        const finish = (ok: boolean) => {
+          signal?.removeEventListener("abort", cancel);
+          setApproval(null);
+          resolve(ok);
+        };
+        const cancel = () => finish(false);
+        if (signal?.aborted) return cancel();
+        signal?.addEventListener("abort", cancel, { once: true });
         setApproval({
           label,
-          resolve: (ok) => {
-            setApproval(null);
-            resolve(ok);
-          },
+          resolve: finish,
         });
       }),
     [],
   );
 
   // ----- send -----
-  const send = useCallback(
-    async (text: string) => {
-      const executor = executorRef.current;
-      if (!settings || !executor || running) return;
-      const trimmed = text.trim();
-      if (!trimmed) return;
-
-      setRunning(true);
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      let current: chrome.tabs.Tab | null = null;
-      try {
-        current = await executor.currentTab();
-      } catch {
-        /* no tab */
-      }
+  const send = useCallback(async (text: string, intent: "normal" | "continue" | "observe" = "normal") => {
+    const executor = executorRef.current;
+    if (!settings || !executor || !ready || abortRef.current || !text.trim()) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setRunning(true);
+    setProgress({ message: "Preparing page", step: 0, model: settings.model, since: Date.now() });
+    setElapsed(0);
+    const history = historyRef.current;
+    // A fixed id keeps late events from a cancelled task out of a new conversation.
+    const assistantId = uid();
+    let visible = false;
+    try {
+      executor.lockTab(selectedTab);
+      const current = await executor.currentTab().catch(() => null);
+      if (selectedTab !== null && !current) throw new Error("The selected tab was closed. Choose another tab.");
+      if (current?.id) { executor.lockTab(current.id); setSelectedTab(current.id); }
+      if (controller.signal.aborted) return;
       const restricted = !current || isRestrictedUrl(current.url);
-      const context = current
-        ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page: tools cannot read it)" : ""}`
-        : "[No active tab]";
-
-      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${context}\n\n${trimmed}` }];
+      const context = current ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
+      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${context}\n\n${text.trim()}` }];
       let thumb: string | undefined;
       if (settings.vision && settings.attachScreenshot && !restricted) {
         try {
           const shot = await executor.screenshot();
           parts.push({ type: "image", mediaType: shot.mediaType, data: shot.data });
           thumb = `data:${shot.mediaType};base64,${shot.data}`;
-        } catch {
-          /* screenshot unavailable; continue without */
-        }
+        } catch { /* a background controlled tab must never capture the active tab */ }
       }
-      historyRef.current.push({ role: "user", parts });
-      setMessages((prev) => [
-        ...prev,
-        { id: uid(), role: "user", text: trimmed, screenshot: thumb },
-        { id: uid(), role: "assistant", segments: [], streaming: true },
-      ]);
-
-      if (mode === "act") {
-        await executor.setActiveOverlay(true, "Enki is controlling this tab…");
-      }
-      try {
-        await runTurn({
-          provider: createProvider(settings),
-          model: settings.model,
-          mode,
-          system: buildSystemPrompt(mode, settings.customInstructions),
-          history: historyRef.current,
-          tools: toolsForMode(mode, settings.vision),
-          executor,
-          maxSteps: settings.maxSteps,
-          autoApprove: settings.autoApprove,
-          requestApproval,
-          onEvent: handleEvent,
-          signal: controller.signal,
-        });
-      } finally {
-        await executor.setActiveOverlay(false);
-        setRunning(false);
-        abortRef.current = null;
-      }
-    },
-    [settings, running, mode, requestApproval, handleEvent],
-  );
+      if (controller.signal.aborted) return;
+      history.push({ role: "user", parts });
+      setMessages((prev) => [...prev,
+        { id: uid(), role: "user", text: text.trim(), screenshot: thumb },
+        { id: assistantId, role: "assistant", segments: [], streaming: true }]);
+      visible = true;
+      if (mode === "act") await executor.setActiveOverlay(true, "Enki is controlling this tab…");
+      const effectiveMode = intent === "observe" ? "ask" : mode;
+      await runTurn({ provider: createProvider(settings), model: settings.model, mode: effectiveMode,
+        system: buildSystemPrompt(effectiveMode, settings.customInstructions), history,
+        tools: toolsForMode(effectiveMode, settings.vision), executor, maxSteps: settings.maxSteps,
+        autoApprove: settings.autoApprove, requestApproval,
+        onEvent: (e) => { if (historyRef.current === history) handleEvent(e); },
+        signal: controller.signal, contextBudgetTokens: settings.contextBudgetTokens,
+        maxOutputTokens: settings.maxOutputTokens, refreshPage: intent !== "normal" || restoredRef.current,
+      });
+      restoredRef.current = false;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (visible && historyRef.current === history) handleEvent({ type: "error", message });
+      else setBanner(message);
+    } finally {
+      await executor.setActiveOverlay(false).catch(() => undefined);
+      // Keep a tab pinned across tasks only when the agent itself switched or opened one.
+      // Pinning whatever tab happened to be active would silently detach later questions from
+      // the tab the user is actually looking at.
+      const retargeted = executor.agentSelectedTab();
+      if (retargeted !== null && historyRef.current === history) setSelectedTab(retargeted);
+      executor.lockTab(null);
+      setRunning(false);
+      abortRef.current = null;
+    }
+  }, [settings, ready, selectedTab, mode, requestApproval, handleEvent]);
 
   const stop = () => abortRef.current?.abort();
-
   const retry = useCallback(() => {
-    const lastUser = [...historyRef.current].reverse().find((m) => m.role === "user");
-    if (!lastUser) return;
-    const textPart = lastUser.parts.find((p) => p.type === "text") as { text: string } | undefined;
-    if (!textPart) return;
-    const raw = textPart.text;
-    const idx = raw.indexOf("\n\n");
-    const userPrompt = idx !== -1 ? raw.slice(idx + 2) : raw;
-    send(userPrompt);
+    if (abortRef.current) return;
+    invalidateObservations(historyRef.current);
+    void send("Continue the previous task. Check which actions already succeeded and do not repeat them. Ask me if an interrupted action's outcome is uncertain.", "continue");
   }, [send]);
 
   const newChat = () => {
     stop();
     historyRef.current = [];
+    restoredRef.current = false;
     setMessages([]);
     setUsage({ input: 0, output: 0 });
     setApproval(null);
+    setBanner("");
+    setSelectedTab(null);
+    void saveConversation(null);
   };
+
+  // Empty deps on purpose: stop/newChat only touch refs and stable setters, and re-subscribing
+  // both listeners on every render would churn them dozens of times a second while streaming.
+  useEffect(() => {
+    const command = (msg: { type?: string; command?: string; windowId?: number }) => {
+      if (msg.type !== "enki:command" || msg.windowId !== windowRef.current) return;
+      if (msg.command === "stop-task") stop();
+      if (msg.command === "new-chat") newChat();
+      if (msg.command === "focus-composer") { setView("chat"); setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea")?.focus(), 0); }
+    };
+    chrome.runtime.onMessage.addListener(command);
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // Escape closes a dropdown or reverts a field first. Killing a running task because the
+      // user dismissed the tab selector would be its own bug.
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "SELECT" || tag === "INPUT") return;
+      stop();
+    };
+    document.addEventListener("keydown", key);
+    return () => { chrome.runtime.onMessage.removeListener(command); document.removeEventListener("keydown", key); };
+  }, []);
 
   const toggleScreenshot = async () => {
     if (!settings || !settings.vision) return;
@@ -309,9 +388,9 @@ export function App() {
     await saveSettings(next);
   };
 
-  if (!settings) return null;
+  if (!settings || !ready) return null;
 
-  if (view === "logs") return <LogsView onClose={() => setView("chat")} />;
+  if (view === "logs") return <LogsView settings={settings} onClose={() => setView("chat")} />;
 
   if (view === "settings") {
     return (
@@ -358,6 +437,21 @@ export function App() {
         </div>
       </header>
 
+      <QuickModels settings={settings} disabled={running} onChange={(model) => { void saveSettings({ ...settings, model }); }} />
+      <div className="border-b border-ink-800 px-3 py-2 text-xs">
+        <label htmlFor="controlled-tab" className="mb-1 block text-zinc-400">Controlled tab {running ? "(locked for this task)" : ""}</label>
+        <select id="controlled-tab" disabled={running} value={selectedTab ?? ""} onChange={(e) => setSelectedTab(e.target.value ? Number(e.target.value) : null)} className="w-full min-w-0 rounded border border-ink-700 bg-ink-900 p-1.5 text-zinc-200">
+          <option value="">Use active tab when task starts</option>
+          {selectedTab !== null && !tabs.some((t) => t.id === selectedTab) && <option value={selectedTab}>Selected tab unavailable</option>}
+          {tabs.map((t) => <option value={t.id} key={t.id}>{t.title || t.url}</option>)}
+        </select>
+      </div>
+      {banner && <div role="status" className="border-b border-ink-800 px-3 py-2 text-xs text-amber-200">{banner} <button className="underline" onClick={() => setBanner("")}>Dismiss</button></div>}
+      {running && <div role="status" className="border-b border-ink-800 px-3 py-2 text-xs text-enki-400">
+        {progress.message === "Waiting for provider" ? `Waiting for ${presetOf(settings.preset).label.split(" (")[0]}` : progress.message} · {elapsed}s
+        <div className="truncate text-zinc-400">{progress.step > 0 ? `Step ${progress.step}/${settings.maxSteps} · ` : ""}{progress.model}</div>
+      </div>}
+
       {tab && (
         <div className="flex items-center gap-2 border-b border-ink-800 bg-ink-900/60 px-3 py-1.5 text-xs text-zinc-400">
           {tab.favIconUrl ? (
@@ -377,9 +471,16 @@ export function App() {
         approval={approval}
         mode={mode}
         onSuggest={send}
-        onRetry={retry}
+        onRetry={running ? undefined : retry}
         model={settings.model}
       />
+
+      {!running && messages.length > 0 && <div className="flex flex-wrap gap-2 border-t border-ink-800 px-3 py-2 text-xs">
+        <button className="rounded border border-ink-700 px-2 py-1 text-enki-400" onClick={retry}>Continue safely</button>
+        <button className="rounded border border-ink-700 px-2 py-1" onClick={() => { invalidateObservations(historyRef.current); void send("Read the current page again and report its state.", "observe"); }}>Read page again</button>
+        <button className="rounded border border-ink-700 px-2 py-1" onClick={() => setView("settings")}>Switch model</button>
+        <button className="rounded border border-ink-700 px-2 py-1" onClick={() => navigator.clipboard.writeText(diagnosticReport(settings)).then(() => setBanner("Diagnostic report copied. Page content and credentials excluded."), () => setBanner("Clipboard unavailable. Open Logs to export the report."))}>Copy diagnostics</button>
+      </div>}
 
       {needsKey && (
         <div className="mx-3 mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">

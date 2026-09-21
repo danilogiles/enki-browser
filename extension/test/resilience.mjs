@@ -1,16 +1,15 @@
 // Exercises how Enki survives badly-behaved models: a gateway that stalls mid-stream, a model
 // that answers only in the reasoning channel, and one that emits inline <think> tags.
 //
-// Prereqs: `npm run build`, `node test/mock-llm.mjs` running, PLAYWRIGHT_DIR set as for e2e.mjs.
+// Prereqs: `npm run build`, `node test/mock-llm.mjs` running, `npx playwright install chromium`.
 import path from "node:path";
 import os from "node:os";
 import { mkdtemp } from "node:fs/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.resolve(here, "..", "dist");
-const pwDir = process.env.PLAYWRIGHT_DIR ?? path.resolve(here, "..");
-const { chromium } = await import(pathToFileURL(path.join(pwDir, "node_modules", "playwright", "index.mjs")).href);
 
 const MOCK = "http://127.0.0.1:8787";
 const results = [];
@@ -49,6 +48,7 @@ try {
             requestTimeoutSec,
             devMode: true,
             customInstructions: "",
+            saveConversations: false,
           },
           "enki:mode": mode,
         }),
@@ -177,6 +177,31 @@ try {
     /sent nothing for 6s/.test(stalled) && elapsed < 35,
     `${elapsed}s | ${stalled.split("\n").filter(Boolean).slice(-2).join(" | ")}`,
   );
+  const noHeaders = await ask("mock-no-headers", "header timeout", { requestTimeoutSec: 6 });
+  check("gateway header timeout releases the composer", /response headers before the timeout/.test(noHeaders));
+  await configure("mock-echo");
+  await panel.waitForTimeout(300);
+  check("next interaction works after gateway timeout", /Echo:/.test(await send("recovered after timeout")));
+
+  // Use the normal scripted Act flow to reach its sensitive Buy action.
+  await configure("mock-act", 60, "act");
+  await panel.evaluate(async ({ wid, mock }) => {
+    const [t] = await chrome.tabs.query({ active: true, windowId: wid });
+    await chrome.tabs.update(t.id, { url: `${mock}/page` });
+  }, { wid, mock: MOCK });
+  await panel.goto(panelUrl);
+  await panel.waitForTimeout(1000);
+  await panel.fill("textarea", "type hello enki and buy");
+  await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow')", { timeout: 30000 });
+  await panel.click("button[title='Stop']");
+  await panel.waitForFunction(() => !document.querySelector("button[title='Stop']"), null, { timeout: 5000 });
+  check("Stop cancels pending approval", await panel.locator("button:has-text('Allow')").count() === 0);
+  const stoppedTitle = await panel.evaluate(async (wid) => (await chrome.tabs.query({ active: true, windowId: wid }))[0].title, wid);
+  check("cancelled approval does not execute purchase", !stoppedTitle.startsWith("BOUGHT:"));
+  await configure("mock-echo");
+  await panel.waitForTimeout(300);
+  check("next interaction works after Stop", /Echo:/.test(await send("recovered after stop")));
 } catch (e) {
   check("run", false, e?.stack ?? String(e));
 } finally {

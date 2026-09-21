@@ -1,6 +1,6 @@
 {
   "name": "enki",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Enki - open-source AI browser assistant. Bring your own model, see the page, let it act.",
   "type": "module",
@@ -12,10 +12,12 @@
     "icons": "node scripts/icons.mjs",
     "mock": "node test/mock-llm.mjs",
     "test:e2e": "node test/e2e.mjs",
-    "test:resilience": "node test/resilience.mjs"
+    "test:resilience": "node test/resilience.mjs",
+    "test:unit": "node test/unit.cjs",
+    "test:quality": "node test/quality.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.123.0",
+    "@anthropic-ai/sdk": "^0.125.0",
     "lucide-react": "^1.40.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -30,9 +32,10 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "sharp": "^0.34.0",
+    "playwright": "^1.63.0",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.0",
+    "typescript": "^5.9.3",
     "vite": "^8.2.2"
   }
 }
