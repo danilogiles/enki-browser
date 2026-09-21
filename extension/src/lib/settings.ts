@@ -122,7 +122,7 @@ export type ThemeOption = {
 };
 
 export const THEMES: ThemeOption[] = [
-  { id: "dark", label: "Enki Dark (default)", description: "The original slate and teal dark theme." },
+  { id: "dark", label: "Enki Dark (default)", description: "Trust Buddy sky accents on navy chrome." },
   { id: "light", label: "Light", description: "Clean white background with dark text and contrasts." },
   { id: "system", label: "System (auto)", description: "Follows your operating system's light or dark setting." },
   { id: "midnight", label: "Midnight (OLED)", description: "True black with indigo accents and high contrast for OLED screens." },
