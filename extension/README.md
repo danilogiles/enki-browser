@@ -16,32 +16,12 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 
 Planned for a later phase: a **companion mode** that watches your browsing and proactively offers suggestions.
 
-## New in 0.2.0
-
-- Live request stage, elapsed time, tool step, and serving model when the gateway reports it.
-- Latest conversation saved locally and restored — paused, never resumed — after reopening. Screenshots and reasoning are not saved. Disable saving in Settings → Behavior to remove the saved copy; New chat clears it.
-- A configurable input context budget with local, extractive summaries of older exchanges. Summaries can omit details; tool calls and their results stay paired. Oversized current requests fail visibly rather than being silently truncated. Output per step is capped by *Max output tokens* (default 4,096) and Enki tells you when a reply hits it, since a truncated answer cannot be resumed.
-- Three failures of the same tool and arguments stop the task with recovery controls.
-- Continue safely refreshes the page first and preserves previous results. Read page again is read-only, including when the panel is in Act mode. Nothing is automatically replayed.
-- Tasks lock to one tab for their duration. Manually switching tabs mid-task does not redirect input. Only the agent's own switch/new-tab tools pin a tab beyond the task; otherwise the next task follows your active tab again. Screenshots require the controlled tab to be visible.
-- Searchable model favorites and optional preferred Ask/Act models for the current provider.
-- Connection diagnostics test authentication, model responses and structured tool calling with a synthetic request, without executing a browser action. A passing probe is not a guarantee every model response will use tools.
-- Safe diagnostic copy/export with version, provider, model, event times, numeric request metadata and a few fixed-vocabulary fields such as finish reason. Raw errors, page content, prompts, URLs and credentials are excluded. The local Logs view is not redacted this way and stays behind Developer mode.
-- Four editable shortcuts in `chrome://extensions/shortcuts`: open panel, focus composer, stop task, new chat. Focus composer opens the panel if it is closed; stop task and new chat apply while the panel is open. Escape also stops a task from the panel, except while a dropdown or text field has focus.
-- End-of-turn summaries distinguish finished responses, incomplete work and requests for input, with counts from actual tool results. Successful execution does not by itself verify the user's intended outcome.
-
-To update an existing unpacked installation, rebuild (or extract the release ZIP into your installation directory) and click **Reload** for Enki in `chrome://extensions`. Close a running task before reloading. The Chrome Web Store is not configured for this project.
-
-### Regression checks
-
-Run `npm run test:unit`, `npm run typecheck` and `npm run build`. For the browser suites, run `npx playwright install chromium` once, start `npm run mock` in another terminal, then run `npm run test:e2e`, `npm run test:resilience` and `npm run test:quality`. They need Playwright's Chromium build specifically: stable Chrome no longer honours `--load-extension`, so it cannot load an unpacked extension for testing. Tests use isolated Chromium profiles and synthetic pages, never your real browser accounts.
-
 ## Install (developer mode)
 
 Enki is not on the Chrome Web Store yet. Load it unpacked:
 
 ```bash
-git clone https://github.com/devopsfuturasync/enkibrowser.git
+git clone https://github.com/danilogiles/enkibrowser.git
 cd enkibrowser
 npm install
 npm run build
@@ -142,7 +122,9 @@ Comprehensive project documentation is available in [`docs/`](docs/):
 
 - 📄 **[Product Requirements Document (PRD)](docs/PRD.md)** — Vision, personas, functional requirements, and roadmap.
 - 🏗️ **[System Architecture](docs/ARCHITECTURE.md)** — Deep dive into the side panel runtime, Chrome MV3 lifecycle, and CDP execution pipeline.
-- 🛡️ **[Security Policy](docs/SECURITY.md)** — Threat model, defense against indirect prompt injection, and credential protection gates.
+- 🛡️ **[Security Policy](docs/SECURITY.md)** — Threat model, AI egress rules, Companion Mode kill-criteria, credential protection gates.
+- 🛡️ **[Shields](docs/SHIELDS.md)** — Tracker/HTTPS/fingerprint/search defaults (approved product posture).
+- 🔎 **[Egress audit](docs/EGRESS_AUDIT.md)** — No-analytics / host allowlist snapshot.
 - 🤖 **[AI Agents Guide](AGENTS.md)** & **[CLAUDE.md](CLAUDE.md)** — Context, design patterns, and constraints for AI coding agents.
 
 ## How it works
