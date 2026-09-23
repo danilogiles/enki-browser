@@ -14,13 +14,13 @@
 }
 
 @theme {
-  --color-enki-400: var(--enki-400, #2dd4bf);
-  --color-enki-500: var(--enki-500, #14b8a6);
-  --color-enki-600: var(--enki-600, #0d9488);
-  --color-ink-950: var(--ink-950, #0b1220);
-  --color-ink-900: var(--ink-900, #111a2b);
-  --color-ink-800: var(--ink-800, #18233a);
-  --color-ink-700: var(--ink-700, #243149);
+  --color-enki-400: var(--enki-400, #38bdf8);
+  --color-enki-500: var(--enki-500, #0ea5e9);
+  --color-enki-600: var(--enki-600, #0284c7);
+  --color-ink-950: var(--ink-950, #0c4a6e);
+  --color-ink-900: var(--ink-900, #075985);
+  --color-ink-800: var(--ink-800, #0369a1);
+  --color-ink-700: var(--ink-700, #0284c7);
 
   --color-zinc-100: var(--zinc-100, #f4f4f5);
   --color-zinc-200: var(--zinc-200, #e4e4e7);
@@ -32,96 +32,96 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
 }
 
-/* Default Theme: Enki Dark (mantem o que existe hoje) */
+/* Default Theme: Enki Dark — Trust Buddy (sky on navy) */
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
-  --enki-400: #2dd4bf;
-  --enki-500: #14b8a6;
-  --enki-600: #0d9488;
-  --ink-950: #0b1220;
-  --ink-900: #111a2b;
-  --ink-800: #18233a;
-  --ink-700: #243149;
+  --enki-400: #38bdf8;
+  --enki-500: #0ea5e9;
+  --enki-600: #0284c7;
+  --ink-950: #0c4a6e;
+  --ink-900: #075985;
+  --ink-800: #0369a1;
+  --ink-700: #0284c7;
 
-  --zinc-100: #f4f4f5;
-  --zinc-200: #e4e4e7;
-  --zinc-300: #d4d4d8;
-  --zinc-400: #a1a1aa;
-  --zinc-500: #71717a;
-  --zinc-600: #52525b;
+  --zinc-100: #f0f9ff;
+  --zinc-200: #e0f2fe;
+  --zinc-300: #bae6fd;
+  --zinc-400: #7dd3fc;
+  --zinc-500: #38bdf8;
+  --zinc-600: #0ea5e9;
 
-  --app-bg: #0b1220;
-  --app-text: #e5e7eb;
+  --app-bg: #0c4a6e;
+  --app-text: #e0f2fe;
 }
 
-/* White / Light Theme */
+/* White / Light Theme — Trust Buddy accents on light surfaces */
 [data-theme="light"],
 [data-theme="white"] {
   color-scheme: light;
-  --enki-400: #0d9488;
-  --enki-500: #0f766e;
-  --enki-600: #115e59;
+  --enki-400: #0284c7;
+  --enki-500: #0369a1;
+  --enki-600: #075985;
   --ink-950: #ffffff;
-  --ink-900: #f8fafc;
-  --ink-800: #f1f5f9;
-  --ink-700: #cbd5e1;
+  --ink-900: #f0f9ff;
+  --ink-800: #e0f2fe;
+  --ink-700: #7dd3fc;
 
-  --zinc-100: #0f172a;
-  --zinc-200: #1e293b;
-  --zinc-300: #334155;
-  --zinc-400: #64748b;
-  --zinc-500: #94a3b8;
-  --zinc-600: #94a3b8;
+  --zinc-100: #0c4a6e;
+  --zinc-200: #075985;
+  --zinc-300: #0369a1;
+  --zinc-400: #0284c7;
+  --zinc-500: #0ea5e9;
+  --zinc-600: #38bdf8;
 
   --app-bg: #ffffff;
-  --app-text: #0f172a;
+  --app-text: #0c4a6e;
 }
 
 /* System Theme (Auto) */
 @media (prefers-color-scheme: light) {
   [data-theme="system"] {
     color-scheme: light;
-    --enki-400: #0d9488;
-    --enki-500: #0f766e;
-    --enki-600: #115e59;
+    --enki-400: #0284c7;
+    --enki-500: #0369a1;
+    --enki-600: #075985;
     --ink-950: #ffffff;
-    --ink-900: #f8fafc;
-    --ink-800: #f1f5f9;
-    --ink-700: #cbd5e1;
+    --ink-900: #f0f9ff;
+    --ink-800: #e0f2fe;
+    --ink-700: #7dd3fc;
 
-    --zinc-100: #0f172a;
-    --zinc-200: #1e293b;
-    --zinc-300: #334155;
-    --zinc-400: #64748b;
-    --zinc-500: #94a3b8;
-    --zinc-600: #94a3b8;
+    --zinc-100: #0c4a6e;
+    --zinc-200: #075985;
+    --zinc-300: #0369a1;
+    --zinc-400: #0284c7;
+    --zinc-500: #0ea5e9;
+    --zinc-600: #38bdf8;
 
     --app-bg: #ffffff;
-    --app-text: #0f172a;
+    --app-text: #0c4a6e;
   }
 }
 
 @media (prefers-color-scheme: dark) {
   [data-theme="system"] {
     color-scheme: dark;
-    --enki-400: #2dd4bf;
-    --enki-500: #14b8a6;
-    --enki-600: #0d9488;
-    --ink-950: #0b1220;
-    --ink-900: #111a2b;
-    --ink-800: #18233a;
-    --ink-700: #243149;
+    --enki-400: #38bdf8;
+    --enki-500: #0ea5e9;
+    --enki-600: #0284c7;
+    --ink-950: #0c4a6e;
+    --ink-900: #075985;
+    --ink-800: #0369a1;
+    --ink-700: #0284c7;
 
-    --zinc-100: #f4f4f5;
-    --zinc-200: #e4e4e7;
-    --zinc-300: #d4d4d8;
-    --zinc-400: #a1a1aa;
-    --zinc-500: #71717a;
-    --zinc-600: #52525b;
+    --zinc-100: #f0f9ff;
+    --zinc-200: #e0f2fe;
+    --zinc-300: #bae6fd;
+    --zinc-400: #7dd3fc;
+    --zinc-500: #38bdf8;
+    --zinc-600: #0ea5e9;
 
-    --app-bg: #0b1220;
-    --app-text: #e5e7eb;
+    --app-bg: #0c4a6e;
+    --app-text: #e0f2fe;
   }
 }
 
@@ -311,7 +311,7 @@ body {
   }
 }
 .cursor-blink::after {
-  content: "▍";
+  content: "â–";
   color: var(--color-enki-400);
   animation: enki-blink 1s infinite;
   margin-left: 1px;
