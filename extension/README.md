@@ -16,6 +16,10 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 
 Planned for a later phase: a **companion mode** that watches your browsing and proactively offers suggestions.
 
+## Enki Browser
+
+Prefer a whole browser with Enki already inside? **[Enki Browser](https://github.com/danilogiles/enki-browser)** is ungoogled-chromium — Chromium without Google's services or telemetry — with Enki pinned in the toolbar, uBlock Origin Lite blocking ads, trackers and malware sites, DuckDuckGo search, HTTPS upgrades, blocked third-party cookies and fingerprint noise, all on by default. Early alpha, Windows x64.
+
 ## Install (developer mode)
 
 Enki is not on the Chrome Web Store yet. Load it unpacked:
