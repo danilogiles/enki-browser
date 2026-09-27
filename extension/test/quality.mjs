@@ -112,5 +112,27 @@ try {
   await mkdir(path.join(here, ".out"), { recursive: true });
   await panel.screenshot({ path: path.join(here, ".out/quality-panel.png"), fullPage: true });
   check("sidebar fits without horizontal overflow", await panel.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
+  // Enki Home: a request typed on the new tab page must open the panel and be sent from it.
+  // The real side panel is stubbed so the panel under test (a tab) is the one that picks it up.
+  await configure("mock-echo", "ask");
+  await panel.click("button[title='New chat']"); await idle();
+  const home = await context.newPage();
+  await home.goto(`chrome-extension://${id}/src/home/index.html`);
+  await home.evaluate(() => { window.__opened = []; chrome.sidePanel.open = async (o) => { window.__opened.push(o); }; });
+  await home.fill("textarea", "hello from enki home");
+  await home.press("textarea", "Enter");
+  const opened = await home.evaluate(() => window.__opened);
+  check("Enki Home opens the side panel on Enter", opened.length === 1 && typeof opened[0].windowId === "number");
+  // The open panel hears the handoff through storage.onChanged; no reload needed.
+  await panel.waitForFunction(() => document.body.innerText.includes("Echo:") && document.body.innerText.includes("hello from enki home"), null, { timeout: 15000 });
+  await idle();
+  check("the panel sends the Enki Home request to the model", (await panel.textContent("body")).includes("hello from enki home"));
+  check("an Enki Home request is sent only once", await home.evaluate(async () => !(await chrome.storage.session.get("enki:handoff"))["enki:handoff"]));
+  await home.fill("textarea", "example.com");
+  await home.press("textarea", "Enter");
+  await home.waitForURL(/^https:\/\/example\.com\/?$/, { timeout: 15000 });
+  check("an address typed on Enki Home is opened, not asked about", home.url().startsWith("https://example.com"));
+  await home.close();
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }
