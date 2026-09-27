@@ -19,5 +19,13 @@
     "repo": "https://github.com/danilogiles/enkibrowser.git",
     "ref": "main",
     "license": "MIT"
+  },
+  "rcedit": {
+    "name": "rcedit",
+    "version": "2.0.0",
+    "url": "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe",
+    "sha256": "3e7801db1a5edbec91b49a24a094aad776cb4515488ea5a4ca2289c400eade2a",
+    "license": "MIT, build tool only (not shipped)",
+    "note": "Released 2023, before GitHub published asset digests: this hash was taken on first download (size matched the release, 1360384 bytes) and is pinned from then on."
   }
 }
