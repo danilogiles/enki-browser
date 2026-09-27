@@ -26,7 +26,12 @@
       "suggestions_url": "https://duckduckgo.com/ac/?q={searchTerms}&type=list",
       "favicon_url": "https://duckduckgo.com/favicon.ico",
       "safe_for_autoreplace": false,
-      "input_encodings": ["UTF-8"]
+      "input_encodings": [
+        "UTF-8"
+      ]
     }
+  },
+  "background_mode": {
+    "enabled": false
   }
 }

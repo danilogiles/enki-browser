@@ -116,6 +116,16 @@ try {
   });
   check("third-party cookies are blocked", /block/i.test(cookieState ?? ""), cookieState ?? "no checked option found");
 
+  // ---- closing the last window must end the browser, or a staged update never installs
+  await page.goto("chrome://settings/system");
+  await page.waitForTimeout(1500);
+  const background = await page.evaluate(() => {
+    const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
+    const row = all(document).find((el) => el.tagName === "SETTINGS-TOGGLE-BUTTON" && /background/i.test(el.getAttribute("label") ?? el.label ?? ""));
+    return row ? { label: row.getAttribute("label") ?? row.label, checked: !!row.checked } : null;
+  });
+  check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
+
   // ---- the assistant itself
   await page.goto(`chrome-extension://${version.enkiExtensionId}/src/sidepanel/index.html`);
   await page.waitForTimeout(1200);
