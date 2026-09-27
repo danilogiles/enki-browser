@@ -77,7 +77,9 @@ function flatten(value: unknown): Array<{ name?: string; args: Record<string, un
   if (Array.isArray(v.tool_calls)) return v.tool_calls.flatMap((c) => flatten(c));
   if (v.function && typeof v.function === "object") return flatten(v.function);
 
-  const name = typeof v.name === "string" ? v.name : undefined;
+  // `tool` is the key compatibility mode asks for (providers/text-tools.ts); several open models
+  // also reach for it unprompted.
+  const name = typeof v.name === "string" ? v.name : typeof v.tool === "string" ? v.tool : undefined;
   if (!name) return [];
   const raw = v.arguments ?? v.parameters ?? v.input ?? v.args ?? {};
   let args: Record<string, unknown> = {};

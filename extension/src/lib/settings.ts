@@ -31,6 +31,8 @@ export type Preset = {
   free?: boolean;
   /** Selecting this preset turns image support off (models behind it usually reject images). */
   noVision?: boolean;
+  /** Compatibility mode starts on for this preset (see providers/text-tools.ts). */
+  textTools?: boolean;
 };
 
 export const PRESETS: Preset[] = [
@@ -44,9 +46,10 @@ export const PRESETS: Preset[] = [
     free: true,
     editableBaseUrl: true,
     noVision: true,
+    textTools: true,
     setupUrl: "https://github.com/diegosouzapw/OmniRoute",
     hint:
-      "Open-source gateway that runs on your machine and routes to 150+ free providers automatically. Install and start it first, then come back here. Model \"auto\" picks the best free model; \"auto/cheap\", \"auto/fast\" and \"auto/best-free\" are alternatives. No key needed unless you created one in its dashboard (http://localhost:20128). The free pool has no reliable vision models, so image support is turned off for this preset; Enki works from the page DOM instead. Re-enable it below if you added your own vision-capable keys to OmniRoute.",
+      "Open-source gateway that runs on your machine and routes to free providers. Install and start it first, then come back here. \"auto\" rotates through its keyless pool, which upstream providers block often; when it fails, pick a specific model such as \"cfp/moonshotai/kimi-k2.6\", or connect a free key (Gemini, Groq, OpenRouter) in its dashboard at http://localhost:20128. Keyless routes drop tool definitions, so Compatibility mode (Behavior tab) starts on for this preset. The free pool has no reliable vision models, so image support is turned off; Enki works from the page DOM instead.",
   },
   {
     id: "ollama",
@@ -140,6 +143,12 @@ export type Settings = {
   autoApprove: boolean;
   /** The model accepts images. When false, no screenshots are sent and the screenshot tool is hidden. */
   vision: boolean;
+  /**
+   * Send instructions and tools as plain chat text instead of the system/tools fields, for
+   * gateways that drop them. Unset means "the preset's default", so people who saved OmniRoute
+   * settings before this existed get it without re-saving.
+   */
+  textTools?: boolean;
   /** Attach a screenshot of the current tab with every user message (requires vision). */
   attachScreenshot: boolean;
   /** Max tool-call rounds per user request. */
@@ -184,6 +193,13 @@ const KEY = "enki:settings";
 
 export function presetOf(id: PresetId): Preset {
   return PRESETS.find((p) => p.id === id) ?? PRESETS[PRESETS.length - 1];
+}
+
+/** Compatibility mode applies to OpenAI-compatible endpoints only; Anthropic's API keeps tools. */
+export function usesTextTools(settings: Settings): boolean {
+  const preset = presetOf(settings.preset);
+  if (preset.kind !== "openai-compatible") return false;
+  return settings.textTools ?? !!preset.textTools;
 }
 
 export async function loadSettings(): Promise<Settings> {

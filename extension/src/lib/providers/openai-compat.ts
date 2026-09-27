@@ -93,6 +93,13 @@ export class OpenAICompatProvider implements ChatProvider {
         const detail = errorText(text);
         log.error("provider", `HTTP ${res.status} ${res.statusText}`, { body: text.slice(0, 1000) });
         let hint = "";
+        // OmniRoute reports a failed combo with these headers. The body then lists every
+        // upstream it tried, which reads as noise; what the user needs is the way out.
+        const attempted = res.headers.get("x-omniroute-combo-attempted");
+        if (attempted || isComboFailure(detail)) {
+          const pool = res.headers.get("x-omniroute-combo-pool-size");
+          throw new Error(`${res.status}: ${comboFailureMessage(req.model, detail, attempted, pool)}`);
+        }
         if (res.status === 401) {
           hint = this.opts.apiKey
             ? " (The provider rejected this API key — check it in Settings ⚙️)."
@@ -137,7 +144,8 @@ export class OpenAICompatProvider implements ChatProvider {
         }
         if (chunk.error) {
           log.error("provider", "Error event inside the stream", chunk.error);
-          throw new Error(typeof chunk.error === "string" ? chunk.error : chunk.error.message ?? JSON.stringify(chunk.error));
+          const message = typeof chunk.error === "string" ? chunk.error : chunk.error.message ?? JSON.stringify(chunk.error);
+          throw new Error(isComboFailure(message) ? comboFailureMessage(req.model, message, null, null) : message);
         }
         if (chunks === 1) {
           log.info("provider", `First chunk after ${Date.now() - started}ms`, { servedBy: chunk.model });
@@ -235,6 +243,25 @@ type OpenAIChunk = {
   /** Gateways report which upstream model actually served the request. */
   model?: string;
 };
+
+/**
+ * OmniRoute joins one "model: reason (HTTP nnn)" entry per upstream it tried with "; ". Two or
+ * more of those means a whole combo failed, not one model.
+ */
+function isComboFailure(detail: string): boolean {
+  return (detail.match(/\(HTTP \d{3}\)/g) ?? []).length >= 2;
+}
+
+function comboFailureMessage(model: string, detail: string, attempted: string | null, pool: string | null): string {
+  const tried = attempted ? `${attempted}${pool ? ` of ${pool}` : ""} providers` : "every provider";
+  return (
+    `OmniRoute tried ${tried} for "${model}" and all of them failed — its keyless free pool is being blocked or ` +
+    "rate-limited upstream, so retrying rarely helps. Pick a specific model in Settings ⚙️ (\"cfp/moonshotai/kimi-k2.6\" " +
+    "needs no key), connect a free key (Google AI Studio, Groq or OpenRouter) in the OmniRoute dashboard at " +
+    "http://localhost:20128, or use the Google Gemini preset directly. " +
+    `First failure: ${detail.split("; ")[0].slice(0, 200)}`
+  );
+}
 
 /** Pull a readable message out of an error body, JSON or plain text. */
 function errorText(body: string): string {
@@ -371,7 +398,9 @@ function dataUrl(img: ImagePart): string {
 }
 
 function toOpenAIMessages(system: string, messages: Message[]): unknown[] {
-  const out: unknown[] = [{ role: "system", content: system }];
+  // Compatibility mode moves the instructions into the first user message and leaves this
+  // empty; some templates reject an empty system turn.
+  const out: unknown[] = system.trim() ? [{ role: "system", content: system }] : [];
   for (const m of messages) {
     if (m.role === "user") {
       out.push({

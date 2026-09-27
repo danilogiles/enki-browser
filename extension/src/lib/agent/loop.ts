@@ -184,7 +184,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             message:
               "This model answered as if Enki's tools did not exist" +
               (recovered.foreign.length ? ` (it tried to use ${recovered.foreign[0]}, which belongs to another tool)` : "") +
-              ". Free gateway pools rotate between providers and some ignore tool definitions — send the message again, or pick a specific model in Settings.",
+              ". Free gateway pools rotate between providers and some drop tool definitions — turn on Compatibility mode in Settings → Behavior, send the message again, or pick a specific model.",
           });
         }
       }

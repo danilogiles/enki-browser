@@ -13,6 +13,8 @@ const { diagnosticReport } = require('../src/lib/diagnostics.ts');
 const { log } = require('../src/lib/debug.ts');
 const { runTurn } = require('../src/lib/agent/loop.ts');
 const { DEFAULT_SETTINGS } = require('../src/lib/settings.ts');
+const { toTextProtocol } = require('../src/lib/providers/text-tools.ts');
+const { extractTextToolCalls } = require('../src/lib/agent/toolcall-text.ts');
 global.chrome = { runtime: { getManifest: () => ({ version: 'test' }) } };
 const user = (text) => ({ role: 'user', parts: [{ type: 'text', text }] });
 const call = { type: 'tool_call', id: 'c1', name: 'click', input: { ref: 'ref_1' } };
@@ -95,5 +97,31 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
   });
   check('a reply cut off by the output cap says so instead of ending silently', () =>
     assert.match(truncated.find((e) => e.type === 'notice').message, /1024-token output cap/));
+
+  check('compatibility mode carries instructions, tools and results as plain chat text', () => {
+    const req = toTextProtocol({
+      model: 'm', system: 'SYSTEM_RULES', tools: [{ name: 'click', description: 'Click it', inputSchema: { type: 'object', properties: { ref: { type: 'string' } }, required: ['ref'] } }],
+      messages: [user('task'), { role: 'assistant', parts: [{ type: 'text', text: 'on it' }, call] },
+        { role: 'tool', parts: [{ type: 'tool_result', toolCallId: 'c1', name: 'click', content: [{ type: 'text', text: 'CLICKED' }] }] }, user('next')],
+    });
+    assert.equal(req.system, '');
+    assert.equal(req.tools.length, 0);
+    assert.deepEqual(req.messages.map((m) => m.role), ['user', 'assistant', 'user']);
+    const first = req.messages[0].parts.map((p) => p.text).join('');
+    assert.ok(first.includes('SYSTEM_RULES') && first.includes('- click: Click it') && first.includes('- ref: string'));
+    assert.ok(req.messages[1].parts[0].text.includes('{"tool":"click","arguments":{"ref":"ref_1"}}'));
+    const last = req.messages[2].parts.map((p) => p.text).join('');
+    assert.ok(last.includes('[Result of click]\nCLICKED') && last.includes('next') && /JSON block/.test(last));
+    assert.ok(!JSON.stringify(req.messages).includes('"role":"tool"'));
+  });
+  check('a call written in compatibility-mode JSON is recovered; a foreign one is not', () => {
+    const allowed = new Set(['navigate']);
+    const ok = extractTextToolCalls('Going.\n```json\n{"tool": "navigate", "arguments": {"url": "https://example.com"}}\n```', allowed);
+    assert.equal(ok.calls.length, 1);
+    assert.deepEqual(ok.calls[0].input, { url: 'https://example.com' });
+    assert.equal(ok.cleaned, 'Going.');
+    const bad = extractTextToolCalls('{"tool": "mcp__puppeteer__click", "arguments": {}}', allowed);
+    assert.equal(bad.calls.length, 0);
+  });
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });

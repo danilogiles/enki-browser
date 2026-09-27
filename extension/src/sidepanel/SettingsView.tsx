@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Sliders,
 } from "lucide-react";
-import { PRESETS, presetOf, THEMES, type PresetId, type Settings } from "../lib/settings";
+import { PRESETS, presetOf, THEMES, usesTextTools, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
 import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
@@ -50,7 +50,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
 
   const choosePreset = (id: PresetId) => {
     const p = presetOf(id);
-    setDraft((d) => ({ ...d, preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision, favoriteModels: [], askModel: "", actModel: "" }));
+    setDraft((d) => ({ ...d, preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision, textTools: undefined, favoriteModels: [], askModel: "", actModel: "" }));
     setModels([]);
     setStatus(null);
   };
@@ -318,6 +318,13 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 hint="Turn off for text-only models. Enki then works from the page DOM and hides the screenshot tool."
                 checked={draft.vision}
                 onChange={(v) => set("vision", v)}
+              />
+              <Toggle
+                label="Compatibility mode (tools as plain text)"
+                hint="For gateways that drop tool definitions and the system prompt, such as OmniRoute's keyless routes. Enki sends its instructions and tools inside the chat and reads the model's JSON replies as tool calls. Leave off for providers with native tool calling."
+                checked={usesTextTools(draft)}
+                disabled={preset.kind !== "openai-compatible"}
+                onChange={(v) => set("textTools", v)}
               />
               <Toggle
                 label="Attach a screenshot to every message"
