@@ -1,0 +1,23 @@
+# Chromium switches passed by the launcher, one per line. Lines starting with # are ignored.
+# The fingerprinting and search-collection switches are ungoogled-chromium's; see
+# https://github.com/ungoogled-software/ungoogled-chromium/blob/master/docs/flags.md
+
+# Fingerprinting: add tiny noise to canvas and layout readings, so the values sites use to
+# identify a browser differ per page load. "Standard" tier in docs/SHIELDS.md — imperceptible,
+# and does not break sites the way blocking the APIs outright would.
+--fingerprinting-canvas-image-data-noise
+--fingerprinting-canvas-measuretext-noise
+--fingerprinting-client-rects-noise
+
+# WebRTC may reveal local network addresses to any page; use the public interface only.
+--webrtc-ip-handling-policy=default_public_interface_only
+
+# No hyperlink-auditing pings, no search engines added behind the user's back.
+--no-pings
+--disable-search-engine-collection
+
+# ungoogled-chromium has no Web Store installs; this lets people install extensions from a
+# .crx file with a prompt instead of silently downloading it.
+--extension-mime-request-handling=always-prompt-for-install
+
+--no-default-browser-check
