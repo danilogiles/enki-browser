@@ -3,7 +3,7 @@
 //
 //   npm run build && npm run verify
 //   ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6 npm run verify   also run one Act task through a local OmniRoute
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -125,6 +125,36 @@ try {
     return row ? { label: row.getAttribute("label") ?? row.label, checked: !!row.checked } : null;
   });
   check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
+
+  // ---- the product: its start page, its name, its look
+  await page.goto("chrome://newtab/");
+  await page.waitForTimeout(1200);
+  const home = await page.evaluate(() => ({ box: !!document.querySelector("textarea"), text: document.body.innerText }));
+  check("a new tab opens Enki Home", home.box && /Enki/.test(home.text), home.text.split("\n").filter(Boolean).slice(0, 3).join(" | "));
+
+  const deepText = (url) => page.goto(url).then(() => page.waitForTimeout(1500)).then(() => page.evaluate(() => {
+    const walk = (n) => (n.shadowRoot ? walk(n.shadowRoot) : "") + [...n.childNodes].map((c) => (c.nodeType === 3 ? c.textContent : c.nodeType === 1 ? walk(c) : "")).join(" ");
+    return walk(document.body).replace(/\s+/g, " ");
+  }));
+  const about = await deepText("chrome://settings/help");
+  check("the About page names Enki Browser, not Chromium", /Enki Browser/.test(about) && !/\bChromium\b(?!\.)/.test(about.replace(/ungoogled-chromium/gi, "")), about.match(/[^.]{0,40}Enki Browser[^.]{0,40}/)?.[0]?.trim() ?? "");
+  // Read the Theme row itself: the page's side menu also says "About Enki Browser", which would
+  // satisfy a search of the whole page without proving anything about the theme.
+  await page.goto("chrome://settings/appearance");
+  await page.waitForTimeout(1500);
+  const themeRow = await page.evaluate(() => {
+    const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
+    const row = all(document).find((el) => el.id === "themeRow");
+    return row ? (row.shadowRoot ?? row).textContent.replace(/\s+/g, " ").trim() : "";
+  });
+  check("the Enki Browser theme is active", /Enki Browser/.test(themeRow), themeRow || "theme row not found");
+
+  const winInfo = execFileSync("powershell.exe", ["-NoProfile", "-Command",
+    `$c = Join-Path '${app}' 'chromium\\chrome.exe'; ` +
+    `(Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $c -and $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle; ` +
+    `(Get-Item $c).VersionInfo.FileDescription`]).toString().trim().split(/\r?\n/);
+  check("the window title ends in Enki Browser", / - Enki Browser$/.test(winInfo[0] ?? ""), winInfo[0] ?? "no window");
+  check("chrome.exe describes itself as Enki Browser", winInfo.at(-1) === "Enki Browser", winInfo.at(-1));
 
   // ---- the assistant itself
   await page.goto(`chrome-extension://${version.enkiExtensionId}/src/sidepanel/index.html`);

@@ -61,7 +61,7 @@ static class EnkiBrowser
             flags.Add("--disable-machine-id");
         }
 
-        string extensions = string.Join(",", new[] { "enki", "ublock-lite" }
+        string extensions = string.Join(",", new[] { "enki", "ublock-lite", "theme" }
             .Select(name => Path.Combine(root, "extensions", name))
             .Where(Directory.Exists));
         if (extensions.Length > 0) flags.Add("--load-extension=" + extensions);

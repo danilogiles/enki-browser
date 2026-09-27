@@ -46,6 +46,15 @@ An update is installed only if:
 empty file named `no-update` next to `EnkiBrowser.exe`. Coming from 0.1.0, install 0.2.0 once
 by hand; from then on it updates itself.
 
+## What it looks like
+
+- **Enki Home** is the new tab: one box that asks Enki — the side panel opens with your request
+  already sent, in *Ask* or *Act* mode — or, with Alt+Enter or the globe, searches DuckDuckGo.
+  Typing an address just opens it. It speaks Portuguese, Spanish or English, following the browser.
+- **Enki's colours** on the whole window: deep navy frame and toolbar, sky accents.
+- **Its own name and icon:** the window title, About, menus and update messages say Enki Browser
+  (in all 50 languages), and Windows shows Enki's icon in the taskbar and Alt+Tab.
+
 ## What is inside
 
 | | Default | Where it comes from |
@@ -102,6 +111,9 @@ checks what a user would observe, not what the config says:
 - ad and tracker scripts never load: refused, or replaced by uBlock's harmless stub
 - the same canvas drawing reads back differently on each load
 - `chrome://settings/cookies` has third-party cookies blocked
+- the browser does not keep running after its last window closes (so updates can install)
+- a new tab opens Enki Home; the About page and the window title say Enki Browser; the theme is
+  active; `chrome.exe` describes itself as Enki Browser
 - the Enki panel renders
 
 With `ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6` and a local OmniRoute, it also has Enki complete
@@ -116,8 +128,8 @@ Honest list; each is on the roadmap.
   careful with links from email and messages.
 - **Updates apply on restart.** If Enki Browser stays open for days, a downloaded security fix
   waits until you close and reopen it.
-- **Chromium branding in places** (the About page, the process name `chrome.exe`). A real rebrand
-  needs Enki Browser's own Chromium build.
+- **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line
+  on the About page names ungoogled-chromium. Changing those needs Enki Browser's own Chromium build.
 - **"Enki started debugging this browser" bar** while Enki acts on a page. That is Chromium's
   warning for the debugger API extensions use; a built-in assistant will not need it.
 - **No Chrome Web Store.** As in ungoogled-chromium, extensions install from `.crx` files with a
