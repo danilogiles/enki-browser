@@ -218,6 +218,23 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
             )}
 
             <label className="mt-3 block text-xs text-zinc-400">Model</label>
+            {!!preset.recommended?.length && (
+              <select
+                aria-label="Recommended models"
+                value={preset.recommended.some((r) => r.id === draft.model) ? draft.model : ""}
+                onChange={(e) => e.target.value && set("model", e.target.value)}
+                className={inputCls}
+              >
+                <option value="">Other model — type or pick it below</option>
+                <optgroup label="Recommended">
+                  {preset.recommended.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.id} — {r.note}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            )}
             <div className="flex gap-1">
               <input
                 type="text"
@@ -229,7 +246,11 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 className={inputCls}
               />
               <datalist id="enki-models">
-                {models.map((m) => (
+                {/* Recommended first, so they show before the refresh and on top after it. */}
+                {preset.recommended?.map((r) => (
+                  <option key={`rec:${r.id}`} value={r.id} label={`★ ${r.note}`} />
+                ))}
+                {models.filter((m) => !preset.recommended?.some((r) => r.id === m)).map((m) => (
                   <option key={m} value={m} />
                 ))}
               </datalist>
@@ -241,8 +262,8 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               <p className={`text-xs ${status.kind === "ok" ? "text-enki-400" : "text-red-300"}`}>{status.text}</p>
             )}
             <p className="text-xs text-zinc-500">
-              Pick a model that supports tool calling{draft.vision ? " and images" : ""}. Press the refresh button to
-              list what your key can access.
+              {preset.recommended?.length ? "Start with a recommended model. For anything else, pick" : "Pick"} a model that
+              supports tool calling{draft.vision ? " and images" : ""}. Press the refresh button to list what your key can access.
             </p>
             <div className="border-t border-ink-700 pt-3">
               <button type="button" disabled={probing || !canSave} onClick={diagnose} className="rounded border border-ink-700 px-3 py-2 text-enki-400 disabled:opacity-50">{probing ? "Testing gateway and model…" : "Run connection diagnostics"}</button>

@@ -33,7 +33,14 @@ export type Preset = {
   noVision?: boolean;
   /** Compatibility mode starts on for this preset (see providers/text-tools.ts). */
   textTools?: boolean;
+  /**
+   * Models offered in the Settings dropdown, best first. Model ids are the part people get
+   * wrong, and a gateway's own list (480 ids from OmniRoute) does not say which ones work.
+   */
+  recommended?: ModelSuggestion[];
 };
+
+export type ModelSuggestion = { id: string; note: string };
 
 export const PRESETS: Preset[] = [
   {
@@ -41,7 +48,18 @@ export const PRESETS: Preset[] = [
     label: "OmniRoute (free models, local gateway)",
     kind: "openai-compatible",
     baseUrl: "http://localhost:20128/v1",
-    defaultModel: "auto",
+    // "auto" rotates a keyless pool whose upstreams are mostly blocked, so it failed out of the
+    // box. The default is the model that completed live Act tasks through it.
+    defaultModel: "cfp/moonshotai/kimi-k2.6",
+    recommended: [
+      // Each completed a navigate → read → answer task on a live site through OmniRoute 3.8.50.
+      { id: "cfp/moonshotai/kimi-k2.6", note: "no key · most thorough for Act tasks" },
+      { id: "cfp/moonshotai/kimi-k2.7-code", note: "no key · as thorough, newer" },
+      { id: "cfp/zai-org/glm-5.2", note: "no key · good alternative" },
+      { id: "cfp/deepseek-ai/deepseek-v4-pro-0813", note: "no key · good alternative" },
+      { id: "cfp/deepseek-ai/deepseek-v4-flash-0731", note: "no key · fastest" },
+      { id: "auto", note: "rotates providers · works once you connect your own keys" },
+    ],
     keyOptional: true,
     free: true,
     editableBaseUrl: true,
@@ -49,7 +67,7 @@ export const PRESETS: Preset[] = [
     textTools: true,
     setupUrl: "https://github.com/diegosouzapw/OmniRoute",
     hint:
-      "Open-source gateway that runs on your machine and routes to free providers. Install and start it first, then come back here. \"auto\" rotates through its keyless pool, which upstream providers block often; when it fails, pick a specific model such as \"cfp/moonshotai/kimi-k2.6\", or connect a free key (Gemini, Groq, OpenRouter) in its dashboard at http://localhost:20128. Keyless routes drop tool definitions, so Compatibility mode (Behavior tab) starts on for this preset. The free pool has no reliable vision models, so image support is turned off; Enki works from the page DOM instead.",
+      "Open-source gateway that runs on your machine and routes to free providers. Install and start it first, then come back here. Pick a model from Recommended below — the cfp/ models need no key. \"auto\" rotates through a keyless pool that upstream providers block often; it becomes useful once you connect a free key (Gemini, Groq, OpenRouter) in the dashboard at http://localhost:20128. Keyless routes drop tool definitions, so Compatibility mode (Behavior tab) starts on for this preset. The free pool has no reliable vision models, so image support is turned off; Enki works from the page DOM instead.",
   },
   {
     id: "ollama",
@@ -57,6 +75,10 @@ export const PRESETS: Preset[] = [
     kind: "openai-compatible",
     baseUrl: "http://localhost:11434/v1",
     defaultModel: "qwen3-vl",
+    recommended: [
+      { id: "qwen3-vl", note: "vision + tools" },
+      { id: "qwen3", note: "text only · turn images off in Behavior" },
+    ],
     keyOptional: true,
     free: true,
     editableBaseUrl: true,
@@ -70,6 +92,11 @@ export const PRESETS: Preset[] = [
     kind: "anthropic",
     baseUrl: "https://api.anthropic.com",
     defaultModel: "claude-opus-5",
+    recommended: [
+      { id: "claude-opus-5", note: "best at multi-step browsing" },
+      { id: "claude-sonnet-5", note: "faster, cheaper" },
+      { id: "claude-haiku-4-5", note: "fastest, cheapest" },
+    ],
     keyUrl: "https://platform.claude.com/settings/keys",
   },
   {
@@ -78,6 +105,10 @@ export const PRESETS: Preset[] = [
     kind: "openai-compatible",
     baseUrl: "https://api.openai.com/v1",
     defaultModel: "gpt-5",
+    recommended: [
+      { id: "gpt-5", note: "strongest" },
+      { id: "gpt-5-mini", note: "faster, cheaper" },
+    ],
     keyUrl: "https://platform.openai.com/api-keys",
   },
   {
@@ -86,6 +117,10 @@ export const PRESETS: Preset[] = [
     kind: "openai-compatible",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     defaultModel: "gemini-2.5-flash",
+    recommended: [
+      { id: "gemini-2.5-flash", note: "free tier · vision + tools" },
+      { id: "gemini-2.5-pro", note: "stronger · lower free limits" },
+    ],
     keyUrl: "https://aistudio.google.com/apikey",
     hint: "Gemini has a generous free tier via AI Studio.",
   },
@@ -95,6 +130,7 @@ export const PRESETS: Preset[] = [
     kind: "openai-compatible",
     baseUrl: "https://api.groq.com/openai/v1",
     defaultModel: "meta-llama/llama-4-maverick-17b-128e-instruct",
+    recommended: [{ id: "meta-llama/llama-4-maverick-17b-128e-instruct", note: "vision + tools · very fast" }],
     keyUrl: "https://console.groq.com/keys",
   },
   {
@@ -103,6 +139,10 @@ export const PRESETS: Preset[] = [
     kind: "openai-compatible",
     baseUrl: "https://openrouter.ai/api/v1",
     defaultModel: "anthropic/claude-sonnet-4.6",
+    recommended: [
+      { id: "anthropic/claude-sonnet-4.6", note: "reliable tool use" },
+      { id: "openrouter/auto", note: "OpenRouter picks per request" },
+    ],
     keyUrl: "https://openrouter.ai/keys",
   },
   {
