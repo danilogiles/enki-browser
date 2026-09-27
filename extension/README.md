@@ -148,7 +148,9 @@ src/
 
 ## Contributing
 
-Issues and pull requests are welcome. Please read [AGENTS.md](AGENTS.md) and [docs/SECURITY.md](docs/SECURITY.md) to ensure safety rules and type checks remain strictly intact.
+Enki is built in the open and contributions are welcome — you do not need to build Chromium, just Node.js and a Chromium browser. Start with [CONTRIBUTING.md](CONTRIBUTING.md): setup, tests, what a pull request needs, and the safety rules that are not negotiable. Português e español são bem-vindos.
+
+Found a vulnerability, or a page that makes Enki act without being asked? Report it [privately](https://github.com/danilogiles/enkibrowser/security/advisories/new), not in a public issue.
 
 ## License
 
