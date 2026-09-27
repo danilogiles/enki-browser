@@ -16,6 +16,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         sidepanel: "src/sidepanel/index.html",
+        // Enki Home. Unused by the extension on its own; Enki Browser makes it the new tab page.
+        home: "src/home/index.html",
       },
     },
   },

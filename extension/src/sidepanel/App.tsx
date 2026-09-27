@@ -3,6 +3,7 @@ import { Bug, Eye, MousePointerClick, Plus, Settings as SettingsIcon } from "luc
 import logo from "../assets/logo.svg";
 import type { ImagePart, Message, TextPart, ToolCallPart } from "../lib/types";
 import { loadSettings, onSettingsChange, presetOf, saveSettings, type Settings } from "../lib/settings";
+import { onHandoff, takeHandoff, type Handoff } from "../lib/handoff";
 import { createProvider } from "../lib/providers";
 import { BrowserExecutor, isRestrictedUrl } from "../lib/tools/executor";
 import { toolsForMode } from "../lib/tools/definitions";
@@ -348,6 +349,26 @@ export function App() {
     invalidateObservations(historyRef.current);
     void send("Continue the previous task. Check which actions already succeeded and do not repeat them. Ask me if an interrupted action's outcome is uncertain.", "continue");
   }, [send]);
+
+  // A request typed on Enki Home arrives here. It waits for the panel to be ready and idle, in
+  // the mode the user picked there, and for a usable provider — without one it opens Settings
+  // and is sent as soon as they are saved.
+  const [handoff, setHandoff] = useState<Handoff | null>(null);
+  useEffect(() => {
+    const grab = () => void takeHandoff().then((h) => h && setHandoff(h));
+    grab();
+    return onHandoff(grab);
+  }, []);
+  useEffect(() => {
+    if (!handoff || !ready || !settings || running) return;
+    if (!settings.apiKey && !presetOf(settings.preset).keyOptional) { setView("settings"); return; }
+    if (handoff.mode !== mode) { changeMode(handoff.mode); return; }
+    setHandoff(null);
+    setView("chat");
+    void send(handoff.text);
+    // changeMode is recreated each render; the effect re-runs on the state it changes instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoff, ready, settings, running, mode, send]);
 
   const newChat = () => {
     stop();
