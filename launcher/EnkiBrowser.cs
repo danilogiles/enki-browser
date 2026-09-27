@@ -27,6 +27,20 @@ static class EnkiBrowser
             return 1;
         }
 
+        // Updater entry points that never open a window: check, verify and stage now.
+        if (args.Contains("--enki-update-check"))
+        {
+            if (!Updater.Disabled(root)) Updater.CheckAndStage(root, true);
+            return 0;
+        }
+        // A release downloaded last time installs before the browser starts, while nothing
+        // holds its files. The new launcher then takes over, so new launch logic applies at once.
+        if (!Updater.Disabled(root) && Updater.ApplyStaged(root))
+        {
+            Process.Start(new ProcessStartInfo(Path.Combine(root, "EnkiBrowser.exe"), string.Join(" ", args.Select(Quote))) { UseShellExecute = false });
+            return 0;
+        }
+
         var flags = new List<string>();
 
         // A file named "portable" next to the launcher keeps the profile beside the program
@@ -61,7 +75,7 @@ static class EnkiBrowser
         }
 
         // Whatever Windows or the user passed (a URL, a file to open) goes last, unchanged.
-        flags.AddRange(args);
+        flags.AddRange(args.Where(a => !a.StartsWith("--enki-")));
 
         var start = new ProcessStartInfo(chrome, string.Join(" ", flags.Select(Quote)))
         {
@@ -69,6 +83,11 @@ static class EnkiBrowser
             WorkingDirectory = Path.Combine(root, "chromium"),
         };
         Process.Start(start);
+
+        // With the browser already up, look for a newer release. This process has no window,
+        // so a slow download never delays anything the user sees.
+        if (!Updater.Disabled(root))
+            Updater.CheckAndStage(root, Environment.GetEnvironmentVariable("ENKI_BROWSER_UPDATE_NOW") == "1");
         return 0;
     }
 

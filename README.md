@@ -27,6 +27,25 @@ or free models through OmniRoute.
 Windows SmartScreen may warn that the app is unrecognised, because releases are not yet
 code-signed. Check the SHA-256, then choose *More info → Run anyway*.
 
+## Updates
+
+From 0.2.0, Enki Browser updates itself. Once a day, after the browser has opened, the launcher
+looks for a newer release, downloads it in the background and installs it **the next time you
+start Enki Browser** — never while it is open, because Chromium holds its files. Your profile,
+history and Enki settings are untouched, and the previous version is kept in `.previous`.
+
+An update is installed only if:
+
+- its `update.json` carries a valid **RSA-3072 signature** from the release key. That key exists
+  only as a secret in this repository's CI; the launcher trusts nothing else, so a tampered
+  download or a compromised release page cannot push code to you;
+- the zip's SHA-256 matches the one in that signed manifest;
+- its version is **newer** than the one installed (no downgrades).
+
+`.update\update.log` in the install folder records every check. To turn updates off, create an
+empty file named `no-update` next to `EnkiBrowser.exe`. Coming from 0.1.0, install 0.2.0 once
+by hand; from then on it updates itself.
+
 ## What is inside
 
 | | Default | Where it comes from |
@@ -64,6 +83,7 @@ other Chromium on the computer. Command-line switches keep Enki Browser self-con
 npm ci
 npm run build     # → out/EnkiBrowser/ and out/EnkiBrowser-<version>-windows-x64.zip
 npm run verify    # starts the built browser and checks every default by using it
+node test/update.mjs  # builds two versions and checks the updater: forged, tampered, downgrade, real
 ```
 
 Requirements: Windows 10/11 x64, Node.js 22+, Git. The C# compiler that ships with Windows' .NET
@@ -94,8 +114,8 @@ Honest list; each is on the roadmap.
 - **No Google Safe Browsing.** ungoogled-chromium removes it. uBlock's malware lists cover known
   malware and badware hosts, but phishing protection is weaker than Chrome's or Brave's. Be
   careful with links from email and messages.
-- **No automatic updates.** Chromium ships security fixes every few weeks; until the updater
-  exists, install new releases as they come out. Watch this repository to be notified.
+- **Updates apply on restart.** If Enki Browser stays open for days, a downloaded security fix
+  waits until you close and reopen it.
 - **Chromium branding in places** (the About page, the process name `chrome.exe`). A real rebrand
   needs Enki Browser's own Chromium build.
 - **"Enki started debugging this browser" bar** while Enki acts on a page. That is Chromium's
@@ -108,8 +128,8 @@ Honest list; each is on the roadmap.
 
 1. **Now — distribution (this repo, 0.x):** pinned upstream, built-in Enki and blocker, verified
    defaults, installer, CI builds and releases.
-2. **Updates:** a signed update feed and updater, and a public security cadence — a release within
-   days of every Chromium security fix.
+2. **Updates:** ✅ signed self-updates (0.2.0). Next: a public security cadence — a release within
+   days of every Chromium security fix — and an update prompt for browsers that stay open.
 3. **Own Chromium build:** ungoogled-chromium's patch set plus ours — the Enki Browser name and icon
    everywhere, Enki as a component extension without the debugger bar, a Safe Browsing
    replacement, and privacy defaults compiled in.
