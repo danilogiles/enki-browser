@@ -98,6 +98,20 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
   check('a reply cut off by the output cap says so instead of ending silently', () =>
     assert.match(truncated.find((e) => e.type === 'notice').message, /1024-token output cap/));
 
+  let asked = 0;
+  const internal = [];
+  await runTurn({
+    ...options, refreshPage: true, history: [user('go to example.com')], tools: [{ name: 'read_page' }, { name: 'navigate' }],
+    executor: { ...options.executor, prepare: async () => ({ label: 'read', sensitive: false, run: async () => ({ content: [{ type: 'text', text: 'This tab (chrome://newtab/) is a browser-internal page' }], isError: true }) }) },
+    provider: { async *stream() { asked++; yield { type: 'text_delta', text: 'You are on a new tab.' }; yield { type: 'done', stopReason: 'end_turn' }; } },
+    onEvent: (e) => internal.push(e),
+  });
+  check('an unreadable page during refresh still reaches the model instead of ending the turn', () => {
+    assert.equal(asked, 1);
+    assert.ok(!internal.some((e) => e.type === 'error'));
+    assert.equal(internal.at(-1).reason, 'end_turn');
+  });
+
   check('compatibility mode carries instructions, tools and results as plain chat text', () => {
     const req = toTextProtocol({
       model: 'm', system: 'SYSTEM_RULES', tools: [{ name: 'click', description: 'Click it', inputSchema: { type: 'object', properties: { ref: { type: 'string' } }, required: ['ref'] } }],

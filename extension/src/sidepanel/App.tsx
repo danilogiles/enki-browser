@@ -110,7 +110,9 @@ export function App() {
       if (windowId === undefined) return;
       const [t] = await chrome.tabs.query({ active: true, windowId });
       const list = await chrome.tabs.query({ windowId });
-      setTabs(list.filter((t) => t.id && !isRestrictedUrl(t.url)).map((t) => ({ id: t.id!, title: t.title ?? "", url: t.url ?? "" })));
+      // Internal pages stay in the list: Enki cannot read them, but in Act mode it can navigate
+      // away from them. Hiding them made a pinned new tab show up as "unavailable".
+      setTabs(list.filter((t) => t.id).map((t) => ({ id: t.id!, title: t.title ?? "", url: t.url ?? "" })));
       if (t?.id) setTab({ id: t.id, title: t.title ?? "", url: t.url ?? "", favIconUrl: t.favIconUrl });
     };
     // Normally the panel controls the window it is docked in. When the panel is opened as a
@@ -442,8 +444,8 @@ export function App() {
         <label htmlFor="controlled-tab" className="mb-1 block text-zinc-400">Controlled tab {running ? "(locked for this task)" : ""}</label>
         <select id="controlled-tab" disabled={running} value={selectedTab ?? ""} onChange={(e) => setSelectedTab(e.target.value ? Number(e.target.value) : null)} className="w-full min-w-0 rounded border border-ink-700 bg-ink-900 p-1.5 text-zinc-200">
           <option value="">Use active tab when task starts</option>
-          {selectedTab !== null && !tabs.some((t) => t.id === selectedTab) && <option value={selectedTab}>Selected tab unavailable</option>}
-          {tabs.map((t) => <option value={t.id} key={t.id}>{t.title || t.url}</option>)}
+          {selectedTab !== null && !tabs.some((t) => t.id === selectedTab) && <option value={selectedTab}>Selected tab was closed</option>}
+          {tabs.map((t) => <option value={t.id} key={t.id}>{t.title || t.url}{isRestrictedUrl(t.url) ? " (internal page — navigate only)" : ""}</option>)}
         </select>
       </div>
       {banner && <div role="status" className="border-b border-ink-800 px-3 py-2 text-xs text-amber-200">{banner} <button className="underline" onClick={() => setBanner("")}>Dismiss</button></div>}
