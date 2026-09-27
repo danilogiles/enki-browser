@@ -100,7 +100,12 @@ export async function runTurn(o: RunOptions): Promise<void> {
       const r = result(call, out);
       o.history.push({ role: "tool", parts: [r] });
       o.onEvent({ type: "tool_result", call, result: r });
-      if (out.isError) throw new Error("Could not refresh the controlled page. Select an accessible tab before continuing.");
+      // A failed refresh used to end the turn here, before the model was ever asked. On a
+      // browser-internal page (a new tab, settings) that is every attempt: Continue, Read page
+      // again and the first message after a restore all failed, and the only way out was
+      // navigating by hand. The failure is already in the history, so the model knows the page
+      // is unreadable and can navigate away or say so — not blind, just honest.
+      if (out.isError) log.warn("agent", "Page refresh failed; continuing with the failure in context");
     }
     for (let step = 0; step < o.maxSteps; step++) {
       if (o.signal.aborted) return void onEvent({ type: "done", reason: "aborted" });
@@ -184,7 +189,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             message:
               "This model answered as if Enki's tools did not exist" +
               (recovered.foreign.length ? ` (it tried to use ${recovered.foreign[0]}, which belongs to another tool)` : "") +
-              ". Free gateway pools rotate between providers and some ignore tool definitions — send the message again, or pick a specific model in Settings.",
+              ". Free gateway pools rotate between providers and some drop tool definitions — turn on Compatibility mode in Settings → Behavior, send the message again, or pick a specific model.",
           });
         }
       }

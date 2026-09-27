@@ -59,8 +59,11 @@ This Dockerfile automatically builds on top of the official image and pre-instal
 3. Select **OmniRoute (free models, local gateway)** in the Provider list.
 4. Set **Base URL** to `http://localhost:20128/v1`.
 5. Set **Model** to:
-   - `auto` (default auto-routing)
-   - `openrouter/auto` or `tr/auto` (direct API routes without browser dependencies)
+   - `auto` (default auto-routing — depends on keyless upstreams that are often blocked; see below)
+   - `cfp/moonshotai/kimi-k2.6` or `cfp/zai-org/glm-5.2` (keyless Cloudflare Playground models that complete Act tasks)
+   - any model from a provider you connected with your own free key (Google AI Studio, Groq, OpenRouter) — the reliable option
+   
+   Leave **Compatibility mode** on (Behavior tab): keyless routes drop tool definitions, and Enki sends them as chat text instead.
 6. Click the **Refresh 🔄** button to test the connection.
 7. Click **Save**.
 

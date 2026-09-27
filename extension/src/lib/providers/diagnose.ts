@@ -1,5 +1,6 @@
 import { createProvider } from ".";
-import type { Settings } from "../settings";
+import { usesTextTools, type Settings } from "../settings";
+import { extractTextToolCalls } from "../agent/toolcall-text";
 
 export type Diagnostic = { label: string; state: "pass" | "fail" | "unknown"; detail: string };
 
@@ -9,6 +10,7 @@ export async function diagnoseProvider(settings: Settings, signal: AbortSignal):
   const provider = createProvider(settings);
   let answered = false;
   let called = false;
+  let text = "";
   try {
     for await (const ev of provider.stream({ model: settings.model,
       system: "Connection test. Call enki_connection_test with nonce enki-probe. Do not answer in prose.",
@@ -19,6 +21,12 @@ export async function diagnoseProvider(settings: Settings, signal: AbortSignal):
     })) {
       if (ev.type === "text_delta" && ev.text.trim() || ev.type === "thinking_delta" && ev.text.trim() || ev.type === "tool_call") answered = true;
       if (ev.type === "tool_call" && ev.call.name === "enki_connection_test" && ev.call.input.nonce === "enki-probe") called = true;
+      if (ev.type === "text_delta") text += ev.text;
+    }
+    // In compatibility mode the call arrives as text, and the agent loop recovers it the same way.
+    if (!called && usesTextTools(settings)) {
+      called = extractTextToolCalls(text, new Set(["enki_connection_test"])).calls
+        .some((c) => c.input.nonce === "enki-probe");
     }
     checks.push({ label: "Gateway", state: "pass", detail: "Endpoint responded." },
       { label: "Authentication", state: "pass", detail: "Chat request accepted with current credentials." },

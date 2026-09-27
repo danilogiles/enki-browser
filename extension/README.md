@@ -63,9 +63,16 @@ Follow the install and start instructions in the official repository, [github.co
    docker compose up -d --build
    ```
    *(See [`docker/README.md`](docker/README.md) for full guide).*
-2. **Connect in Enki:** In Settings ⚙️, choose **OmniRoute**, verify `http://localhost:20128/v1`, set model to `auto` (alternatives: `auto/cheap`, `auto/fast`, `auto/best-free`), press the refresh button, and save.
+2. **Connect in Enki:** In Settings ⚙️, choose **OmniRoute**, verify `http://localhost:20128/v1`, pick a model from the **Recommended** dropdown under Model (the default, `cfp/moonshotai/kimi-k2.6`, needs no key), and save. `auto` is in the list too, but it only becomes reliable once you connect your own keys in OmniRoute.
 3. **If the connection test says 401:** running OmniRoute in Docker with `NODE_ENV=production` gates its API, so `GET /v1/models` answers `401 Authentication required` while `POST /v1/chat/completions` still works without a key. Enki detects this — the test falls back to a one-token chat probe and reports *"Chat works; this endpoint needs a key only to list models"*. Type the model id (`auto`) by hand, or create a key in the dashboard at `http://localhost:20128` to get the model list too.
 4. The free pool has no reliable vision models, so the OmniRoute preset turns off image support automatically and works from the page DOM. If you add your own vision-capable keys to OmniRoute, turn images back on in Settings.
+5. **If `auto` fails with "OmniRoute tried N providers… and all of them failed":** the keyless pool behind `auto` depends on free upstreams that block or rate-limit third-party traffic (OpenCode's free tier now answers 403 outside its own app, Felo returns 429, DuckDuckGo trips its anti-abuse check). Retrying rarely helps. Either pick a specific keyless model — `cfp/moonshotai/kimi-k2.6` and `cfp/zai-org/glm-5.2` (Cloudflare Playground) complete multi-step Act tasks — or connect a free key (Google AI Studio, Groq, OpenRouter) in the OmniRoute dashboard, which is the reliable option.
+
+#### Compatibility mode
+
+OmniRoute's keyless routes forward only user and assistant text: the system prompt, the `tools` array and every tool-result message are dropped before the model sees them. With native tool calling the model never learns it can browse, so it answers *"Navegando…"* and nothing happens. Cloudflare Playground also rejects any single message over 6,000 characters.
+
+**Compatibility mode** (Settings → Behavior, on by default for the OmniRoute preset) works around both. Enki moves its instructions and a tool catalogue into the first user message, asks the model to call tools by writing `{"tool": "...", "arguments": {...}}` blocks, shows earlier calls and results back as plain chat text, and splits long messages under the cap. The agent loop's existing text recovery turns those blocks into real tool calls, with the same safety gates — only Enki's own tools ever run. Turn it off if you point OmniRoute at providers with native tool calling. `node test/live-omniroute.mjs [model] [task]` runs one Act task against a local OmniRoute after `npm run build`.
 
 ### How Enki keeps track of the browser
 
