@@ -17,6 +17,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -107,13 +108,26 @@ static class Updater
 
     static bool BrowserRunning(string root)
     {
-        string chrome = Path.Combine(root, "chromium", "chrome.exe");
+        // Both sides go through the long form: a folder reached as C:\Users\RUNNER~1\... and the
+        // same folder reported as C:\Users\runneradmin\... must compare equal, or an update would
+        // be applied under a browser that is still running.
+        string chrome = LongPath(Path.Combine(root, "chromium", "chrome.exe"));
         foreach (var p in Process.GetProcessesByName("chrome"))
         {
-            try { if (string.Equals(p.MainModule.FileName, chrome, StringComparison.OrdinalIgnoreCase)) return true; }
+            try { if (string.Equals(LongPath(p.MainModule.FileName), chrome, StringComparison.OrdinalIgnoreCase)) return true; }
             catch { /* another user's or an elevated process: not ours */ }
         }
         return false;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    static extern uint GetLongPathName(string shortPath, StringBuilder longPath, uint size);
+
+    static string LongPath(string path)
+    {
+        var sb = new StringBuilder(1024);
+        uint n = GetLongPathName(path, sb, (uint)sb.Capacity);
+        return n > 0 && n < sb.Capacity ? sb.ToString() : Path.GetFullPath(path);
     }
 
     // ------------------------------------------------------------------ check

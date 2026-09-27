@@ -4,7 +4,7 @@
 //   ENKI_DIST=../enkibrowser/dist node test/update.mjs      (ENKI_DIST optional; saves two clones)
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -12,7 +12,9 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const tmp = mkdtempSync(path.join(os.tmpdir(), "enki-update-test-"));
+// realpath gives the long form: CI's temp folder is handed out as C:UsersRUNNER~1..., which
+// matches nothing a process list reports.
+const tmp = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "enki-update-test-")));
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok });
@@ -71,6 +73,17 @@ const log = () => (existsSync(path.join(install, ".update", "update.log")) ? rea
 const lastLog = () => log().trim().split("\n").at(-1)?.slice(21) ?? "";
 const updateOnce = (feed) => run(["--enki-update-check"], { ENKI_BROWSER_UPDATE_FEED: feed });
 
+const ourProcesses = () => {
+  const out = execFileSync("powershell.exe", ["-NoProfile", "-Command",
+    `Get-CimInstance Win32_Process -Filter "name='chrome.exe'" | Where-Object { $_.ExecutablePath -like '${install}\\*' } | ForEach-Object { $_.ProcessId }`]).toString();
+  return out.split(/\s+/).filter(Boolean).map(Number);
+};
+const diagnose = () => {
+  console.log("--- update.log\n" + log());
+  console.log("--- install folder: " + execFileSync("cmd.exe", ["/c", "dir", "/b", "/a", install]).toString().replace(/\r?\n/g, " "));
+  console.log("--- chrome processes of this install: " + ourProcesses().join(", "));
+};
+
 let browser;
 const connect = async (port) => {
   for (let i = 0; i < 60; i++) {
@@ -84,11 +97,11 @@ const closeBrowser = async (b) => {
   const cdp = await b.newBrowserCDPSession();
   await cdp.send("Browser.close").catch(() => undefined);
   await b.close().catch(() => undefined);
-  for (let i = 0; i < 40; i++) {
-    const out = execFileSync("tasklist", ["/FI", "IMAGENAME eq chrome.exe", "/FO", "CSV", "/NH"]).toString();
-    if (!out.includes("chrome.exe")) break;
-    await sleep(250);
-  }
+  // Wait for this installation's processes only (other browsers on the machine are irrelevant);
+  // a relaunch while one lingers joins it and ignores the new debug port.
+  for (let i = 0; i < 60 && ourProcesses().length; i++) await sleep(500);
+  const left = ourProcesses();
+  if (left.length) { console.log(`(killing ${left.length} lingering processes)`); for (const pid of left) try { process.kill(pid); } catch {} }
   await sleep(1000);
 };
 
@@ -124,6 +137,10 @@ try {
   check("the profile survives the update", existsSync(path.join(install, "User Data", "enki-test-marker")));
   check("the previous version is kept for rollback", existsSync(path.join(install, ".previous", "version.json"))
     && JSON.parse(readFileSync(path.join(install, ".previous", "version.json"), "utf8")).enkiBrowser === "0.0.1");
+} catch (e) {
+  console.log(`ERROR ${e.message}`);
+  diagnose();
+  results.push({ name: "no unexpected error", ok: false });
 } finally {
   if (browser) await closeBrowser(browser).catch(() => undefined);
   server.close();
