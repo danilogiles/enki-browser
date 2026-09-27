@@ -98,4 +98,6 @@ None today. Future crash reports: opt-in only + same-PR docs.
 
 ## 6. Responsible Disclosure
 
-If you discover a security vulnerability in Enki, please contact the maintainers via GitHub Issues or a private security advisory. We treat security reports with high urgency.
+If you discover a security vulnerability in Enki, report it through [private vulnerability reporting](https://github.com/danilogiles/enkibrowser/security/advisories/new). **Do not open a public issue**: that publishes the flaw to everyone before a fix exists. We treat security reports with high urgency.
+
+A web page that makes Enki act without the user asking — prompt injection through hidden text, comments, alt text or screenshots — is a vulnerability, not a model quirk, and belongs here too.
