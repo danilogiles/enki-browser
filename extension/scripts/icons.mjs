@@ -29,7 +29,9 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
 await mkdir("public/icons", { recursive: true });
 await mkdir("src/assets", { recursive: true });
 await writeFile("src/assets/logo.svg", svg);
-for (const size of [16, 32, 48, 128]) {
-  await sharp(Buffer.from(svg)).resize(size, size).png().toFile(`public/icons/icon${size}.png`);
+// 256 is for Windows (Enki Browser's taskbar and Start menu icon at high DPI). Each size is
+// rasterised from the vector at its own density rather than scaled from a smaller bitmap.
+for (const size of [16, 32, 48, 128, 256]) {
+  await sharp(Buffer.from(svg), { density: Math.max(72, (72 * size) / 128) }).resize(size, size).png().toFile(`public/icons/icon${size}.png`);
 }
 console.log("icons written to public/icons");
