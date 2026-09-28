@@ -21,7 +21,10 @@ if (process.env.ENKI_VERSION) pkg.version = process.env.ENKI_VERSION;
 const updateKeyFile = process.env.UPDATE_PUBLIC_KEY_FILE ?? path.join(root, "config", "update-signing.pub");
 const cache = path.join(root, "cache");
 const out = path.join(root, "out");
-const app = path.join(out, "EnkiBrowser");
+// out/EnkiBrowser is the install layout: the stub and `current` at the top, this release in
+// app/<version>/ (see launcher/Install.cs).
+const installRoot = path.join(out, "EnkiBrowser");
+const app = path.join(installRoot, "app", pkg.version);
 
 const step = (msg) => console.log(`\n▸ ${msg}`);
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: "inherit", ...opts });
@@ -137,6 +140,20 @@ function findCsc() {
   return csc;
 }
 
+// ---------------------------------------------------------------- code signing
+/**
+ * Signs a Windows executable when ENKI_SIGN_COMMAND is set, e.g. a signtool line for Azure
+ * Trusted Signing or SignPath, with {file} where the path goes. Unset (local builds, forks), files
+ * stay unsigned. Code-signing keys now live only in hardware or cloud HSMs, so this is a command
+ * to call rather than a certificate file to load.
+ */
+function signFile(file) {
+  const template = process.env.ENKI_SIGN_COMMAND;
+  if (!template) return false;
+  execFileSync(template.replaceAll("{file}", `"${file}"`), { stdio: "inherit", shell: true });
+  return true;
+}
+
 // ---------------------------------------------------------------- build
 step("Cleaning out/");
 rmSync(out, { recursive: true, force: true });
@@ -218,9 +235,9 @@ writeFileSync(path.join(app, "chromium", "initial_preferences"), JSON.stringify(
 mkdirSync(path.join(app, "config"), { recursive: true });
 cpSync(path.join(root, "config", "flags.txt"), path.join(app, "config", "flags.txt"));
 
-step("Compiling the launcher");
+step("Compiling the stub, the launcher and the installer");
 // The updater trusts exactly one key, compiled in: the public half of the release signing key.
-// The assembly attributes give EnkiBrowser.exe its name and version in Windows.
+// The assembly attributes give each program its name and version in Windows.
 const jwk = createPublicKey(readFileSync(updateKeyFile)).export({ format: "jwk" });
 const b64 = (u) => Buffer.from(u, "base64url").toString("base64");
 const buildInfo = path.join(out, "BuildInfo.g.cs");
@@ -238,19 +255,24 @@ static class UpdateKey
     public const string Exponent = "${b64(jwk.e)}";
 }
 `);
-run(findCsc(), [
-  "/nologo", "/target:winexe", "/optimize+", "/platform:x64",
-  `/win32icon:${ico}`,
-  "/r:System.Windows.Forms.dll", "/r:System.Core.dll", "/r:System.Web.Extensions.dll",
-  "/r:System.IO.Compression.dll", "/r:System.IO.Compression.FileSystem.dll",
-  `/out:${path.join(app, "EnkiBrowser.exe")}`,
-  path.join(root, "launcher", "EnkiBrowser.cs"), path.join(root, "launcher", "Updater.cs"), buildInfo,
+const src = (f) => path.join(root, "launcher", f);
+const csc = (outFile, sources, extra = []) => run(findCsc(), [
+  "/nologo", "/target:winexe", "/optimize+", "/platform:x64", `/win32icon:${ico}`,
+  "/r:System.Windows.Forms.dll", "/r:System.Drawing.dll", "/r:System.Core.dll", "/r:Microsoft.CSharp.dll",
+  "/r:System.Web.Extensions.dll", "/r:System.IO.Compression.dll", "/r:System.IO.Compression.FileSystem.dll",
+  ...extra, `/out:${outFile}`, ...sources, buildInfo,
 ]);
-rmSync(buildInfo);
+// Shortcuts point at the stub, which updates never replace; each version brings its own launcher.
+csc(path.join(installRoot, "EnkiBrowser.exe"), [src("Stub.cs"), src("Common.cs"), src("Install.cs")]);
+csc(path.join(app, "EnkiBrowserLauncher.exe"), [src("Launcher.cs"), src("Updater.cs"), src("Common.cs"), src("Install.cs")]);
+// Signed before packaging, so the zip and the installer carry signed programs. chrome.exe is
+// included because rcedit changed it; the rest of Chromium is shipped as ungoogled-chromium built it.
+const signed = [path.join(installRoot, "EnkiBrowser.exe"), path.join(app, "EnkiBrowserLauncher.exe"), path.join(app, "chromium", "chrome.exe")].map(signFile);
+console.log(signed.every(Boolean) ? "  signed EnkiBrowser.exe, EnkiBrowserLauncher.exe, chrome.exe" : "  not signed (ENKI_SIGN_COMMAND is not set)");
+writeFileSync(path.join(installRoot, "current"), pkg.version);
 cpSync(ico, path.join(app, "enki.ico"));
 
-step("Installer, licenses, version");
-for (const f of ["install.ps1", "uninstall.ps1", "Install Enki Browser.cmd"]) cpSync(path.join(root, "installer", f), path.join(app, f));
+step("Licenses and version");
 cpSync(path.join(root, "THIRD_PARTY.md"), path.join(app, "THIRD_PARTY.md"));
 cpSync(path.join(root, "LICENSE"), path.join(app, "LICENSE"));
 const version = {
@@ -265,9 +287,19 @@ const version = {
 writeFileSync(path.join(app, "version.json"), JSON.stringify(version, null, 2));
 
 step("Packaging");
+// The zip is the install layout itself: extract it anywhere to run (add a "portable" file to keep
+// the profile beside it), and the updater takes app\<version>\ out of it.
 const zipName = `EnkiBrowser-${pkg.version}-windows-x64.zip`;
-run(TAR, ["-a", "-c", "-f", path.join(out, zipName), "-C", out, "EnkiBrowser"]);
-writeFileSync(path.join(out, `${zipName}.sha256`), `${hash(path.join(out, zipName))}  ${zipName}\n`);
+const zipPath = path.join(out, zipName);
+run(TAR, ["-a", "-c", "-f", zipPath, "-C", out, "EnkiBrowser"]);
+writeFileSync(`${zipPath}.sha256`, `${hash(zipPath)}  ${zipName}\n`);
+// The installer is one file: the same zip, embedded as a resource.
+const setupName = `EnkiBrowserSetup-${pkg.version}.exe`;
+const setupPath = path.join(out, setupName);
+csc(setupPath, [path.join(root, "installer", "Setup.cs"), src("Common.cs"), src("Install.cs")], [`/resource:${zipPath},payload.zip`]);
+signFile(setupPath);
+writeFileSync(`${setupPath}.sha256`, `${hash(setupPath)}  ${setupName}\n`);
+rmSync(buildInfo);
 rmSync(ico);
-console.log(`\n✓ out/EnkiBrowser and out/${zipName}`);
+console.log(`\n✓ out/EnkiBrowser, out/${zipName}, out/${setupName}`);
 console.log(JSON.stringify(version, null, 2));

@@ -14,25 +14,46 @@ or free models through OmniRoute.
 
 ## Install
 
-1. Download `EnkiBrowser-<version>-windows-x64.zip` from [Releases](https://github.com/danilogiles/enki-browser/releases) and check it against the `.sha256` file next to it.
-2. Extract it anywhere and double-click **`Install Enki Browser.cmd`**. No administrator rights
-   are needed: it installs for your user into `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start
-   menu and desktop shortcuts, and appears in *Settings → Apps* for uninstalling.
-3. Open Enki Browser, click the Enki icon in the toolbar (or press `Ctrl+Shift+E`), and choose
-   a model in the panel's Settings.
+1. Download **`EnkiBrowserSetup-<version>.exe`** from [Releases](https://github.com/danilogiles/enki-browser/releases) and check it against the `.sha256` file next to it.
+2. Run it. No administrator rights are needed: it installs for your user into
+   `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start menu and desktop shortcuts, appears in
+   *Settings → Apps* for uninstalling, and opens Enki Browser when it is done. It also upgrades
+   an install of 0.1–0.4, keeping your profile.
+3. Click the Enki icon in the toolbar (or press `Ctrl+Shift+E`) and choose a model in the panel's
+   Settings.
 
-**Portable use:** instead of installing, create an empty file named `portable` next to
-`EnkiBrowser.exe` and run it from there; the profile then lives in that folder.
+Silent install: `EnkiBrowserSetup-<version>.exe /S`. Another folder: `/D=<folder>`.
+Uninstall from *Settings → Apps*; it asks whether to keep your browsing data.
 
-Windows SmartScreen may warn that the app is unrecognised, because releases are not yet
-code-signed. Check the SHA-256, then choose *More info → Run anyway*.
+**Portable use:** the `EnkiBrowser-<version>-windows-x64.zip` is the same browser, unpacked.
+Extract it anywhere, create an empty file named `portable` next to `EnkiBrowser.exe`, and run
+it; the profile then lives in that folder.
+
+> **Antivirus warnings.** Releases are not yet code-signed (see [Code signing](#code-signing)).
+> Windows SmartScreen will say the app is unrecognised — check the SHA-256, then *More info →
+> Run anyway* — and a behaviour-based antivirus may be suspicious of an unsigned program that
+> downloads and installs updates. One did quarantine 0.2–0.4 mid-update; 0.5 changed how updates
+> are installed because of it (below).
 
 ## Updates
 
-From 0.2.0, Enki Browser updates itself. Once a day, after the browser has opened, the launcher
-looks for a newer release, downloads it in the background and installs it **the next time you
-start Enki Browser** — never while it is open, because Chromium holds its files. Your profile,
-history and Enki settings are untouched, and the previous version is kept in `.previous`.
+Enki Browser updates itself. Once a day, after the browser has opened, it looks for a newer
+release and installs it **beside the one you are using**; the next time you start Enki Browser,
+you are on the new version. Your profile, history and Enki settings are untouched.
+
+How it is laid out, and why:
+
+```
+EnkiBrowser.exe     opens the version named in `current`; updates never replace it
+current             e.g. 0.5.0
+app\0.5.0\          one complete release (Chromium, extensions, launcher)
+app\0.5.1\          the next one, added by an update
+```
+
+An update only ever **adds** a folder and then rewrites `current`. Nothing that exists is renamed,
+moved or overwritten, and no running file is touched — so it can install while you browse, and it
+does not look like the self-replacing programs antivirus software hunts for. The previous version
+stays for rollback; older ones are removed once nothing runs from them.
 
 An update is installed only if:
 
@@ -43,8 +64,21 @@ An update is installed only if:
 - its version is **newer** than the one installed (no downgrades).
 
 `.update\update.log` in the install folder records every check. To turn updates off, create an
-empty file named `no-update` next to `EnkiBrowser.exe`. Coming from 0.1.0, install 0.2.0 once
-by hand; from then on it updates itself.
+empty file named `no-update` next to `EnkiBrowser.exe`.
+
+## Code signing
+
+The build signs `EnkiBrowser.exe`, the launcher, `chrome.exe` and the installer whenever the
+`ENKI_SIGN_COMMAND` environment variable (in CI, the secret of the same name) holds a signing
+command with `{file}` where the path goes. Code-signing keys are now issued only in hardware or
+cloud HSMs, so this is a command rather than a certificate file. Two routes fit this project:
+
+- **[SignPath Foundation](https://signpath.org)** — free code signing for open-source projects,
+  with a GitHub Actions integration. Needs the project to apply.
+- **Azure Trusted Signing** — paid, with identity verification of the publisher.
+
+Until one is in place, releases are unsigned.
+
 
 ## Enki Shield: phishing protection that stays on your device
 
@@ -97,9 +131,12 @@ Nothing here compiles Chromium (yet — see the roadmap). `build/build.mjs`:
    the pinned digest;
 2. builds Enki from its repository and gives it a fixed extension id (`config/enki-extension.pub`),
    so its settings survive reinstalls and it can be pinned;
-3. writes the first-run defaults next to `chrome.exe` and compiles `launcher/EnkiBrowser.cs` — the
-   `EnkiBrowser.exe` that starts Chromium with its own profile, the built-in extensions and the
-   privacy switches.
+3. adds Enki Shield and the theme, renames the UI, and writes the first-run defaults next to
+   `chrome.exe`;
+4. compiles, with the C# compiler Windows ships, `EnkiBrowser.exe` (the stub), each release's
+   `EnkiBrowserLauncher.exe` (starts Chromium with its profile, the built-in extensions and the
+   privacy switches, and runs the updater) and `EnkiBrowserSetup.exe` (the zip embedded in an
+   installer). No PowerShell is involved in installing, updating or uninstalling.
 
 Why a launcher: a prebuilt Chromium can only force-install extensions that are not on the Chrome
 Web Store on domain-managed Windows machines, and its policy registry key is shared with every
@@ -107,8 +144,9 @@ other Chromium on the computer. Command-line switches keep Enki Browser self-con
 
 ```bash
 npm ci
-npm run build     # → out/EnkiBrowser/ and out/EnkiBrowser-<version>-windows-x64.zip
-npm run verify    # starts the built browser and checks every default by using it
+npm run build         # → out/EnkiBrowser/, the zip and EnkiBrowserSetup-<version>.exe
+npm run verify        # starts the built browser and checks every default by using it
+node test/setup.mjs   # installer: fresh install, upgrade from 0.1–0.4, uninstall
 node test/update.mjs  # builds two versions and checks the updater: forged, tampered, downgrade, real
 ```
 
@@ -146,8 +184,10 @@ Honest list; each is on the roadmap.
 - **Phishing protection is list-based.** Enki Shield blocks what public lists know about, updated
   twice a day; Google's Safe Browsing also uses signals no public list has, so a brand-new phishing
   site can reach you before it is listed. Be careful with links from email and messages.
-- **Updates apply on restart.** If Enki Browser stays open for days, a downloaded security fix
+- **Updates apply on restart.** If Enki Browser stays open for days, an installed security fix
   waits until you close and reopen it.
+- **Not code-signed yet**, so SmartScreen warns on install and a behaviour-based antivirus may
+  distrust the updater (see [Code signing](#code-signing)).
 - **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line
   on the About page names ungoogled-chromium. Changing those needs Enki Browser's own Chromium build.
 - **"Enki started debugging this browser" bar** while Enki acts on a page. That is Chromium's

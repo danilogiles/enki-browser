@@ -31,12 +31,19 @@ jobs:
         with:
           path: cache/*.zip
           key: upstream-${{ hashFiles('upstream.json') }}
+      # Signs the programs when a signing command is configured (README, "Code signing"). Forks,
+      # and pull requests from them, have no secrets and build unsigned.
       - run: node build/build.mjs
+        env:
+          ENKI_SIGN_COMMAND: ${{ secrets.ENKI_SIGN_COMMAND }}
       - run: npm run verify
+      - run: node test/setup.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: enki-browser-windows-x64
           path: |
+            out/EnkiBrowserSetup-*.exe
+            out/EnkiBrowserSetup-*.exe.sha256
             out/EnkiBrowser-*-windows-x64.zip
             out/EnkiBrowser-*-windows-x64.zip.sha256
           retention-days: 14
@@ -93,6 +100,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease \
             --title "Enki Browser $GITHUB_REF_NAME" \
-            --notes "Early alpha for Windows x64. Install: extract, run 'Install Enki Browser.cmd'. Check the zip against its .sha256. From 0.2.0 on, installed copies update themselves (signed updates, applied on the next start). Read Known gaps in the README first." \
+            --notes "Early alpha for Windows x64. Install: run EnkiBrowserSetup (check it against its .sha256); it also upgrades 0.1–0.4 installs. The zip is the same browser for portable use. Installed copies update themselves with signed releases. Read Known gaps in the README first." \
+            dist/EnkiBrowserSetup-*.exe dist/EnkiBrowserSetup-*.exe.sha256 \
             dist/EnkiBrowser-*-windows-x64.zip dist/EnkiBrowser-*-windows-x64.zip.sha256 \
             dist/update.json dist/update.json.sig
