@@ -12,7 +12,9 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const app = path.join(root, "out", "EnkiBrowser");
+// The install layout: the stub and `current` at the top, the release in app/<version>/.
+const installRoot = path.join(root, "out", "EnkiBrowser");
+const app = path.join(installRoot, "app", readFileSync(path.join(installRoot, "current"), "utf8").trim());
 const version = JSON.parse(readFileSync(path.join(app, "version.json"), "utf8"));
 const port = 9333;
 const results = [];
@@ -36,7 +38,8 @@ await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const local = `http://127.0.0.1:${server.address().port}/`;
 
 const userData = mkdtempSync(path.join(os.tmpdir(), "enki-browser-verify-"));
-const proc = spawn(path.join(app, "EnkiBrowser.exe"), [`--remote-debugging-port=${port}`, "about:blank"], {
+// Started through the stub, as the Start menu shortcut does: stub → launcher → Chromium.
+const proc = spawn(path.join(installRoot, "EnkiBrowser.exe"), [`--remote-debugging-port=${port}`, "about:blank"], {
   env: { ...process.env, ENKI_BROWSER_USER_DATA: userData },
   stdio: "ignore",
 });

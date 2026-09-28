@@ -1,4 +1,4 @@
-// Enki Browser's updater: find, verify, stage and apply new releases.
+// Enki Browser's updater: find, verify and install new releases beside the running one.
 //
 // Trust chain. Each release carries update.json (version, zip URL, zip SHA-256) and
 // update.json.sig, an RSA-SHA256 signature made in CI with a key that exists only as a
@@ -7,17 +7,15 @@
 // is discarded, and a version not newer than the running one is never installed — so neither a
 // compromised download nor a replayed old release can change what runs.
 //
-// Timing. Checking happens after the browser has started, at most once a day, in this windowless
-// process. Applying happens on the next launch, and only while no Enki Browser window is open:
-// Chromium holds its files open, and replacing them underneath a running browser corrupts it.
+// Installing. The new release is extracted into app\<version>\ next to the running one, checked,
+// and only then does `current` name it. Nothing that exists is renamed, moved or overwritten,
+// and no running file is touched: the 0.2–0.4 updater swapped files in place, renaming the
+// running launcher, and an antivirus's behaviour monitor took that for malware and quarantined
+// the install. The running browser keeps its version; the next start opens the new one.
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -29,12 +27,7 @@ static class Updater
     const string DefaultFeed = "https://api.github.com/repos/danilogiles/enki-browser/releases?per_page=20";
     static readonly TimeSpan CheckInterval = TimeSpan.FromHours(20);
 
-    // Entries that belong to this installation, not to a release: never moved during an update.
-    static readonly string[] Keep = { "User Data", ".update", ".previous", "portable", "no-update" };
-
     static string UpdateDir(string root) { return Path.Combine(root, ".update"); }
-    static string StagedDir(string root) { return Path.Combine(UpdateDir(root), "staged"); }
-    static string ReadyFile(string root) { return Path.Combine(UpdateDir(root), "ready.json"); }
 
     public static bool Disabled(string root)
     {
@@ -42,110 +35,31 @@ static class Updater
             || Environment.GetEnvironmentVariable("ENKI_BROWSER_NO_UPDATE") == "1";
     }
 
-    public static Version CurrentVersion(string root)
+    public static Version ReadVersion(string dir)
     {
         try
         {
-            var json = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(Path.Combine(root, "version.json"))) as Dictionary<string, object>;
+            var json = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(Path.Combine(dir, "version.json"))) as Dictionary<string, object>;
             return new Version((string)json["enkiBrowser"]);
         }
         catch { return new Version(0, 0, 0); }
     }
 
-    // ------------------------------------------------------------------ apply
-
-    /// Installs a staged update if one is ready and the browser is closed. Returns true when the
-    /// program files changed, so the caller restarts the new launcher instead of continuing.
-    public static bool ApplyStaged(string root)
-    {
-        if (!File.Exists(ReadyFile(root)) || !Directory.Exists(StagedDir(root))) return false;
-        if (BrowserRunning(root)) { Log(root, "update ready; waiting for the browser to close"); return false; }
-
-        string staged = StagedDir(root);
-        string previous = Path.Combine(root, ".previous");
-        var moved = new List<string>();
-        try
-        {
-            if (Directory.Exists(previous)) Directory.Delete(previous, true);
-            Directory.CreateDirectory(previous);
-            foreach (string entry in Directory.GetFileSystemEntries(staged))
-            {
-                string name = Path.GetFileName(entry);
-                if (Keep.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
-                string target = Path.Combine(root, name);
-                // Moving (not copying) the old entry aside works even for the running launcher:
-                // Windows lets a running executable be renamed on the same volume, only not replaced.
-                if (File.Exists(target) || Directory.Exists(target)) MovePath(target, Path.Combine(previous, name));
-                moved.Add(name);
-                MovePath(entry, target);
-            }
-        }
-        catch (Exception e)
-        {
-            Log(root, "apply failed, rolling back: " + e.Message);
-            foreach (string name in moved)
-            {
-                try
-                {
-                    string target = Path.Combine(root, name);
-                    if (File.Exists(target)) File.Delete(target); else if (Directory.Exists(target)) Directory.Delete(target, true);
-                    string saved = Path.Combine(previous, name);
-                    if (File.Exists(saved) || Directory.Exists(saved)) MovePath(saved, target);
-                }
-                catch (Exception r) { Log(root, "rollback of " + name + " failed: " + r.Message); }
-            }
-            return false;
-        }
-        try { Directory.Delete(UpdateDir(root), true); } catch { /* the next check cleans up */ }
-        Log(root, "applied update to " + CurrentVersion(root));
-        return true;
-    }
-
-    static void MovePath(string from, string to)
-    {
-        if (Directory.Exists(from)) Directory.Move(from, to); else File.Move(from, to);
-    }
-
-    static bool BrowserRunning(string root)
-    {
-        // Both sides go through the long form: a folder reached as C:\Users\RUNNER~1\... and the
-        // same folder reported as C:\Users\runneradmin\... must compare equal, or an update would
-        // be applied under a browser that is still running.
-        string chrome = LongPath(Path.Combine(root, "chromium", "chrome.exe"));
-        foreach (var p in Process.GetProcessesByName("chrome"))
-        {
-            try { if (string.Equals(LongPath(p.MainModule.FileName), chrome, StringComparison.OrdinalIgnoreCase)) return true; }
-            catch { /* another user's or an elevated process: not ours */ }
-        }
-        return false;
-    }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    static extern uint GetLongPathName(string shortPath, StringBuilder longPath, uint size);
-
-    static string LongPath(string path)
-    {
-        var sb = new StringBuilder(1024);
-        uint n = GetLongPathName(path, sb, (uint)sb.Capacity);
-        return n > 0 && n < sb.Capacity ? sb.ToString() : Path.GetFullPath(path);
-    }
-
-    // ------------------------------------------------------------------ check
-
-    /// Looks for a newer signed release and stages it. `force` skips the once-a-day limit.
-    public static void CheckAndStage(string root, bool force)
+    /// Looks for a newer signed release and installs it beside this one. `force` skips the
+    /// once-a-day limit.
+    public static void CheckAndStage(string root, string appDir, bool force)
     {
         bool created;
         using (var mutex = new Mutex(true, "EnkiBrowserUpdater", out created))
         {
             if (!created && !mutex.WaitOne(0)) return; // another launcher is already on it
-            try { CheckAndStageLocked(root, force); }
+            try { CheckAndStageLocked(root, appDir, force); }
             catch (Exception e) { Log(root, "check failed: " + e.Message); }
             finally { try { mutex.ReleaseMutex(); } catch { } }
         }
     }
 
-    static void CheckAndStageLocked(string root, bool force)
+    static void CheckAndStageLocked(string root, string appDir, bool force)
     {
         Directory.CreateDirectory(UpdateDir(root));
         string stamp = Path.Combine(UpdateDir(root), "last-check");
@@ -153,11 +67,17 @@ static class Updater
         File.WriteAllText(stamp, DateTime.UtcNow.ToString("o"));
 
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | (SecurityProtocolType)12288; // TLS 1.2 + 1.3
-        Version current = CurrentVersion(root);
+        Version current = ReadVersion(appDir);
         Manifest m = FindLatest();
         if (m == null) { Log(root, "no signed release found"); return; }
         if (m.Version <= current) { Log(root, "up to date (" + current + "; latest signed release " + m.Version + ")"); return; }
-        if (File.Exists(ReadyFile(root)) && ReadVersion(ReadyFile(root)) >= m.Version) return; // already staged
+
+        string target = Path.Combine(root, "app", m.Version.ToString());
+        if (File.Exists(Path.Combine(target, "EnkiBrowserLauncher.exe")) && ReadVersion(target) == m.Version)
+        {
+            SetCurrent(root, m.Version);
+            return; // already installed by an earlier check
+        }
 
         Log(root, "downloading " + m.Version + " from " + m.Url);
         string zip = Path.Combine(UpdateDir(root), "download.zip");
@@ -173,21 +93,25 @@ static class Updater
         if (Directory.Exists(work)) Directory.Delete(work, true);
         SafeExtract(zip, work);
         File.Delete(zip);
-        string app = Path.Combine(work, "EnkiBrowser");
+        string release = Path.Combine(work, "EnkiBrowser", "app", m.Version.ToString());
         // The zip must be the release the manifest describes, not merely a zip with the right hash.
-        if (CurrentVersion(app) != m.Version) throw new Exception("zip contains " + CurrentVersion(app) + ", manifest says " + m.Version);
+        if (ReadVersion(release) != m.Version) throw new Exception("zip does not contain version " + m.Version);
 
-        if (Directory.Exists(StagedDir(root))) Directory.Delete(StagedDir(root), true);
-        Directory.Move(app, StagedDir(root));
+        if (Directory.Exists(target)) Directory.Delete(target, true); // an incomplete earlier attempt
+        Directory.CreateDirectory(Path.GetDirectoryName(target));
+        Directory.Move(release, target); // a new folder, created here: nothing existing moves
         Directory.Delete(work, true);
-        File.WriteAllText(ReadyFile(root), "{\"version\":\"" + m.Version + "\"}");
-        Log(root, "staged " + m.Version + "; it installs the next time Enki Browser starts");
+        SetCurrent(root, m.Version);
+        Log(root, "installed " + m.Version + "; it opens the next time Enki Browser starts");
     }
 
-    static Version ReadVersion(string file)
+    /// Points `current` at a version, replacing the file in one step so a crash mid-write can
+    /// never leave it half written (and the stub falls back to the newest folder if it were).
+    static void SetCurrent(string root, Version v)
     {
-        try { return new Version((string)((Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(File.ReadAllText(file)))["version"]); }
-        catch { return new Version(0, 0, 0); }
+        string file = Path.Combine(root, "current"), next = file + ".new";
+        File.WriteAllText(next, v.ToString());
+        if (File.Exists(file)) File.Replace(next, file, null); else File.Move(next, file);
     }
 
     class Manifest { public Version Version; public string Url; public string Sha256; }
@@ -202,7 +126,6 @@ static class Updater
         string json;
         using (var web = Client()) json = web.DownloadString(DefaultFeed);
         var releases = new JavaScriptSerializer() { MaxJsonLength = int.MaxValue }.DeserializeObject(json) as object[];
-        Manifest best = null;
         foreach (Dictionary<string, object> release in releases ?? new object[0])
         {
             if (release.ContainsKey("draft") && (bool)release["draft"]) continue;
@@ -213,11 +136,9 @@ static class Updater
                 if ((string)asset["name"] == "update.json.sig") sigUrl = (string)asset["browser_download_url"];
             }
             if (manifestUrl == null || sigUrl == null) continue;
-            Manifest m = FetchManifest(manifestUrl, sigUrl);
-            if (m != null && (best == null || m.Version > best.Version)) best = m;
-            if (best != null) break; // releases come newest first; the first signed one is the answer
+            return FetchManifest(manifestUrl, sigUrl); // releases come newest first
         }
-        return best;
+        return null;
     }
 
     static Manifest FetchManifest(string manifestUrl, string sigUrl)
