@@ -67,7 +67,10 @@ try {
   }, MOCK);
   await panel.goto(`chrome-extension://${extId}/src/sidepanel/index.html?window=${targetWindowId}`);
   await panel.waitForSelector("textarea", { timeout: 10000 });
-  await panel.waitForTimeout(800);
+  // A fixed pause raced the target page's first paint on slow CI runners, and the capture then
+  // failed. Wait until the tab has actually finished loading.
+  await panel.waitForFunction(async (wid) => (await chrome.tabs.query({ active: true, windowId: wid }))[0]?.status === "complete", targetWindowId, { timeout: 15000 });
+  await panel.waitForTimeout(300);
 
   // ---- Ask mode: echo model proves page context + screenshot reach the provider ----
   await panel.fill("textarea", "What is this page?");

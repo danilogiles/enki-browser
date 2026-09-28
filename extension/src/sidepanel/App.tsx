@@ -13,7 +13,7 @@ import { Chat } from "./Chat";
 import { Composer } from "./Composer";
 import { SettingsView } from "./SettingsView";
 import { LogsView } from "./LogsView";
-import { setDevMode } from "../lib/debug";
+import { log, setDevMode } from "../lib/debug";
 import { uid, type Segment, type TabInfo, type UiMessage } from "./types";
 import { CONVERSATION_KEY, restoreConversation, saveConversation, snapshotConversation } from "../lib/conversation";
 import { invalidateObservations } from "../lib/agent/context";
@@ -303,11 +303,21 @@ export function App() {
       const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${context}\n\n${text.trim()}` }];
       let thumb: string | undefined;
       if (settings.vision && settings.attachScreenshot && !restricted) {
-        try {
-          const shot = await executor.screenshot();
-          parts.push({ type: "image", mediaType: shot.mediaType, data: shot.data });
-          thumb = `data:${shot.mediaType};base64,${shot.data}`;
-        } catch { /* a background controlled tab must never capture the active tab */ }
+        // captureVisibleTab fails transiently while a page is still painting and is limited to two
+        // calls a second, so one retry recovers most failures. A background controlled tab is
+        // refused on purpose (never capture a different tab) and is not retried.
+        for (let attempt = 0; attempt < 2 && !thumb; attempt++) {
+          try {
+            const shot = await executor.screenshot();
+            parts.push({ type: "image", mediaType: shot.mediaType, data: shot.data });
+            thumb = `data:${shot.mediaType};base64,${shot.data}`;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            if (/Select the controlled tab/.test(message)) break;
+            if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
+            else log.warn("agent", "Screenshot not attached; the model sees the page text only", { error: message });
+          }
+        }
       }
       if (controller.signal.aborted) return;
       history.push({ role: "user", parts });
