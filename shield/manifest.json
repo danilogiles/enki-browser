@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Enki Shield",
+  "version": "1.0.0",
+  "description": "Warns before opening known phishing sites. The list is downloaded and checked on this device; the sites you visit are never sent anywhere.",
+  "minimum_chrome_version": "120",
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["declarativeNetRequest", "webNavigation", "tabs", "storage", "alarms"],
+  "host_permissions": ["https://malware-filter.gitlab.io/*", "https://malware-filter.pages.dev/*"],
+  "web_accessible_resources": [{ "resources": ["blocked.html"], "matches": ["<all_urls>"] }]
+}

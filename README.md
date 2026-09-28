@@ -46,6 +46,23 @@ An update is installed only if:
 empty file named `no-update` next to `EnkiBrowser.exe`. Coming from 0.1.0, install 0.2.0 once
 by hand; from then on it updates itself.
 
+## Enki Shield: phishing protection that stays on your device
+
+Enki Browser has no Google Safe Browsing — ungoogled-chromium removes it, since it reports
+hashes of the pages you open to Google. **Enki Shield** takes its place for phishing:
+
+- Twice a day it downloads [phishing-filter](https://gitlab.com/malware-filter/phishing-filter)
+  (built from OpenPhish, PhishTank and IPThreat, with the world's most popular sites excluded to
+  avoid false alarms): about 40,000 domains and 28,000 individual pages.
+- **Every check happens in the browser.** The sites you visit are never sent anywhere — the only
+  thing Enki Shield ever fetches is the list itself.
+- A listed domain is refused before any connection is made; a listed page on a shared host
+  (Weebly, Google Sites…) is stopped as the navigation starts. Either way you see a warning with
+  *Back to safety* and *I understand the risk, open it anyway* (that one site, this session only).
+- Try it safely: open `https://test.enki-shield.invalid` — always blocked, never real.
+
+Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and URLhaus lists.
+
 ## What it looks like
 
 - **Enki Home** is the new tab: one box that asks Enki — the side panel opens with your request
@@ -114,6 +131,9 @@ checks what a user would observe, not what the config says:
 - the browser does not keep running after its last window closes (so updates can install)
 - a new tab opens Enki Home; the About page and the window title say Enki Browser; the theme is
   active; `chrome.exe` describes itself as Enki Browser
+- Enki Shield has the phishing list; its test address, a real listed domain and a listed page
+  all show the warning; another page on the same host does not; *open it anyway* lets the site
+  through
 - the Enki panel renders
 
 With `ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6` and a local OmniRoute, it also has Enki complete
@@ -123,9 +143,9 @@ a real task inside Enki Browser (navigate to Wikipedia, read the page, answer).
 
 Honest list; each is on the roadmap.
 
-- **No Google Safe Browsing.** ungoogled-chromium removes it. uBlock's malware lists cover known
-  malware and badware hosts, but phishing protection is weaker than Chrome's or Brave's. Be
-  careful with links from email and messages.
+- **Phishing protection is list-based.** Enki Shield blocks what public lists know about, updated
+  twice a day; Google's Safe Browsing also uses signals no public list has, so a brand-new phishing
+  site can reach you before it is listed. Be careful with links from email and messages.
 - **Updates apply on restart.** If Enki Browser stays open for days, a downloaded security fix
   waits until you close and reopen it.
 - **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line

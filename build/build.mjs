@@ -187,6 +187,15 @@ writeFileSync(ico, pngsToIco(pngs));
 
 step("Enki Browser's look and name");
 cpSync(path.join(root, "theme"), path.join(app, "extensions", "theme"), { recursive: true });
+// Enki Shield, with a fixed id like Enki's so its downloaded list survives reinstalls.
+const shieldDir = path.join(app, "extensions", "shield");
+cpSync(path.join(root, "shield"), shieldDir, { recursive: true });
+const shieldKey = readFileSync(path.join(root, "config", "shield-extension.pub"), "utf8").trim();
+const shieldManifest = JSON.parse(readFileSync(path.join(shieldDir, "manifest.json"), "utf8"));
+shieldManifest.key = shieldKey;
+writeFileSync(path.join(shieldDir, "manifest.json"), JSON.stringify(shieldManifest, null, 2));
+const shieldId = extensionIdFromKey(shieldKey);
+console.log(`  Enki Shield id: ${shieldId}`);
 const renamed = rebrandLocales(path.join(app, "chromium", "locales"), "Enki Browser");
 const counts = Object.values(renamed);
 console.log(`  renamed Chromium → Enki Browser in ${counts.reduce((a, b) => a + b, 0)} strings across ${counts.length} languages`);
@@ -250,6 +259,7 @@ const version = {
   blocker: upstream.blocker.version,
   enki: enkiManifest.version,
   enkiExtensionId: enkiId,
+  shieldExtensionId: shieldId,
   builtAt: new Date().toISOString(),
 };
 writeFileSync(path.join(app, "version.json"), JSON.stringify(version, null, 2));

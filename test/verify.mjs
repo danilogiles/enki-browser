@@ -126,6 +126,47 @@ try {
   });
   check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
 
+  // ---- Enki Shield: phishing protection checked on this device
+  const shieldPage = `chrome-extension://${version.shieldExtensionId}/blocked.html?url=about%3Ablank`;
+  await page.goto(shieldPage).catch(() => undefined); // may interrupt a pending redirect
+  await page.waitForTimeout(500);
+  let status = null;
+  for (let i = 0; i < 60 && !(status?.domains > 5000); i++) {
+    status = await page.evaluate(() => chrome.runtime.sendMessage({ type: "shield:status" })).catch(() => null);
+    if (!(status?.domains > 5000)) await page.waitForTimeout(1000);
+  }
+  check("Enki Shield has downloaded the phishing list", status?.domains > 5000, status ? `${status.domains} domains, ${status.pages} pages` : "no status");
+
+  // Every visit starts from a blank page, and a warning only counts if it is the warning for
+  // *this* URL: a leftover warning from the previous visit once made two checks pass by accident.
+  const warningFor = (url) => `chrome-extension://${version.shieldExtensionId}/blocked.html?url=${encodeURIComponent(url)}`;
+  const visit = async (url) => {
+    await page.goto("about:blank");
+    const error = await page.goto(url).then(() => null, (e) => /net::(ERR_[A-Z_]+)/.exec(e.message)?.[1] ?? "error");
+    for (let i = 0; i < 20 && page.url() !== warningFor(url); i++) await page.waitForTimeout(250);
+    return { warned: page.url() === warningFor(url), error, at: page.url() };
+  };
+  const canary = "https://check.enki-shield.invalid/login";
+  check("the Shield test address shows the warning", (await visit(canary)).warned);
+
+  // A real entry from the list: the rule refuses it before any DNS lookup or connection, so the
+  // test never touches the phishing site.
+  await page.goto(shieldPage).catch(() => undefined);
+  await page.waitForTimeout(500);
+  const sample = (await page.evaluate(() => chrome.runtime.sendMessage({ type: "shield:sample" })))?.domain;
+  check("a domain on the live phishing list is refused", !!sample && (await visit(`https://${sample}/`)).warned, sample ?? "no sample");
+
+  check("a listed page on a shared host shows the warning", (await visit("https://enki-shield-page.invalid/phish")).warned);
+  // .invalid never resolves, so an unblocked visit fails with a DNS error, not ERR_BLOCKED_BY_CLIENT.
+  const other = await visit("https://enki-shield-page.invalid/other");
+  check("other pages on that host are not blocked", !other.warned && other.error !== "ERR_BLOCKED_BY_CLIENT", other.error ?? other.at);
+
+  await visit(canary);
+  const failed = page.waitForEvent("requestfailed", { predicate: (r) => r.url().startsWith(canary), timeout: 10000 }).catch(() => null);
+  await page.click("#proceed");
+  const reason = (await failed)?.failure()?.errorText ?? "no request";
+  check("'open it anyway' lets that one site through", /NAME_NOT_RESOLVED/.test(reason), reason);
+
   // ---- the product: its start page, its name, its look
   await page.goto("chrome://newtab/");
   await page.waitForTimeout(1200);
