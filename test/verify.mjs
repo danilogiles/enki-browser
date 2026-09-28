@@ -166,9 +166,13 @@ try {
   await page.click("#proceed");
   const reason = (await failed)?.failure()?.errorText ?? "no request";
   check("'open it anyway' lets that one site through", /NAME_NOT_RESOLVED/.test(reason), reason);
+  // Let that navigation settle into its error page; left running, it interrupts the next goto.
+  await page.waitForLoadState("load").catch(() => undefined);
+  await page.goto("about:blank").catch(() => undefined);
+  await page.waitForTimeout(500);
 
   // ---- the product: its start page, its name, its look
-  await page.goto("chrome://newtab/");
+  await page.goto("chrome://newtab/").catch(() => page.goto("chrome://newtab/"));
   await page.waitForTimeout(1200);
   const home = await page.evaluate(() => ({ box: !!document.querySelector("textarea"), text: document.body.innerText }));
   check("a new tab opens Enki Home", home.box && /Enki/.test(home.text), home.text.split("\n").filter(Boolean).slice(0, 3).join(" | "));
