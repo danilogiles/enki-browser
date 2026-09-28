@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dangerous site blocked</title>
+    <link rel="stylesheet" href="blocked.css" />
+  </head>
+  <body>
+    <main>
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M32 5 L55 13 L55 33 C55 47 45 57 32 61 C19 57 9 47 9 33 L9 13 Z" fill="#3a0d14" stroke="#fb7185" stroke-width="2.5" />
+        <path d="M32 21 V37" stroke="#fecdd3" stroke-width="4" stroke-linecap="round" />
+        <circle cx="32" cy="45" r="2.8" fill="#fecdd3" />
+      </svg>
+      <h1 id="title"></h1>
+      <p id="lead"></p>
+      <p class="host" id="host"></p>
+      <div class="actions">
+        <button id="back" class="primary"></button>
+        <button id="proceed" class="quiet"></button>
+      </div>
+      <details>
+        <summary id="whyTitle"></summary>
+        <p id="why"></p>
+        <p id="list"></p>
+        <p><a id="report" target="_blank" rel="noreferrer" href="https://gitlab.com/malware-filter/phishing-filter/-/issues"></a></p>
+      </details>
+    </main>
+    <script src="blocked.js"></script>
+  </body>
+</html>

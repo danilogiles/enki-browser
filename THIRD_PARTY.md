@@ -8,7 +8,13 @@ own license. Exact versions and download hashes are pinned in `upstream.json`.
 |---|---|---|---|
 | ungoogled-chromium | The browser: Chromium with Google services and telemetry removed. The project's official Windows build with two changes made by `build/build.mjs`: the product name in the locale `.pak` files reads "Enki Browser" instead of "Chromium", and `chrome.exe` carries Enki's icon and name in its version resources. No code is changed. | BSD-3-Clause; Chromium itself is BSD-3-Clause plus the third-party licenses listed at `chrome://credits` | https://github.com/ungoogled-software/ungoogled-chromium-windows |
 | uBlock Origin Lite | Ad and tracker blocker. Shipped **unmodified** as a separate extension. | GPL-3.0 | https://github.com/uBlockOrigin/uBOL-home |
+| Enki Shield | Phishing warnings (`shield/`), written for Enki Browser. | MIT | this repository |
 | Enki | The AI assistant in the side panel, and Enki Home. The build adds a fixed `key` to its manifest so its extension id is stable, and makes Enki Home the new tab page. | MIT | https://github.com/danilogiles/enkibrowser |
+
+Data downloaded at run time, not shipped: Enki Shield fetches
+[phishing-filter](https://gitlab.com/malware-filter/phishing-filter) (filters CC BY-SA 4.0; sources
+OpenPhish, PhishTank and IPThreat) from malware-filter.gitlab.io, falling back to
+malware-filter.pages.dev. The warning page credits it.
 
 Build tools that are not shipped: [rcedit](https://github.com/electron/rcedit) (MIT) sets the icon and version strings of `chrome.exe`.
 

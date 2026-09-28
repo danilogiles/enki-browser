@@ -61,9 +61,9 @@ static class EnkiBrowser
             flags.Add("--disable-machine-id");
         }
 
-        string extensions = string.Join(",", new[] { "enki", "ublock-lite", "theme" }
-            .Select(name => Path.Combine(root, "extensions", name))
-            .Where(Directory.Exists));
+        // Every folder under extensions/ is built in: Enki, the blocker, Enki Shield, the theme.
+        string extDir = Path.Combine(root, "extensions");
+        string extensions = Directory.Exists(extDir) ? string.Join(",", Directory.GetDirectories(extDir).OrderBy(d => d)) : "";
         if (extensions.Length > 0) flags.Add("--load-extension=" + extensions);
 
         string flagFile = Path.Combine(root, "config", "flags.txt");
