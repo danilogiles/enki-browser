@@ -185,7 +185,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 type={showKey ? "text" : "password"}
                 value={draft.apiKey}
                 onChange={(e) => set("apiKey", e.target.value)}
-                placeholder={preset.keyOptional ? "Leave empty if not needed" : "sk-…"}
+                placeholder={preset.keyOptional ? "Leave empty if not needed" : preset.keyPlaceholder ?? "sk-…"}
                 autoComplete="off"
                 spellCheck={false}
                 className={inputCls}

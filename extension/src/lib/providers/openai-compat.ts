@@ -103,7 +103,9 @@ export class OpenAICompatProvider implements ChatProvider {
         if (res.status === 401) {
           hint = this.opts.apiKey
             ? " (The provider rejected this API key — check it in Settings ⚙️)."
-            : " (This endpoint wants an API key and none is set. A local OmniRoute started with NODE_ENV=production gates its API: create a key in its dashboard at http://localhost:20128 and paste it into Settings ⚙️).";
+            : this.opts.baseUrl.includes(":20128")
+              ? " (This endpoint wants an API key and none is set. A local OmniRoute started with NODE_ENV=production gates its API: create a key in its dashboard at http://localhost:20128 and paste it into Settings ⚙️)."
+              : " (This provider needs an API key and none is set. Add it in Settings ⚙️ — the \"Get a key\" link there leads to the provider's page).";
         } else if (res.status === 429) {
           hint = " (Rate limit or credits exhausted. Try switching models in Settings ⚙️).";
         } else if (res.status === 502 || res.status === 503) {

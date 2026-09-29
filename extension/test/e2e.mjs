@@ -51,6 +51,9 @@ try {
           baseUrl: `${mock}/v1`,
           model: "mock-echo",
           autoApprove: false,
+          // Explicit: the default follows the default preset (NVIDIA, text only), and this test
+          // is about screenshots reaching the provider.
+          vision: true,
           attachScreenshot: true,
           maxSteps: 10,
           customInstructions: "",

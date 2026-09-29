@@ -46,6 +46,7 @@ Pick a model that supports **images** and **tool calling**. Good options:
 
 | Provider | Suggested model | Notes |
 |---|---|---|
+| NVIDIA | `nvidia/nemotron-3-ultra-550b-a55b` | **The default.** Free key from build.nvidia.com, no credit card; about 40 requests a minute. Text only (no screenshots). |
 | Anthropic | `claude-opus-5` or `claude-sonnet-5` | Best at multi-step browsing. |
 | OpenAI | `gpt-5` | |
 | Google Gemini | `gemini-2.5-flash` | Free tier available through AI Studio. |
