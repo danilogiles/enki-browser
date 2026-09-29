@@ -111,6 +111,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 | | Default | Where it comes from |
 |---|---|---|
 | AI assistant | Enki in the side panel, pinned to the toolbar | [danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser), MIT |
+| AI model | NVIDIA Nemotron 3 Ultra by default — free key from [build.nvidia.com](https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b), no credit card; or Claude, GPT, Gemini, Groq, OpenRouter, Ollama, OmniRoute | chosen in Enki's Settings |
 | Ads and trackers | Blocked (EasyList, EasyPrivacy, Peter Lowe's list, uBlock filters) | [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home), unmodified |
 | Malware sites | Blocked by uBlock's *Badware risks* and the URLhaus *Malicious URL Blocklist* | uBlock Origin Lite |
 | Search | DuckDuckGo | `config/initial_preferences.json` |

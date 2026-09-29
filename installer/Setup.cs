@@ -76,7 +76,16 @@ static class Setup
         using (var payload = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip"))
         {
             if (payload == null) throw new InvalidDataException("this installer has no payload");
-            version = Install.ExtractRelease(payload, root, progress);
+            try { version = Install.ExtractRelease(payload, root, progress); }
+            catch (UnauthorizedAccessException e)
+            {
+                // Almost always an antivirus holding or blocking a file there (for example one it
+                // quarantined from an earlier version). Say so, and what to do, not just "denied".
+                throw new Exception(e.Message + "\n\n" + Win.T(
+                    "Um antivírus provavelmente está bloqueando esse arquivo (talvez por ter colocado em quarentena uma versão anterior). Exclua os itens do Enki Browser da quarentena do antivírus, reinicie o Windows e rode o instalador de novo.",
+                    "Probablemente un antivirus está bloqueando ese archivo (quizá por haber puesto en cuarentena una versión anterior). Elimina los elementos de Enki Browser de la cuarentena del antivirus, reinicia Windows y vuelve a ejecutar el instalador.",
+                    "An antivirus is probably blocking that file (perhaps after quarantining an earlier version). Delete Enki Browser's items from the antivirus quarantine, restart Windows and run the installer again."));
+            }
         }
         if (version == null || !File.Exists(Path.Combine(root, "app", version, "EnkiBrowserLauncher.exe")))
             throw new InvalidDataException("the installed files are incomplete");

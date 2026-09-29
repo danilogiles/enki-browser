@@ -52,7 +52,11 @@ static class Install
         string version = null;
         using (var archive = new ZipArchive(zip, ZipArchiveMode.Read))
         {
-            var entries = archive.Entries.Where(e => e.FullName.Replace('\\', '/').StartsWith("EnkiBrowser/")).ToList();
+            // The release folder first, the stub and `current` last: if anything is refused midway
+            // (an antivirus, a full disk), no install is left that looks complete but cannot open.
+            var entries = archive.Entries.Where(e => e.FullName.Replace('\\', '/').StartsWith("EnkiBrowser/"))
+                .OrderBy(e => e.FullName.Replace('\\', '/').StartsWith("EnkiBrowser/app/") ? 0 : e.FullName.EndsWith("/current") ? 2 : 1)
+                .ToList();
             // A reinstall of the same version replaces its folder rather than mixing files into it.
             var appVersion = entries.Select(e => e.FullName.Replace('\\', '/').Split('/')).FirstOrDefault(p => p.Length > 3 && p[1] == "app");
             if (appVersion != null) { version = appVersion[2]; Win.DeleteTree(Path.Combine(root, "app", version)); }
