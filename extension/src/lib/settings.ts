@@ -6,6 +6,7 @@ export type PresetId =
   | "gemini"
   | "groq"
   | "openrouter"
+  | "nvidia"
   | "omniroute"
   | "ollama"
   | "custom";
@@ -18,6 +19,8 @@ export type Preset = {
   defaultModel: string;
   keyUrl?: string;
   keyOptional?: boolean;
+  /** What this provider's keys look like, shown in the empty key field. */
+  keyPlaceholder?: string;
   hint?: string;
   /**
    * Official install/run instructions for a preset that needs a local server.
@@ -43,6 +46,26 @@ export type Preset = {
 export type ModelSuggestion = { id: string; note: string };
 
 export const PRESETS: Preset[] = [
+  {
+    // First and the default: the free option that needs nothing installed — just a free key.
+    id: "nvidia",
+    label: "NVIDIA (Nemotron)",
+    kind: "openai-compatible",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    defaultModel: "nvidia/nemotron-3-ultra-550b-a55b",
+    // The model page has the "Get API Key" button; the key page itself sits behind a sign-in.
+    keyUrl: "https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b",
+    keyPlaceholder: "nvapi-…",
+    free: true,
+    noVision: true,
+    recommended: [
+      { id: "nvidia/nemotron-3-ultra-550b-a55b", note: "most capable · tools · 1M context" },
+      { id: "nvidia/nemotron-3-super-120b-a12b", note: "faster · tools" },
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", note: "fastest" },
+    ],
+    hint:
+      "Free with an NVIDIA Developer account — no credit card. Open the link below, sign in, and press \"Get API Key\". The free tier allows about 40 requests a minute, plenty for browsing; long Act tasks can hit it. Nemotron reads text, not images, so Enki works from the page DOM.",
+  },
   {
     id: "omniroute",
     label: "OmniRoute (free models, local gateway)",
@@ -209,13 +232,14 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  preset: "anthropic",
+  preset: "nvidia",
   apiKey: "",
-  baseUrl: presetOf("anthropic").baseUrl,
-  model: presetOf("anthropic").defaultModel,
+  baseUrl: presetOf("nvidia").baseUrl,
+  model: presetOf("nvidia").defaultModel,
   theme: "dark",
   autoApprove: false,
-  vision: true,
+  // Follows the default preset: Nemotron reads text only.
+  vision: !presetOf("nvidia").noVision,
   attachScreenshot: true,
   maxSteps: 30,
   requestTimeoutSec: 180,
