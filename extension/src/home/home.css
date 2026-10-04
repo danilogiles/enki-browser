@@ -1,11 +1,41 @@
 @import "tailwindcss";
 
+/*
+ * Enki Home follows the operating system, light or dark, in the same neutral greys as the browser
+ * around it; Enki's sky is the only accent. The colours are variables so one set of utility
+ * classes serves both: `fg` is the overlay colour (white on dark, black on light), so a translucent
+ * card stays visible on either background.
+ */
 @theme {
   --font-sans: "Segoe UI Variable Display", "Segoe UI", ui-sans-serif, system-ui, -apple-system, Roboto, sans-serif;
-  --color-deep: #04121f;
-  --color-sky: #38bdf8;
-  --color-mist: #e0f2fe;
-  --color-muted: #86aecb;
+  --color-fg: var(--overlay);
+  --color-mist: var(--text);
+  --color-muted: var(--muted);
+  --color-sky: var(--accent);
+  --color-deep: var(--on-accent);
+}
+
+:root {
+  color-scheme: light dark;
+  --overlay: #000000;
+  --text: #1f1f1f;
+  --muted: #5f6368;
+  --accent: #0284c7;
+  --on-accent: #ffffff;
+  --page: #ffffff;
+  --glow: rgb(2 132 199 / 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --overlay: #ffffff;
+    --text: #e8eaed;
+    --muted: #9aa0a6;
+    --accent: #38bdf8;
+    --on-accent: #0b1220;
+    --page: #1f1f1f;
+    --glow: rgb(56 189 248 / 0.10);
+  }
 }
 
 html,
@@ -16,20 +46,17 @@ body,
 
 body {
   margin: 0;
-  color-scheme: dark;
-  color: var(--color-mist);
+  color: var(--text);
   font-family: var(--font-sans);
-  /* Brand navy deepened for a full page: #0c4a6e reads as a panel colour, not a canvas. */
   background:
-    radial-gradient(60rem 36rem at 50% -8rem, rgb(56 189 248 / 0.16), transparent 70%),
-    radial-gradient(40rem 30rem at 85% 110%, rgb(14 165 233 / 0.10), transparent 70%),
-    linear-gradient(180deg, #062238 0%, #04121f 100%);
+    radial-gradient(60rem 32rem at 50% -10rem, var(--glow), transparent 70%),
+    var(--page);
   -webkit-font-smoothing: antialiased;
 }
 
 /* The request box is excluded: its whole card lights up on focus instead (focus-within). */
 :is(button, input, a):focus-visible {
-  outline: 2px solid var(--color-sky);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 

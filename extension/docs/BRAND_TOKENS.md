@@ -1,6 +1,6 @@
-﻿# Enki brand lock — Trust Buddy (C)
+# Enki brand — the shield robot
 
-**Mark:** Happy robot face (soft fill + blush) inside a security shield. App plate `#0c4a6e`.
+**Mark:** a friendly white robot whose head is a security shield: dark visor, two sky-blue eyes. No plate behind it, so it sits on light and dark taskbars alike; a faint dark outline keeps it visible on white. Original artwork (inspired by friendly-robot assistant icons, copying none).
 
 ## Colors
 | Token | Hex | Use |
@@ -19,7 +19,10 @@
 - `public/icons/icon{16,32,48,128}.png`
 - Regenerated via `npm run icons` (`scripts/icons.mjs`)
 
-## Panel chrome
+## Panel and Enki Home
+Default theme is **System**: neutral light or dark greys following the OS, like the browser around them, with sky (`#38bdf8` dark / `#0284c7` light) as the only accent. The original navy look is the optional **Enki Navy** theme.
+
+## Panel chrome (Enki Navy)
 Default dark theme maps `--enki-*` accents to sky and `--ink-*` surfaces to navy (`#0c4a6e` / `#075985`).
 
 License: original work for Enki — MIT with the product.

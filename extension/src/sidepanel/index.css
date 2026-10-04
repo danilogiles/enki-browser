@@ -32,9 +32,104 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
 }
 
-/* Default Theme: Enki Dark — Trust Buddy (sky on navy) */
-:root,
+/*
+ * Dark and Light are neutral greys, like the browser around the panel, with Enki's sky as the only
+ * accent. The default is System, which picks between them from the OS — so does a fresh panel
+ * before settings load (no data-theme yet). Enki's navy lives on as an optional theme.
+ */
 [data-theme="dark"] {
+  color-scheme: dark;
+  --enki-400: #38bdf8;
+  --enki-500: #0ea5e9;
+  --enki-600: #0284c7;
+  --ink-950: #1f1f1f;
+  --ink-900: #2a2b2d;
+  --ink-800: #35363a;
+  --ink-700: #4a4c50;
+
+  --zinc-100: #e8eaed;
+  --zinc-200: #dadce0;
+  --zinc-300: #bdc1c6;
+  --zinc-400: #9aa0a6;
+  --zinc-500: #80868b;
+  --zinc-600: #5f6368;
+
+  --app-bg: #1f1f1f;
+  --app-text: #e8eaed;
+}
+
+[data-theme="light"],
+[data-theme="white"] {
+  color-scheme: light;
+  --enki-400: #0284c7;
+  --enki-500: #0369a1;
+  --enki-600: #075985;
+  --ink-950: #ffffff;
+  --ink-900: #f4f6f8;
+  --ink-800: #e9edf1;
+  --ink-700: #d3d9df;
+
+  --zinc-100: #1f1f1f;
+  --zinc-200: #303134;
+  --zinc-300: #3c4043;
+  --zinc-400: #5f6368;
+  --zinc-500: #80868b;
+  --zinc-600: #9aa0a6;
+
+  --app-bg: #ffffff;
+  --app-text: #1f1f1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]),
+  [data-theme="system"] {
+    color-scheme: dark;
+    --enki-400: #38bdf8;
+    --enki-500: #0ea5e9;
+    --enki-600: #0284c7;
+    --ink-950: #1f1f1f;
+    --ink-900: #2a2b2d;
+    --ink-800: #35363a;
+    --ink-700: #4a4c50;
+
+    --zinc-100: #e8eaed;
+    --zinc-200: #dadce0;
+    --zinc-300: #bdc1c6;
+    --zinc-400: #9aa0a6;
+    --zinc-500: #80868b;
+    --zinc-600: #5f6368;
+
+    --app-bg: #1f1f1f;
+    --app-text: #e8eaed;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]),
+  [data-theme="system"] {
+    color-scheme: light;
+    --enki-400: #0284c7;
+    --enki-500: #0369a1;
+    --enki-600: #075985;
+    --ink-950: #ffffff;
+    --ink-900: #f4f6f8;
+    --ink-800: #e9edf1;
+    --ink-700: #d3d9df;
+
+    --zinc-100: #1f1f1f;
+    --zinc-200: #303134;
+    --zinc-300: #3c4043;
+    --zinc-400: #5f6368;
+    --zinc-500: #80868b;
+    --zinc-600: #9aa0a6;
+
+    --app-bg: #ffffff;
+    --app-text: #1f1f1f;
+  }
+}
+
+/* Optional Theme: Enki Navy — the original sky-on-navy look */
+[data-theme="navy"] {
   color-scheme: dark;
   --enki-400: #38bdf8;
   --enki-500: #0ea5e9;
@@ -53,76 +148,6 @@
 
   --app-bg: #0c4a6e;
   --app-text: #e0f2fe;
-}
-
-/* White / Light Theme — Trust Buddy accents on light surfaces */
-[data-theme="light"],
-[data-theme="white"] {
-  color-scheme: light;
-  --enki-400: #0284c7;
-  --enki-500: #0369a1;
-  --enki-600: #075985;
-  --ink-950: #ffffff;
-  --ink-900: #f0f9ff;
-  --ink-800: #e0f2fe;
-  --ink-700: #7dd3fc;
-
-  --zinc-100: #0c4a6e;
-  --zinc-200: #075985;
-  --zinc-300: #0369a1;
-  --zinc-400: #0284c7;
-  --zinc-500: #0ea5e9;
-  --zinc-600: #38bdf8;
-
-  --app-bg: #ffffff;
-  --app-text: #0c4a6e;
-}
-
-/* System Theme (Auto) */
-@media (prefers-color-scheme: light) {
-  [data-theme="system"] {
-    color-scheme: light;
-    --enki-400: #0284c7;
-    --enki-500: #0369a1;
-    --enki-600: #075985;
-    --ink-950: #ffffff;
-    --ink-900: #f0f9ff;
-    --ink-800: #e0f2fe;
-    --ink-700: #7dd3fc;
-
-    --zinc-100: #0c4a6e;
-    --zinc-200: #075985;
-    --zinc-300: #0369a1;
-    --zinc-400: #0284c7;
-    --zinc-500: #0ea5e9;
-    --zinc-600: #38bdf8;
-
-    --app-bg: #ffffff;
-    --app-text: #0c4a6e;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  [data-theme="system"] {
-    color-scheme: dark;
-    --enki-400: #38bdf8;
-    --enki-500: #0ea5e9;
-    --enki-600: #0284c7;
-    --ink-950: #0c4a6e;
-    --ink-900: #075985;
-    --ink-800: #0369a1;
-    --ink-700: #0284c7;
-
-    --zinc-100: #f0f9ff;
-    --zinc-200: #e0f2fe;
-    --zinc-300: #bae6fd;
-    --zinc-400: #7dd3fc;
-    --zinc-500: #38bdf8;
-    --zinc-600: #0ea5e9;
-
-    --app-bg: #0c4a6e;
-    --app-text: #e0f2fe;
-  }
 }
 
 /* Custom Theme: Midnight (OLED Black + Indigo) */

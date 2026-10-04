@@ -1,22 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#bae6fd"/>
-      <stop offset="1" stop-color="#38bdf8"/>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfe7ee"/>
     </linearGradient>
-    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#e0f2fe"/>
-      <stop offset="1" stop-color="#7dd3fc"/>
+    <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0b1220"/>
     </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <rect width="128" height="128" rx="28" fill="#0c4a6e"/>
-  <circle cx="64" cy="64" r="42" fill="url(#sky)" opacity="0.25"/>
-  <path d="M64 18 L100 31 L100 65 C100 88 84 105 64 113 C44 105 28 88 28 65 L28 31 Z"
-        fill="#075985" stroke="#7dd3fc" stroke-width="2.5"/>
-  <circle cx="64" cy="60" r="19.5" fill="url(#body)"/>
-  <circle cx="57" cy="57" r="2.75" fill="#0c4a6e"/>
-  <circle cx="71" cy="57" r="2.75" fill="#0c4a6e"/>
-  <path d="M55 65.5 Q64 72.5 73 65.5" fill="none" stroke="#0c4a6e" stroke-width="2.25" stroke-linecap="round"/>
-  <circle cx="51" cy="63" r="2.25" fill="#fb7185" opacity="0.55"/>
-  <circle cx="77" cy="63" r="2.25" fill="#fb7185" opacity="0.55"/>
+  <!-- The head is the shield: friendly assistant and protection in one shape. -->
+  <path d="M128 16 C150 30 180 38 214 40 C220 40 224 45 224 51 V116 C224 176 186 220 128 242 C70 220 32 176 32 116 V51 C32 45 36 40 42 40 C76 38 106 30 128 16 Z"
+        fill="url(#shell)" stroke="#0f172a" stroke-opacity="0.22" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Visor -->
+  <rect x="62" y="84" width="132" height="70" rx="35" fill="url(#visor)"/>
+  <!-- Eyes -->
+  <g filter="url(#glow)" fill="#38bdf8">
+    <rect x="90" y="101" width="24" height="36" rx="12"/>
+    <rect x="142" y="101" width="24" height="36" rx="12"/>
+  </g>
+  <!-- A small highlight so it reads as glossy, not flat -->
+  <path d="M70 60 C92 52 112 46 128 36" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
 </svg>
