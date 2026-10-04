@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Bug, Eye, MousePointerClick, Plus, Settings as SettingsIcon } from "lucide-react";
-import logo from "../assets/logo.svg";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ImagePart, Message, TextPart, ToolCallPart } from "../lib/types";
 import { loadSettings, onSettingsChange, presetOf, saveSettings, type Settings } from "../lib/settings";
 import { onHandoff, takeHandoff, type Handoff } from "../lib/handoff";
@@ -9,16 +7,18 @@ import { BrowserExecutor, isRestrictedUrl } from "../lib/tools/executor";
 import { toolsForMode } from "../lib/tools/definitions";
 import { runTurn, type AgentEvent } from "../lib/agent/loop";
 import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
-import { Chat } from "./Chat";
+import { Chat, type Progress } from "./Chat";
 import { Composer } from "./Composer";
 import { SettingsView } from "./SettingsView";
 import { LogsView } from "./LogsView";
 import { log, setDevMode } from "../lib/debug";
 import { uid, type Segment, type TabInfo, type UiMessage } from "./types";
-import { CONVERSATION_KEY, restoreConversation, saveConversation, snapshotConversation } from "../lib/conversation";
+import { snapshotConversation } from "../lib/conversation";
+import { clearChats, currentChat, deleteChat, listChats, loadChat, saveChat, setCurrentChat, type ChatEntry } from "../lib/history";
+import { applyTheme } from "../lib/theme";
+import { Header } from "./Header";
 import { invalidateObservations } from "../lib/agent/context";
 import { diagnosticReport } from "../lib/diagnostics";
-import { QuickModels } from "./QuickModels";
 
 const MODE_KEY = "enki:mode";
 
@@ -29,7 +29,8 @@ export function App() {
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [running, setRunning] = useState(false);
   const [approval, setApproval] = useState<{ label: string; resolve: (ok: boolean) => void } | null>(null);
-  const [tab, setTab] = useState<TabInfo | null>(null);
+  // The active tab is tracked for the tab picker in the "more" menu; nothing else shows it now.
+  const [, setTab] = useState<TabInfo | null>(null);
   const [usage, setUsage] = useState({ input: 0, output: 0 });
   const [ready, setReady] = useState(false);
   const [banner, setBanner] = useState("");
@@ -37,6 +38,9 @@ export function App() {
   const [elapsed, setElapsed] = useState(0);
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [selectedTab, setSelectedTab] = useState<number | null>(null);
+  // The saved chat this conversation belongs to; a new chat gets an id on its first message.
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [chats, setChats] = useState<ChatEntry[]>([]);
   const windowRef = useRef<number | undefined>(undefined);
   const restoredRef = useRef(false);
 
@@ -49,13 +53,15 @@ export function App() {
     loadSettings().then(async (s) => {
       setSettings(s);
       if (s.saveConversations) {
-        const stored = await chrome.storage.local.get(CONVERSATION_KEY);
-        const restored = restoreConversation(stored[CONVERSATION_KEY]);
-        if (restored) {
+        setChats(await listChats());
+        // Reopen the chat that was open, not merely the newest: after New chat there is none.
+        const open = await currentChat();
+        const restored = open ? await loadChat(open) : null;
+        if (open && restored) {
           historyRef.current = restored.history;
           restoredRef.current = true;
           setMessages(restored.messages);
-          setBanner("Conversation restored locally. Page observations will be refreshed before continuing.");
+          setChatId(open);
         }
       }
       setReady(true);
@@ -69,17 +75,22 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (settings?.theme) {
-      document.documentElement.setAttribute("data-theme", settings.theme);
-    }
-  }, [settings?.theme]);
+    if (settings) applyTheme(document.documentElement, settings.theme, settings.customTheme);
+  }, [settings?.theme, settings?.customTheme]);
 
   useEffect(() => setDevMode(!!settings?.devMode), [settings?.devMode]);
 
   useEffect(() => {
     if (!ready || !settings) return;
-    if (!settings.saveConversations) { void saveConversation(null); return; }
-    const persist = () => { void saveConversation(snapshotConversation(historyRef.current, messages)).catch(() => setBanner("Could not save this conversation. Browser storage may be full.")); };
+    if (!settings.saveConversations) { void clearChats().then(() => setChats([])); return; }
+    if (!messages.length) return;
+    const id = chatId ?? uid();
+    if (!chatId) { setChatId(id); void setCurrentChat(id); }
+    const persist = () => {
+      void saveChat(id, snapshotConversation(historyRef.current, messages))
+        .then(() => listChats().then(setChats))
+        .catch(() => setBanner("Could not save this conversation. Browser storage may be full."));
+    };
     // Avoid serializing storage writes for every streamed token. Tool boundaries save immediately.
     const last = messages[messages.length - 1];
     const segments = last?.segments ?? [];
@@ -87,7 +98,7 @@ export function App() {
     const timer = setTimeout(persist, running && !toolBoundary ? 250 : 0);
     window.addEventListener("pagehide", persist);
     return () => { clearTimeout(timer); window.removeEventListener("pagehide", persist); };
-  }, [messages, ready, running, settings?.saveConversations]);
+  }, [messages, ready, running, settings?.saveConversations, chatId]);
 
   useEffect(() => {
     if (!running) return;
@@ -389,7 +400,29 @@ export function App() {
     setApproval(null);
     setBanner("");
     setSelectedTab(null);
-    void saveConversation(null);
+    setChatId(null);
+    void setCurrentChat(null);
+  };
+
+  const openChat = async (id: string) => {
+    if (abortRef.current) return;
+    const restored = await loadChat(id);
+    if (!restored) { setBanner("That chat could not be opened."); return; }
+    historyRef.current = restored.history;
+    restoredRef.current = true;
+    setMessages(restored.messages);
+    setUsage({ input: 0, output: 0 });
+    setApproval(null);
+    setBanner("");
+    setChatId(id);
+    void setCurrentChat(id);
+    setView("chat");
+  };
+
+  const removeChat = async (id: string) => {
+    await deleteChat(id);
+    setChats(await listChats());
+    if (id === chatId) newChat();
   };
 
   // Empty deps on purpose: stop/newChat only touch refs and stable setters, and re-subscribing
@@ -443,61 +476,27 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-ink-700 px-3 py-2">
-        <img src={logo} alt="" className="h-6 w-6 rounded-md" />
-        <span className="font-semibold tracking-tight">Enki</span>
-        <button
-          type="button"
-          onClick={() => setView("settings")}
-          title={`Active model: ${settings.model} (${presetOf(settings.preset).label}). Click to open settings.`}
-          className="max-w-[120px] truncate rounded bg-ink-800/80 px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-ink-700 hover:text-zinc-200"
-        >
-          {settings.model || settings.preset}
-        </button>
-        <div className="ml-auto flex items-center gap-1">
-          <ModeToggle mode={mode} onChange={changeMode} disabled={running} />
-          {settings.devMode && (
-            <IconButton title="Logs" onClick={() => setView("logs")}>
-              <Bug size={16} />
-            </IconButton>
-          )}
-          <IconButton title="New chat" onClick={newChat}>
-            <Plus size={16} />
-          </IconButton>
-          <IconButton title="Settings" onClick={() => setView("settings")}>
-            <SettingsIcon size={16} />
-          </IconButton>
-        </div>
-      </header>
-
-      <QuickModels settings={settings} disabled={running} onChange={(model) => { void saveSettings({ ...settings, model }); }} />
-      <div className="border-b border-ink-800 px-3 py-2 text-xs">
-        <label htmlFor="controlled-tab" className="mb-1 block text-zinc-400">Controlled tab {running ? "(locked for this task)" : ""}</label>
-        <select id="controlled-tab" disabled={running} value={selectedTab ?? ""} onChange={(e) => setSelectedTab(e.target.value ? Number(e.target.value) : null)} className="w-full min-w-0 rounded border border-ink-700 bg-ink-900 p-1.5 text-zinc-200">
-          <option value="">Use active tab when task starts</option>
-          {selectedTab !== null && !tabs.some((t) => t.id === selectedTab) && <option value={selectedTab}>Selected tab was closed</option>}
-          {tabs.map((t) => <option value={t.id} key={t.id}>{t.title || t.url}{isRestrictedUrl(t.url) ? " (internal page — navigate only)" : ""}</option>)}
-        </select>
-      </div>
-      {banner && <div role="status" className="border-b border-ink-800 px-3 py-2 text-xs text-amber-200">{banner} <button className="underline" onClick={() => setBanner("")}>Dismiss</button></div>}
-      {running && <div role="status" className="border-b border-ink-800 px-3 py-2 text-xs text-enki-400">
-        {progress.message === "Waiting for provider" ? `Waiting for ${presetOf(settings.preset).label.split(" (")[0]}` : progress.message} · {elapsed}s
-        <div className="truncate text-zinc-400">{progress.step > 0 ? `Step ${progress.step}/${settings.maxSteps} · ` : ""}{progress.model}</div>
-      </div>}
-
-      {tab && (
-        <div className="flex items-center gap-2 border-b border-ink-800 bg-ink-900/60 px-3 py-1.5 text-xs text-zinc-400">
-          {tab.favIconUrl ? (
-            <img src={tab.favIconUrl} alt="" className="h-3.5 w-3.5 rounded-sm" />
-          ) : (
-            <span className="h-3.5 w-3.5 rounded-sm bg-ink-700" />
-          )}
-          <span className="truncate" title={tab.url}>
-            {tab.title || tab.url}
-          </span>
-          {isRestrictedUrl(tab.url) && <span className="ml-auto shrink-0 text-amber-400">internal page</span>}
-        </div>
-      )}
+      <Header
+        settings={settings}
+        running={running}
+        onModel={(model) => { void saveSettings({ ...settings, model }); }}
+        onOpenSettings={() => setView("settings")}
+        chats={settings.saveConversations ? chats : []}
+        currentChat={chatId}
+        onNewChat={newChat}
+        onOpenChat={(id) => { void openChat(id); }}
+        onDeleteChat={(id) => { void removeChat(id); }}
+        canContinue={!running && messages.length > 0}
+        onContinue={retry}
+        onReadAgain={() => { invalidateObservations(historyRef.current); void send("Read the current page again and report its state.", "observe"); }}
+        onCopyDiagnostics={() => navigator.clipboard.writeText(diagnosticReport(settings)).then(() => setBanner("Diagnostic report copied. Page content and credentials excluded."), () => setBanner("Clipboard unavailable. Open Logs to export the report."))}
+        onLogs={settings.devMode ? () => setView("logs") : undefined}
+        tabs={tabs}
+        selectedTab={selectedTab}
+        onSelectTab={setSelectedTab}
+        usage={usage}
+      />
+      {banner && <div role="status" className="mx-3 mb-1 rounded-lg bg-ink-900 px-3 py-1.5 text-xs text-zinc-400">{banner} <button className="underline" onClick={() => setBanner("")}>Dismiss</button></div>}
 
       <Chat
         messages={messages}
@@ -505,22 +504,15 @@ export function App() {
         mode={mode}
         onSuggest={send}
         onRetry={running ? undefined : retry}
-        model={settings.model}
+        showSteps={settings.showSteps !== false}
+        showRunDetails={settings.showRunDetails !== false}
+        progress={running ? { ...progress, maxSteps: settings.maxSteps, elapsed, message: progress.message === "Waiting for provider" ? `Waiting for ${presetOf(settings.preset).label.split(" (")[0]}` : progress.message } as Progress : null}
       />
 
-      {!running && messages.length > 0 && <div className="flex flex-wrap gap-2 border-t border-ink-800 px-3 py-2 text-xs">
-        <button className="rounded border border-ink-700 px-2 py-1 text-enki-400" onClick={retry}>Continue safely</button>
-        <button className="rounded border border-ink-700 px-2 py-1" onClick={() => { invalidateObservations(historyRef.current); void send("Read the current page again and report its state.", "observe"); }}>Read page again</button>
-        <button className="rounded border border-ink-700 px-2 py-1" onClick={() => setView("settings")}>Switch model</button>
-        <button className="rounded border border-ink-700 px-2 py-1" onClick={() => navigator.clipboard.writeText(diagnosticReport(settings)).then(() => setBanner("Diagnostic report copied. Page content and credentials excluded."), () => setBanner("Clipboard unavailable. Open Logs to export the report."))}>Copy diagnostics</button>
-      </div>}
-
       {needsKey && (
-        <div className="mx-3 mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+        <div className="mx-3 mb-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           Add an API key in{" "}
-          <button className="underline" onClick={() => setView("settings")}>
-            Settings
-          </button>{" "}
+          <button className="underline" onClick={() => setView("settings")}>Settings</button>{" "}
           to start.
         </div>
       )}
@@ -534,44 +526,9 @@ export function App() {
         vision={settings.vision}
         onToggleScreenshot={toggleScreenshot}
         mode={mode}
-        usage={usage}
+        onMode={changeMode}
+        onSettings={() => setView("settings")}
       />
     </div>
-  );
-}
-
-function ModeToggle({ mode, onChange, disabled }: { mode: Mode; onChange: (m: Mode) => void; disabled: boolean }) {
-  const btn = (m: Mode, icon: ReactNode, label: string) => (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onChange(m)}
-      title={m === "ask" ? "Ask: Enki can only look at the page" : "Act: Enki can navigate, click and type"}
-      className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition disabled:opacity-60 ${
-        mode === m ? "bg-enki-500/20 text-enki-400" : "text-zinc-400 hover:text-zinc-200"
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-  return (
-    <div className="flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
-      {btn("ask", <Eye size={13} />, "Ask")}
-      {btn("act", <MousePointerClick size={13} />, "Act")}
-    </div>
-  );
-}
-
-function IconButton({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className="rounded-md p-1.5 text-zinc-400 transition hover:bg-ink-800 hover:text-zinc-100"
-    >
-      {children}
-    </button>
   );
 }

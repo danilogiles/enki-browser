@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /*
- * Enki Home follows the operating system, light or dark, in the same neutral greys as the browser
- * around it; Enki's sky is the only accent. The colours are variables so one set of utility
+ * Enki Home follows the panel's theme — System by default, light or dark with the OS — in sober
+ * near-black or off-white; Enki's sky is the only accent. The colours are variables so one set of utility
  * classes serves both: `fg` is the overlay colour (white on dark, black on light), so a translucent
  * card stays visible on either background.
  */
@@ -18,24 +18,38 @@
 :root {
   color-scheme: light dark;
   --overlay: #000000;
-  --text: #1f1f1f;
-  --muted: #5f6368;
+  --text: #1b1c1b;
+  --muted: #61625f;
   --accent: #0284c7;
   --on-accent: #ffffff;
-  --page: #ffffff;
-  --glow: rgb(2 132 199 / 0.08);
+  --page: #fcfcf9;
+  --glow: rgb(2 132 199 / 0.06);
 }
 
+/* Dark: sober near-black, as in Comet. Used for System when the OS is dark, and for Dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --overlay: #ffffff;
-    --text: #e8eaed;
-    --muted: #9aa0a6;
+    --text: #e8e8e6;
+    --muted: #8f918e;
     --accent: #38bdf8;
     --on-accent: #0b1220;
-    --page: #1f1f1f;
-    --glow: rgb(56 189 248 / 0.10);
+    --page: #191a1a;
+    --glow: rgb(56 189 248 / 0.07);
   }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --overlay: #ffffff;
+  --text: #e8e8e6;
+  --muted: #8f918e;
+  --accent: #38bdf8;
+  --on-accent: #0b1220;
+  --page: #191a1a;
+  --glow: rgb(56 189 248 / 0.07);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 html,

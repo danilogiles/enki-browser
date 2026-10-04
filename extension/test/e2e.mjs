@@ -103,7 +103,8 @@ try {
   await panel.click("button:has-text('Allow')");
 
   await panel.waitForFunction(() => document.body.innerText.includes("Done."), null, { timeout: 30000 });
-  const finalText = await panel.evaluate(() => document.body.innerText);
+  // Steps are folded behind an arrow now; they are in the page, not on screen, until expanded.
+  const finalText = await panel.evaluate(() => document.body.textContent);
   check("act: read_page ran", /Read page \(interactive\)/.test(finalText));
   check("act: type ran", /Type "hello enki"/.test(finalText));
 
