@@ -45,9 +45,11 @@ Tested on Ubuntu 24.04 and Debian 12.
 ## Updates
 
 On Windows, Enki Browser updates itself (on Linux, install the new release the same way you
-installed it; Scoop installs are updated by Scoop). Once a day, after the browser has opened, it looks for a newer
-release and installs it **beside the one you are using**; the next time you start Enki Browser,
-you are on the new version. Your profile, history and Enki settings are untouched.
+installed it; Scoop installs are updated by Scoop). While the browser is open it looks for a newer
+release every couple of hours, downloads it and installs it **beside the one you are using**. A
+notification then offers to restart now: every window and tab comes back, on the new version. If
+you ignore it, the next time you start Enki Browser you are on the new version anyway. Nothing
+restarts without your click. Your profile, history and Enki settings are untouched.
 
 How it is laid out, and why:
 
@@ -199,8 +201,8 @@ Honest list; each is on the roadmap.
 - **Phishing protection is list-based.** Enki Shield blocks what public lists know about, updated
   twice a day; Google's Safe Browsing also uses signals no public list has, so a brand-new phishing
   site can reach you before it is listed. Be careful with links from email and messages.
-- **Updates apply on restart.** If Enki Browser stays open for days, an installed security fix
-  waits until you close and reopen it.
+- **Updates need a restart**, like every browser: a downloaded fix is offered in a notification
+  and waits for your click (or your next start). Incognito windows do not come back after it.
 - **Not code-signed yet**, so SmartScreen warns on install and a behaviour-based antivirus may
   distrust the updater (see [Code signing](#code-signing)).
 - **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line
@@ -218,7 +220,7 @@ Honest list; each is on the roadmap.
 1. **Now — distribution (this repo, 0.x):** pinned upstream, built-in Enki and blocker, verified
    defaults, installer, CI builds and releases.
 2. **Updates:** ✅ signed self-updates (0.2.0). Next: a public security cadence — a release within
-   days of every Chromium security fix — and an update prompt for browsers that stay open.
+   days of every Chromium security fix. ✅ Checks while open and a one-click restart (0.7.1).
 3. **Own Chromium build:** ungoogled-chromium's patch set plus ours — the Enki Browser name and icon
    everywhere, Enki as a component extension without the debugger bar, a Safe Browsing
    replacement, and privacy defaults compiled in.

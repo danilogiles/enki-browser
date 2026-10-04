@@ -34,6 +34,13 @@ static class Launcher
             return 0;
         }
 
+        // From the update notification's twin on the command line: restart into the installed update.
+        if (args.Contains("--enki-restart-to-update"))
+        {
+            Watcher.RequestRestart(root);
+            return 0;
+        }
+
         var flags = new List<string>();
 
         // A file named "portable" next to EnkiBrowser.exe keeps the profile beside the program (a
@@ -69,10 +76,11 @@ static class Launcher
             WorkingDirectory = Path.Combine(appDir, "chromium"),
         });
 
-        // With the browser already up, look for a newer release. This process has no window, so a
-        // slow download never delays anything the user sees.
+        // With the browser already up, stay behind (no window) to keep it up to date while it is
+        // open, so a slow download never delays anything the user sees. See Watcher.cs.
         if (!Updater.Disabled(root))
-            Updater.CheckAndStage(root, appDir, Environment.GetEnvironmentVariable("ENKI_BROWSER_UPDATE_NOW") == "1");
+            Watcher.Run(root, appDir, args.Where(a => a.StartsWith("--") && !a.StartsWith("--enki-")),
+                Environment.GetEnvironmentVariable("ENKI_BROWSER_UPDATE_NOW") == "1");
         return 0;
     }
 }

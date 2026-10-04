@@ -25,7 +25,8 @@ using System.Web.Script.Serialization;
 static class Updater
 {
     const string DefaultFeed = "https://api.github.com/repos/danilogiles/enki-browser/releases?per_page=20";
-    static readonly TimeSpan CheckInterval = TimeSpan.FromHours(20);
+    // Releases are found within a couple of hours; a check is one small request to GitHub.
+    static readonly TimeSpan CheckInterval = TimeSpan.FromHours(2);
 
     static string UpdateDir(string root) { return Path.Combine(root, ".update"); }
 
@@ -46,7 +47,7 @@ static class Updater
     }
 
     /// Looks for a newer signed release and installs it beside this one. `force` skips the
-    /// once-a-day limit.
+    /// CheckInterval limit.
     public static void CheckAndStage(string root, string appDir, bool force)
     {
         bool created;

@@ -41,6 +41,9 @@ build("0.0.1");
 const install = path.join(tmp, "install");
 cpSync(path.join(root, "out", "EnkiBrowser"), install, { recursive: true });
 writeFileSync(path.join(install, "portable"), ""); // profile inside the install: proves it survives
+// A second, untouched 0.0.1 for the update that arrives while the browser is open.
+const live = path.join(tmp, "live");
+cpSync(install, live, { recursive: true });
 // An old version that should be cleaned up: older than both the running and the new one.
 mkdirSync(path.join(install, "app", "0.0.0"), { recursive: true });
 writeFileSync(path.join(install, "app", "0.0.0", "EnkiBrowserLauncher.exe"), "");
@@ -138,6 +141,30 @@ try {
   check("the profile survives the update", existsSync(path.join(install, "User Data", "enki-test-marker")));
   check("the previous version is kept for rollback", has("0.0.1"));
   check("versions older than that are removed", !existsSync(path.join(install, "app", "0.0.0")));
+
+  // While the browser is open: the launcher that started it finds the release, installs it and
+  // offers a restart; the restart reopens every tab in the new version.
+  const liveLog = () => (existsSync(path.join(live, ".update", "update.log")) ? readFileSync(path.join(live, ".update", "update.log"), "utf8") : "");
+  const liveChromes = () => execFileSync("powershell.exe", ["-NoProfile", "-Command",
+    `Get-CimInstance Win32_Process -Filter "name='chrome.exe'" | Where-Object { $_.ExecutablePath -like '${live}\\*' } | ForEach-Object { $_.ExecutablePath }`]).toString().split(/\r?\n/).filter(Boolean);
+  const liveLast = () => liveLog().trim().split("\n").at(-1) ?? "";
+  const inNew = () => { const c = liveChromes(); return c.length > 0 && c.every((p) => p.includes("\\app\\0.0.2\\")); };
+  const liveStub = path.join(live, "EnkiBrowser.exe");
+  spawn(liveStub, ["--remote-debugging-port=9453", `${base}/tab-a`], { env: { ...process.env, ENKI_BROWSER_UPDATE_FEED: genuine, ENKI_BROWSER_UPDATE_NOW: "1" }, stdio: "ignore" });
+  let liveBrowser = await connect(9453);
+  const second = await liveBrowser.contexts()[0].newPage();
+  await second.goto(`${base}/tab-b`).catch(() => undefined);
+  for (let i = 0; i < 240 && !/0\.0\.2 is ready/.test(liveLog()); i++) await sleep(500);
+  check("an update found while the browser is open is installed and offered", /0\.0\.2 is ready; offering to restart/.test(liveLog()) && readFileSync(path.join(live, "current"), "utf8").trim() === "0.0.2", liveLast());
+  await liveBrowser.close().catch(() => undefined); // drop the CDP connection only; the browser stays
+  spawn(liveStub, ["--enki-restart-to-update"], { stdio: "ignore" });
+  for (let i = 0; i < 120 && !inNew(); i++) await sleep(500);
+  check("restart to update reopens the browser in the new version", inNew(), liveLast());
+  liveBrowser = await connect(9453);
+  await sleep(2000);
+  const tabs = (await (await liveBrowser.newBrowserCDPSession()).send("Target.getTargets")).targetInfos.filter((t) => t.type === "page").map((t) => t.url);
+  check("every tab comes back after the restart", tabs.some((u) => u.endsWith("/tab-a")) && tabs.some((u) => u.endsWith("/tab-b")), tabs.join(", "));
+  await closeBrowser(liveBrowser);
 } catch (e) {
   console.log(`ERROR ${e.message}`);
   console.log("--- update.log\n" + log());
