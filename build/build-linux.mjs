@@ -9,7 +9,7 @@
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { addExtensions, extract, fetchPinned, findRoot, hash, out, pkg, rebrand, root, run, step, upstream, versionInfo, writeDefaults } from "./common.mjs";
+import { addExtensions, extract, fetchPinned, findRoot, hash, out, pkg, rebrand, replaceLogos, root, run, step, upstream, versionInfo, writeDefaults } from "./common.mjs";
 
 if (process.platform !== "linux") throw new Error("build-linux.mjs builds the Linux edition and runs on Linux (CI, or Docker).");
 
@@ -34,6 +34,7 @@ const ext = await addExtensions(app);
 
 step("Enki Browser's look and name");
 rebrand(path.join(app, "chromium"));
+await replaceLogos(path.join(app, "chromium"), upstream.chromiumLinux.version, ext.iconDir);
 // The window icon comes from the .desktop entry (matched by WM_CLASS), so Chromium's bundled
 // product logos are replaced too for the places that use them directly.
 mkdirSync(path.join(app, "icons"), { recursive: true });

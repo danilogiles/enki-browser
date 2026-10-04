@@ -110,9 +110,14 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 - **Enki Home** is the new tab: one box that asks Enki — the side panel opens with your request
   already sent, in *Ask* or *Act* mode — or, with Alt+Enter or the globe, searches DuckDuckGo.
   Typing an address just opens it. It speaks Portuguese, Spanish or English, following the browser.
-- **Your system's look:** light or dark, following the operating system like other browsers; Enki Home and the panel follow it too, with Enki's sky as the accent.
+- **A sober look:** neutral grey window chrome, light or dark following the operating system;
+  Enki Home and the panel use the same quiet palette, and the panel lets you pick your own colours.
+  Profiles from 0.3–0.5, which kept the old navy theme, are moved to it once (a backup of
+  `Preferences` is kept next to it).
 - **Its own name and icon:** the window title, About, menus and update messages say Enki Browser
-  in every language, and the taskbar, Alt+Tab and the Linux dock show Enki's icon.
+  in every language, and the taskbar, Alt+Tab and the Linux dock show Enki's icon. The About page
+  shows Enki's logo and Enki Browser's version in front of Chromium's, and keeps crediting the
+  Chromium project and its authors.
 
 ## What is inside
 
@@ -176,8 +181,9 @@ checks what a user would observe, not what the config says:
 - the same canvas drawing reads back differently on each load
 - `chrome://settings/cookies` has third-party cookies blocked
 - the browser does not keep running after its last window closes (so updates can install)
-- a new tab opens Enki Home; the About page and the window title say Enki Browser; the theme is
-  active; `chrome.exe` describes itself as Enki Browser
+- a new tab opens Enki Home; the About page and the window title say Enki Browser; About shows
+  Enki Browser's version, Enki's logo (not Chromium's) and the Chromium credits; no custom theme
+  is active; `chrome.exe` describes itself as Enki Browser
 - Enki Shield has the phishing list; its test address, a real listed domain and a listed page
   all show the warning; another page on the same host does not; *open it anyway* lets the site
   through
@@ -198,7 +204,7 @@ Honest list; each is on the roadmap.
 - **Not code-signed yet**, so SmartScreen warns on install and a behaviour-based antivirus may
   distrust the updater (see [Code signing](#code-signing)).
 - **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line
-  on the About page names ungoogled-chromium. Changing those needs Enki Browser's own Chromium build.
+  on the About page still names ungoogled-chromium after Enki Browser's version. Changing those needs Enki Browser's own Chromium build.
 - **"Enki started debugging this browser" bar** while Enki acts on a page. That is Chromium's
   warning for the debugger API extensions use; a built-in assistant will not need it.
 - **No Chrome Web Store.** As in ungoogled-chromium, extensions install from `.crx` files with a
