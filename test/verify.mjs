@@ -66,9 +66,14 @@ try {
   check("browser starts through the launcher", product.includes(`Chrome/${version.chromium.split(".")[0]}.`), product);
 
   // ---- built-in extensions
-  await new Promise((r) => setTimeout(r, 2500));
-  const targets = (await cdp.send("Target.getTargets")).targetInfos;
-  const extIds = new Set(targets.map((t) => /^chrome-extension:\/\/([a-p]{32})\//.exec(t.url)?.[1]).filter(Boolean));
+  // Poll rather than wait a fixed time: on a slow CI runner the extensions' service workers came
+  // up after a 2.5 s pause, failing this check while every extension later worked.
+  let extIds = new Set();
+  for (let i = 0; i < 40 && !(extIds.has(version.enkiExtensionId) && extIds.size >= 2); i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const targets = (await cdp.send("Target.getTargets")).targetInfos;
+    extIds = new Set(targets.map((t) => /^chrome-extension:\/\/([a-p]{32})\//.exec(t.url)?.[1]).filter(Boolean));
+  }
   check("Enki is loaded with its fixed id", extIds.has(version.enkiExtensionId), [...extIds].join(", "));
   check("the blocker is loaded", extIds.size >= 2, `${extIds.size} extensions running`);
 
