@@ -9,35 +9,43 @@ of Brave and DuckDuckGo. The assistant reads the page you are on and, when you l
 clicks and types for you — with the model *you* choose: Claude, GPT, Gemini, a local Ollama model,
 or free models through OmniRoute.
 
-> **Status: 0.1, early alpha, Windows x64.** It works and is verified end to end (below), but it
-> is young: read [Known gaps](#known-gaps) before making it your main browser.
+> **Status: early alpha, Windows x64 and Linux x64.** It works and is verified end to end (below),
+> but it is young: read [Known gaps](#known-gaps) before making it your main browser.
 
 ## Install
 
-1. Download **`EnkiBrowserSetup-<version>.exe`** from [Releases](https://github.com/danilogiles/enki-browser/releases) and check it against the `.sha256` file next to it.
-2. Run it. No administrator rights are needed: it installs for your user into
-   `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start menu and desktop shortcuts, appears in
-   *Settings → Apps* for uninstalling, and opens Enki Browser when it is done. It also upgrades
-   an install of 0.1–0.4, keeping your profile.
-3. Click the Enki icon in the toolbar (or press `Ctrl+Shift+E`) and choose a model in the panel's
-   Settings.
+Everything is on the [Releases](https://github.com/danilogiles/enki-browser/releases) page; check
+each download against the `.sha256` file next to it. Then click the Enki icon in the toolbar (or
+press `Ctrl+Shift+E`) and choose a model in the panel's Settings — the default, NVIDIA Nemotron,
+needs only a free key.
 
-Silent install: `EnkiBrowserSetup-<version>.exe /S`. Another folder: `/D=<folder>`.
-Uninstall from *Settings → Apps*; it asks whether to keep your browsing data.
+### Windows
 
-**Portable use:** the `EnkiBrowser-<version>-windows-x64.zip` is the same browser, unpacked.
-Extract it anywhere, create an empty file named `portable` next to `EnkiBrowser.exe`, and run
-it; the profile then lives in that folder.
+| How | |
+|---|---|
+| **Installer** | Run `EnkiBrowserSetup-<version>.exe`. No administrator rights: it installs for your user into `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start menu and desktop shortcuts, appears in *Settings → Apps*, and upgrades older installs keeping your profile. Silent: `/S`; another folder: `/D=<folder>`. |
+| **Scoop** | `scoop install https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser.json` — no installer runs; Scoop keeps it updated (`scoop update enki-browser`). |
+| **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too. |
 
 > **Antivirus warnings.** Releases are not yet code-signed (see [Code signing](#code-signing)).
 > Windows SmartScreen will say the app is unrecognised — check the SHA-256, then *More info →
-> Run anyway* — and a behaviour-based antivirus may be suspicious of an unsigned program that
-> downloads and installs updates. One did quarantine 0.2–0.4 mid-update; 0.5 changed how updates
-> are installed because of it (below).
+> Run anyway* — and a behaviour-based antivirus may distrust an unsigned program that starts a
+> browser with extensions and installs updates: Bitdefender quarantined early releases.
+
+### Linux (x86_64)
+
+| How | |
+|---|---|
+| **Ubuntu, Debian** | `sudo apt install ./enki-browser_<version>_amd64.deb` — installs under `/opt` with a menu entry, and sets up the AppArmor profile Ubuntu 23.10+ needs for Chromium's sandbox. Remove with `sudo apt remove enki-browser`. |
+| **Any distro, no root** | Extract `enki-browser-<version>-linux-x64.tar.gz` and run `./enki-browser/install.sh` (into `~/.local`, with a menu entry). On Ubuntu 23.10+, run it once with `--apparmor` (asks for sudo for the sandbox profile). `uninstall.sh` removes it. |
+| **One line** | `curl -fsSL https://raw.githubusercontent.com/danilogiles/enki-browser/main/packaging/linux/get-enki-browser.sh \| bash` — downloads the newest release, checks its SHA-256 and runs `install.sh`. |
+
+Tested on Ubuntu 24.04 and Debian 12.
 
 ## Updates
 
-Enki Browser updates itself. Once a day, after the browser has opened, it looks for a newer
+On Windows, Enki Browser updates itself (on Linux, install the new release the same way you
+installed it; Scoop installs are updated by Scoop). Once a day, after the browser has opened, it looks for a newer
 release and installs it **beside the one you are using**; the next time you start Enki Browser,
 you are on the new version. Your profile, history and Enki settings are untouched.
 
@@ -102,9 +110,9 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 - **Enki Home** is the new tab: one box that asks Enki — the side panel opens with your request
   already sent, in *Ask* or *Act* mode — or, with Alt+Enter or the globe, searches DuckDuckGo.
   Typing an address just opens it. It speaks Portuguese, Spanish or English, following the browser.
-- **Enki's colours** on the whole window: deep navy frame and toolbar, sky accents.
+- **Your system's look:** light or dark, following the operating system like other browsers; Enki Home and the panel follow it too, with Enki's sky as the accent.
 - **Its own name and icon:** the window title, About, menus and update messages say Enki Browser
-  (in all 50 languages), and Windows shows Enki's icon in the taskbar and Alt+Tab.
+  in every language, and the taskbar, Alt+Tab and the Linux dock show Enki's icon.
 
 ## What is inside
 
@@ -195,7 +203,9 @@ Honest list; each is on the roadmap.
   warning for the debugger API extensions use; a built-in assistant will not need it.
 - **No Chrome Web Store.** As in ungoogled-chromium, extensions install from `.crx` files with a
   confirmation prompt. See [chromium-web-store](https://github.com/NeverDecaf/chromium-web-store).
-- **Windows only**, x64.
+- **No automatic updates on Linux yet**: install each new release with the `.deb`, `install.sh` or
+  the one-line installer. No macOS build (it needs an Apple Developer account to notarise).
+- **x86_64 only.**
 
 ## Roadmap
 
@@ -209,7 +219,7 @@ Honest list; each is on the roadmap.
 4. **An assistant built to resist prompt injection:** the model that reads pages gets no tools, the
    agent needs per-site permission on sites you are logged in to, and every release must pass a
    public corpus of injection attacks.
-5. **macOS and Linux**, with the community.
+5. **macOS**, Linux auto-updates and ARM builds, with the community.
 
 ## Contributing
 

@@ -1,0 +1,11 @@
+# Ubuntu 23.10+ refuses unprivileged user namespaces to programs without a profile, and
+# Chromium's sandbox needs them. This grants exactly that to Enki Browser's Chromium and nothing
+# else (it stays unconfined otherwise), the same way Ubuntu ships profiles for other browsers.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile enki-browser @CHROME@ flags=(unconfined) {
+  userns,
+
+  include if exists <local/enki-browser>
+}
