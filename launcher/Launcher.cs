@@ -44,6 +44,7 @@ static class Launcher
         if (string.IsNullOrEmpty(userData))
             userData = portable ? Path.Combine(root, "User Data") : Path.Combine(Install.DataDir, "User Data");
         flags.Add("--user-data-dir=" + userData);
+        Migration.Run(userData, root);
         if (portable)
         {
             flags.Add("--disable-encryption");

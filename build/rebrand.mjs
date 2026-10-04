@@ -57,20 +57,49 @@ const COMPRESSED = (d) => (d[0] === 0x1e && d[1] === 0x9b) || (d[0] === 0x1f && 
 
 /**
  * "Chromium" as the product's name, not as part of an address, file name or identifier:
- * chromium.org, Chromium/…, Chromium_… and "Chromium OS" (a different product) stay as they are.
+ * chromium.org, Chromium/…, Chromium_… and "Chromium OS" (a different product) stay as they are,
+ * and so does the linked project name in "made possible by the <a>Chromium</a> open source
+ * project" — that sentence credits the project Enki Browser is built from.
  */
-const PRODUCT = /(?<![\w./-])Chromium(?![\w/-]|\.\w| OS\b)/g;
+const PRODUCT = /(?<![\w./>-])Chromium(?![\w/-]|\.\w| OS\b|<\/a>)/g;
+
+/**
+ * Strings that credit the Chromium project rather than name the product, found by their English
+ * text and left alone in every language (resource ids are the same across a build's locales):
+ * "The Chromium Authors", the copyright line, and "…the Chromium open source project".
+ */
+const CREDITS = /Chromium Authors|Chromium open source project/;
+
+/**
+ * The About page's version line, "Version 154.0… (Official Build, …) (64-bit)": Enki Browser's own
+ * version goes in front of Chromium's. Matched by its five placeholders, which no other string
+ * has; a plain "Version $1" is used elsewhere and is left alone.
+ */
+const VERSION_LINE = /^Version \$1\$2 +\(\$3\) \$4 \$5$/;
+
+/** Ids to skip and the About version line's id, read from a build's en-US locale. */
+export function localeIds(localesDir) {
+  const pak = readPak(readFileSync(path.join(localesDir, "en-US.pak")));
+  const credits = new Set();
+  let version = null;
+  for (const r of pak.resources) {
+    const text = r.data.toString("utf8");
+    if (CREDITS.test(text)) credits.add(r.id);
+    if (VERSION_LINE.test(text)) version = r.id;
+  }
+  return { credits, version };
+}
 
 /** Rewrites one locale pak in place. Returns how many strings changed. */
-export function rebrandPak(file, name) {
+export function rebrandPak(file, name, { credits = new Set(), version = null, productVersion = null } = {}) {
   const pak = readPak(readFileSync(file));
   if (pak.encoding !== 1) return 0; // locale paks are UTF-8; anything else is not ours to edit
   let changed = 0;
   for (const r of pak.resources) {
-    if (r.data.length < 8 || COMPRESSED(r.data)) continue;
+    if (r.data.length < 8 || COMPRESSED(r.data) || credits.has(r.id)) continue;
     const text = r.data.toString("utf8");
-    if (!text.includes("Chromium")) continue;
-    const next = text.replace(PRODUCT, name);
+    let next = text.includes("Chromium") ? text.replace(PRODUCT, name) : text;
+    if (productVersion && r.id === version && text.includes("$1")) next = `${name} ${productVersion} · ${next}`;
     if (next !== text) {
       r.data = Buffer.from(next, "utf8");
       changed++;
@@ -80,10 +109,12 @@ export function rebrandPak(file, name) {
   return changed;
 }
 
-export function rebrandLocales(localesDir, name) {
+export function rebrandLocales(localesDir, name, productVersion = null) {
+  const ids = localeIds(localesDir);
+  if (productVersion && ids.version === null) throw new Error("the About page's version line was not found in en-US.pak");
   const report = {};
   for (const f of readdirSync(localesDir).filter((f) => f.endsWith(".pak"))) {
-    report[f] = rebrandPak(path.join(localesDir, f), name);
+    report[f] = rebrandPak(path.join(localesDir, f), name, { ...ids, productVersion });
   }
   return report;
 }

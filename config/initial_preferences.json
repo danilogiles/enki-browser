@@ -10,7 +10,10 @@
     "suppress_first_run_default_browser_prompt": true
   },
   "browser": {
-    "check_default_browser": false
+    "check_default_browser": false,
+    "theme": {
+      "is_grayscale2": true
+    }
   },
   "https_only_mode_enabled": true,
   "enable_do_not_track": true,

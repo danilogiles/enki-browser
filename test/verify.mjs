@@ -6,7 +6,7 @@
 //   ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6 ...       also run one Act task through a local OmniRoute
 //   ENKI_NO_SANDBOX=1 ...                              containers without user namespaces only
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -197,7 +197,19 @@ try {
     return walk(document.body).replace(/\s+/g, " ");
   }));
   const about = await deepText("chrome://settings/help");
-  check("the About page names Enki Browser, not Chromium", /Enki Browser/.test(about) && !/\bChromium\b(?!\.)/.test(about.replace(/ungoogled-chromium/gi, "")), about.match(/[^.]{0,40}Enki Browser[^.]{0,40}/)?.[0]?.trim() ?? "");
+  // The credits keep Chromium's name on purpose ("The Chromium Authors", "made possible by the
+  // Chromium open source project"); anywhere else the product must be Enki Browser.
+  const credits = /The Chromium Authors|Chromium open source project/g;
+  check("the About page names Enki Browser, not Chromium", /Enki Browser/.test(about) && !/\bChromium\b(?!\.)/.test(about.replace(/ungoogled-chromium/gi, "").replace(credits, "")), about.match(/[^.]{0,40}Enki Browser[^.]{0,40}/)?.[0]?.trim() ?? "");
+  const chromiumVersion = version.chromium.split("-")[0];
+  const versionLine = about.match(/Enki Browser \S+ · Version [^)]*\)/)?.[0] ?? "";
+  check("the About page shows Enki Browser's version", versionLine.startsWith(`Enki Browser ${version.enkiBrowser} · Version ${chromiumVersion}`), versionLine || about.match(/.{0,60}Version.{0,60}/)?.[0] || "no version line");
+  check("the About page credits the Chromium project", /The Chromium Authors/.test(about) && /Chromium open source project/.test(about));
+  // The logo the About page shows, compared with Chromium's own at the same version.
+  const logo = await page.goto("chrome://theme/current-channel-logo@2x").then((r) => r.body()).catch(() => null);
+  const refs = path.join(root, "cache", `chromium-logos-${chromiumVersion}`);
+  const isChromiums = !!logo && existsSync(refs) && readdirSync(refs).some((f) => readFileSync(path.join(refs, f)).equals(logo));
+  check("the About page shows Enki's logo, not Chromium's", !!logo && logo.length > 100 && !isChromiums, logo ? `${logo.length} bytes` : "no logo");
   // Read the Theme row itself: the page's side menu also says "About Enki Browser", which would
   // satisfy a search of the whole page without proving anything about the theme.
   await page.goto("chrome://settings/appearance");

@@ -5,7 +5,8 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { rebrandLocales } from "./rebrand.mjs";
+import sharp from "sharp";
+import { readPak, rebrandLocales, writePak } from "./rebrand.mjs";
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const upstream = JSON.parse(readFileSync(path.join(root, "upstream.json"), "utf8"));
@@ -139,10 +140,68 @@ export async function addExtensions(app) {
   return { enkiId: enki.id, enkiVersion: enki.manifest.version, shieldId: shield.id, iconDir };
 }
 
-/** "Chromium" becomes "Enki Browser" across the UI, in every language. */
+/**
+ * "Chromium" becomes "Enki Browser" across the UI, in every language, except where a string
+ * credits the Chromium project; the About page's version line leads with Enki Browser's version.
+ */
 export function rebrand(chromiumDir) {
-  const counts = Object.values(rebrandLocales(path.join(chromiumDir, "locales"), "Enki Browser"));
+  const counts = Object.values(rebrandLocales(path.join(chromiumDir, "locales"), "Enki Browser", pkg.version));
   console.log(`  renamed Chromium → Enki Browser in ${counts.reduce((a, b) => a + b, 0)} strings across ${counts.length} languages`);
+}
+
+/** Chromium's logo as it sits in its source tree; the build finds these exact files in the paks. */
+const CHROMIUM_LOGOS = [
+  "default_100_percent/chromium/product_logo_16.png", "default_100_percent/chromium/product_logo_32.png",
+  "default_100_percent/chromium/product_logo_name_22.png", "default_200_percent/chromium/product_logo_16.png",
+  "default_200_percent/chromium/product_logo_32.png", "default_200_percent/chromium/product_logo_name_22.png",
+  "chromium/product_logo_16.png", "chromium/product_logo_24.png", "chromium/product_logo_32.png",
+  "chromium/product_logo_48.png", "chromium/product_logo_64.png", "chromium/product_logo_128.png",
+  "chromium/product_logo_256.png",
+];
+
+/**
+ * Replaces Chromium's logo inside the resource paks (the About page, the profile menu and other
+ * WebUI) with Enki's, at the same pixel size. The logo images are identified by being byte-for-byte
+ * the PNGs in Chromium's source at this exact version — never guessed from size or position.
+ */
+export async function replaceLogos(chromiumDir, chromiumVersion, iconDir) {
+  const tag = chromiumVersion.replace(/-.*$/, "");
+  const dir = path.join(cache, `chromium-logos-${tag}`);
+  mkdirSync(dir, { recursive: true });
+  const known = new Set();
+  for (const rel of CHROMIUM_LOGOS) {
+    const file = path.join(dir, rel.replaceAll("/", "_"));
+    if (!existsSync(file)) {
+      const res = await fetch(`https://raw.githubusercontent.com/chromium/chromium/${tag}/chrome/app/theme/${rel}`);
+      if (!res.ok) continue; // not every file exists in every version
+      writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+    }
+    known.add(hash(file));
+  }
+  const source = readFileSync(path.join(iconDir, "icon256.png"));
+  let replaced = 0;
+  for (const name of ["chrome_100_percent.pak", "chrome_200_percent.pak", "resources.pak"]) {
+    const file = path.join(chromiumDir, name);
+    if (!existsSync(file)) continue;
+    const pak = readPak(readFileSync(file));
+    let changed = false;
+    for (const r of pak.resources) {
+      if (r.data[0] !== 0x89 || r.data[1] !== 0x50) continue; // PNG only
+      if (!known.has(createHash("sha256").update(r.data).digest("hex"))) continue;
+      const width = r.data.readUInt32BE(16), height = r.data.readUInt32BE(20);
+      // Square logos are the mark; the wide ones (logo + name) get the mark on the left.
+      const mark = await sharp(source).resize(height, height, { kernel: "lanczos3" }).png().toBuffer();
+      r.data = width === height ? mark : await sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+        .composite([{ input: mark, left: 0, top: 0 }]).png().toBuffer();
+      replaced++;
+      changed = true;
+    }
+    if (changed) writeFileSync(file, writePak(pak));
+  }
+  // The About page is where people look for whose browser this is; failing loudly beats shipping
+  // Chromium's logo because a path moved upstream.
+  if (replaced < 6) throw new Error(`replaced only ${replaced} Chromium logo images; expected the About page's and others`);
+  console.log(`  replaced Chromium's logo with Enki's in ${replaced} images`);
 }
 
 /** First-run defaults (read from next to the Chromium binary) and the launcher's switches. */
