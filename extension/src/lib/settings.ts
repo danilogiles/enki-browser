@@ -1,3 +1,5 @@
+import type { CustomTheme } from "./theme";
+
 export type ProviderKind = "anthropic" | "openai-compatible";
 
 export type PresetId =
@@ -179,7 +181,7 @@ export const PRESETS: Preset[] = [
   },
 ];
 
-export type ThemeId = "system" | "dark" | "light" | "navy" | "midnight" | "nord" | "cyberpunk";
+export type ThemeId = "system" | "dark" | "light" | "navy" | "midnight" | "nord" | "cyberpunk" | "custom";
 
 export type ThemeOption = {
   id: ThemeId;
@@ -189,8 +191,8 @@ export type ThemeOption = {
 
 export const THEMES: ThemeOption[] = [
   { id: "system", label: "System (default)", description: "Light or dark, following your operating system, like the browser around it." },
-  { id: "dark", label: "Dark", description: "Neutral dark greys with Enki's sky accent." },
-  { id: "light", label: "Light", description: "White and light greys with Enki's sky accent." },
+  { id: "dark", label: "Dark", description: "Sober near-black with Enki's sky accent." },
+  { id: "light", label: "Light", description: "Off-white and soft greys with Enki's sky accent." },
   { id: "navy", label: "Enki Navy", description: "The original look: sky accents on navy." },
   { id: "midnight", label: "Midnight (OLED)", description: "True black with indigo accents and high contrast for OLED screens." },
   { id: "nord", label: "Nord Frost", description: "Soft nordic palette in arctic blues." },
@@ -203,6 +205,12 @@ export type Settings = {
   baseUrl: string;
   model: string;
   theme: ThemeId;
+  /** Colours for the "custom" theme (see lib/theme.ts). */
+  customTheme?: CustomTheme;
+  /** Show the steps of a task (collapsed behind an arrow). Off hides them entirely. */
+  showSteps: boolean;
+  /** Show the outcome and counts after a reply (collapsed). Off hides them entirely. */
+  showRunDetails: boolean;
   /** Skip the confirmation card for sensitive actions (send, buy, delete...). */
   autoApprove: boolean;
   /** The model accepts images. When false, no screenshots are sent and the screenshot tool is hidden. */
@@ -238,6 +246,8 @@ export const DEFAULT_SETTINGS: Settings = {
   baseUrl: presetOf("nvidia").baseUrl,
   model: presetOf("nvidia").defaultModel,
   theme: "system",
+  showSteps: true,
+  showRunDetails: true,
   autoApprove: false,
   // Follows the default preset: Nemotron reads text only.
   vision: !presetOf("nvidia").noVision,

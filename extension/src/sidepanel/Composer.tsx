@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, SendHorizontal, Square } from "lucide-react";
+import { ArrowUp, Camera, CameraOff, Monitor, Search, Settings as SettingsIcon, Square } from "lucide-react";
 import type { Mode } from "../lib/agent/prompt";
 
+/**
+ * The request box, in the shape of Comet's: the text on top, and one quiet row underneath with the
+ * mode (Ask reads the page, Act drives it) on the left and settings and send on the right.
+ */
 type Props = {
   disabled: boolean;
   running: boolean;
@@ -11,10 +15,11 @@ type Props = {
   vision: boolean;
   onToggleScreenshot: () => void;
   mode: Mode;
-  usage: { input: number; output: number };
+  onMode: (m: Mode) => void;
+  onSettings: () => void;
 };
 
-export function Composer({ disabled, running, onSend, onStop, attachScreenshot, vision, onToggleScreenshot, mode, usage }: Props) {
+export function Composer({ disabled, running, onSend, onStop, attachScreenshot, vision, onToggleScreenshot, mode, onMode, onSettings }: Props) {
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -22,7 +27,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
     const el = ref.current;
     if (!el) return;
     el.style.height = "0px";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    el.style.height = Math.min(Math.max(el.scrollHeight, 44), 180) + "px";
   }, [value]);
 
   const submit = () => {
@@ -31,15 +36,29 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
     setValue("");
   };
 
+  const modeButton = (m: Mode, icon: React.ReactNode, title: string) => (
+    <button
+      type="button"
+      disabled={running}
+      onClick={() => onMode(m)}
+      title={title}
+      aria-pressed={mode === m}
+      className={`rounded-md p-1.5 transition disabled:opacity-50 ${mode === m ? "bg-ink-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-200"}`}
+    >
+      {icon}
+    </button>
+  );
+
   return (
-    <div className="border-t border-ink-700 px-3 pb-3 pt-2">
-      <div className="flex items-end gap-2 rounded-xl border border-ink-700 bg-ink-900 px-3 py-2 focus-within:border-enki-500/60">
+    <div className="px-3 pb-3 pt-1">
+      <div className="rounded-2xl border border-ink-700 bg-ink-900 px-3 pb-2 pt-2.5 transition focus-within:border-zinc-500/60">
         <textarea
           ref={ref}
           rows={1}
           value={value}
           disabled={disabled}
-          placeholder={mode === "ask" ? "Ask about this page…" : "What should I do on this page?"}
+          placeholder={mode === "ask" ? "Ask anything…" : "Tell Enki what to do…"}
+          aria-label="Message Enki"
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -47,56 +66,45 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
               submit();
             }
           }}
-          className="max-h-40 flex-1 resize-none bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500 disabled:opacity-50"
+          className="block max-h-44 w-full resize-none bg-transparent text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-500 disabled:opacity-50"
         />
-        <button
-          type="button"
-          onClick={onToggleScreenshot}
-          disabled={!vision}
-          title={
-            !vision
-              ? "This model does not accept images (change in Settings)"
-              : attachScreenshot
-                ? "Screenshot attached to each message (click to turn off)"
-                : "Screenshot off (click to attach)"
-          }
-          className={`rounded-md p-1.5 transition disabled:opacity-30 ${attachScreenshot ? "text-enki-400 hover:bg-ink-800" : "text-zinc-500 hover:bg-ink-800 hover:text-zinc-300"}`}
-        >
-          {attachScreenshot ? <Camera size={16} /> : <CameraOff size={16} />}
-        </button>
-        {running ? (
+        <div className="mt-1.5 flex items-center gap-1">
+          <div className="flex rounded-lg bg-ink-950/60 p-0.5">
+            {modeButton("ask", <Search size={15} />, "Ask: Enki reads the page and answers")}
+            {modeButton("act", <Monitor size={15} />, "Act: Enki can navigate, click and type")}
+          </div>
+          {vision && (
+            <button
+              type="button"
+              onClick={onToggleScreenshot}
+              title={attachScreenshot ? "Screenshot attached to each message (click to turn off)" : "Screenshot off (click to attach)"}
+              className={`rounded-md p-1.5 transition ${attachScreenshot ? "text-zinc-200 hover:bg-ink-800" : "text-zinc-500 hover:bg-ink-800 hover:text-zinc-300"}`}
+            >
+              {attachScreenshot ? <Camera size={15} /> : <CameraOff size={15} />}
+            </button>
+          )}
           <button
             type="button"
-            onClick={onStop}
-            title="Stop"
-            className="rounded-md bg-red-500/20 p-1.5 text-red-300 transition hover:bg-red-500/30"
+            onClick={onSettings}
+            title="Settings"
+            aria-label="Settings"
+            className="ml-auto rounded-md p-1.5 text-zinc-500 transition hover:bg-ink-800 hover:text-zinc-200"
           >
-            <Square size={16} />
+            <SettingsIcon size={15} />
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={submit}
-            disabled={disabled || !value.trim()}
-            title="Send (Enter)"
-            className="rounded-md bg-enki-500 p-1.5 text-ink-950 transition hover:bg-enki-400 disabled:opacity-40"
-          >
-            <SendHorizontal size={16} />
-          </button>
-        )}
-      </div>
-      <div className="mt-1 flex justify-between px-1 text-[10px] text-zinc-600">
-        <span>{mode === "act" ? "Act mode: Enki can click and type. Sensitive actions ask first." : "Ask mode: read-only."}</span>
-        {usage.input + usage.output > 0 && (
-          <span title="Tokens this conversation (in / out)">
-            {fmt(usage.input)} / {fmt(usage.output)} tok
-          </span>
-        )}
+          {running ? (
+            <button type="button" onClick={onStop} title="Stop" aria-label="Stop"
+              className="rounded-full bg-zinc-100 p-1.5 text-ink-950 transition hover:bg-zinc-300">
+              <Square size={14} fill="currentColor" />
+            </button>
+          ) : (
+            <button type="button" onClick={submit} disabled={disabled || !value.trim()} title="Send (Enter)" aria-label="Send"
+              className="rounded-full bg-zinc-100 p-1.5 text-ink-950 transition hover:bg-zinc-300 disabled:bg-ink-800 disabled:text-zinc-500">
+              <ArrowUp size={15} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
-}
-
-function fmt(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }

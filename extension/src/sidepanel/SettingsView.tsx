@@ -15,6 +15,7 @@ import { PRESETS, presetOf, THEMES, usesTextTools, type PresetId, type Settings 
 import { createProvider } from "../lib/providers";
 import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
+import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 
 type Props = {
   settings: Settings;
@@ -106,7 +107,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
 
   /** Themes preview live, so leaving without saving must put the saved theme back. */
   const close = () => {
-    document.documentElement.setAttribute("data-theme", settings.theme || "system");
+    applyTheme(document.documentElement, settings.theme || "system", settings.customTheme);
     onClose();
   };
 
@@ -296,7 +297,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                     type="button"
                     onClick={() => {
                       set("theme", t.id);
-                      document.documentElement.setAttribute("data-theme", t.id);
+                      applyTheme(document.documentElement, t.id, draft.customTheme);
                     }}
                     className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${
                       selected
@@ -317,6 +318,14 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                   </button>
                 );
               })}
+              <CustomColors
+                selected={draft.theme === "custom"}
+                value={draft.customTheme ?? DEFAULT_CUSTOM_THEME}
+                onChange={(c) => {
+                  setDraft((d) => ({ ...d, theme: "custom", customTheme: c }));
+                  applyTheme(document.documentElement, "custom", c);
+                }}
+              />
             </div>
           </Section>
         )}
@@ -324,8 +333,12 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
         {/* TAB 3: BEHAVIOR & INSTRUCTIONS */}
         {activeTab === "behavior" && (
           <>
+            <Section title="Chat">
+              <Toggle label="Show task steps" hint="What Enki did to answer (reading, clicking, typing), folded behind an arrow under each reply. Off hides them entirely; a sensitive action still asks for approval." checked={draft.showSteps !== false} onChange={(v) => set("showSteps", v)} />
+              <Toggle label="Show reply details" hint="The outcome after each reply (done, steps that failed, notices), folded behind an arrow. Off hides it; errors are always shown." checked={draft.showRunDetails !== false} onChange={(v) => set("showRunDetails", v)} />
+            </Section>
             <Section title="Browsing Behavior">
-              <Toggle label="Save conversations on this device" hint="Restores the latest conversation after closing Chrome. Screenshots and reasoning are not saved. Turning off removes the saved copy." checked={draft.saveConversations} onChange={(v) => set("saveConversations", v)} />
+              <Toggle label="Save conversations on this device" hint="Keeps your chats on this device, listed under ⋯ in the panel. Screenshots and reasoning are not saved. Turning off removes every saved chat." checked={draft.saveConversations} onChange={(v) => set("saveConversations", v)} />
               <label htmlFor="context-budget" className="block text-xs text-zinc-400">Input context budget (estimated tokens)</label>
               <input id="context-budget" type="number" min={6000} max={200000} step={1000} value={draft.contextBudgetTokens} onChange={(e) => set("contextBudgetTokens", Math.max(6000, Math.min(200000, Number(e.target.value) || 24000)))} className={inputCls} />
               <p className="text-xs text-zinc-400">Older exchanges are summarized locally. Tool calls stay paired with results. Leave room for the model's response within its context limit.</p>
@@ -511,5 +524,47 @@ function Toggle({
         {hint && <span className="block text-xs text-zinc-500">{hint}</span>}
       </span>
     </label>
+  );
+}
+
+/**
+ * "Your colors": four colours, from which lib/theme.ts derives every other token. The preview
+ * is the panel itself (it repaints as you pick), and a warning appears when the text would be hard
+ * to read on the background — WCAG's 4.5:1 for body text.
+ */
+function CustomColors({ selected, value, onChange }: { selected: boolean; value: CustomTheme; onChange: (c: CustomTheme) => void }) {
+  const fields: Array<[keyof CustomTheme, string]> = [
+    ["background", "Background"],
+    ["surface", "Cards and inputs"],
+    ["text", "Text"],
+    ["accent", "Accent"],
+  ];
+  const readable = contrast(value.text, value.background) >= 4.5;
+  return (
+    <div className={`rounded-xl border p-3 transition ${selected ? "border-enki-500 bg-enki-500/10 ring-1 ring-enki-500/30" : "border-ink-700 bg-ink-900/60"}`}>
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-zinc-100">Your colors</span>
+        {selected && <Check size={14} className="text-enki-400" />}
+      </div>
+      <p className="mt-0.5 text-xs text-zinc-400">Pick four colours; Enki works out the rest. Changes preview right away — press Save to keep them.</p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {fields.map(([key, label]) => (
+          <label key={key} className="flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-950/40 px-2 py-1.5 text-xs text-zinc-300">
+            <input
+              type="color"
+              aria-label={label}
+              value={value[key]}
+              onChange={(e) => onChange({ ...value, [key]: e.target.value })}
+              className="h-6 w-6 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
+            />
+            <span className="min-w-0 truncate">{label}</span>
+          </label>
+        ))}
+      </div>
+      {!readable && <p className="mt-2 text-xs text-amber-300">Text and background are too close to read comfortably. Pick a lighter or darker text colour.</p>}
+      <button type="button" onClick={() => onChange(DEFAULT_CUSTOM_THEME)} className="mt-2 text-xs text-zinc-400 underline hover:text-zinc-200">
+        {selected ? "Reset to the sober dark start" : "Use your own colors"}
+      </button>
+    </div>
   );
 }

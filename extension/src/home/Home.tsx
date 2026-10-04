@@ -3,6 +3,7 @@ import { ArrowUp, Globe, MessageCircle, MousePointerClick, ShieldCheck } from "l
 import logo from "../assets/logo.svg";
 import { putHandoff } from "../lib/handoff";
 import { loadSettings, presetOf, type Settings } from "../lib/settings";
+import { customTokens, luminance } from "../lib/theme";
 
 /**
  * Enki Home: the new tab page of Enki Browser. One box that either asks Enki — the side panel
@@ -103,7 +104,7 @@ export function Home() {
     document.title = t.tab;
     document.documentElement.lang = lang;
     void chrome.windows.getCurrent().then((w) => { windowId.current = w.id; });
-    void loadSettings().then(setSettings);
+    void loadSettings().then((s) => { setSettings(s); applyHomeTheme(s); });
     void chrome.storage.local.get("enki:mode").then((s) => { if (s["enki:mode"] === "act") setMode("act"); });
   }, []);
 
@@ -246,4 +247,25 @@ export function Home() {
       </footer>
     </div>
   );
+}
+
+/**
+ * Enki Home wears the panel's theme: Light and Dark are forced, the custom colours map onto the
+ * page's variables, and everything else (System, and the dark named themes) follows the OS.
+ */
+function applyHomeTheme(s: Settings) {
+  const root = document.documentElement;
+  const theme = s.theme === "light" ? "light" : ["dark", "navy", "midnight", "nord", "cyberpunk"].includes(s.theme) ? "dark" : "system";
+  root.setAttribute("data-theme", theme);
+  if (s.theme === "custom" && s.customTheme) {
+    const t = customTokens(s.customTheme);
+    const dark = luminance(s.customTheme.background) < 0.4;
+    const vars: Record<string, string> = {
+      "--page": s.customTheme.background, "--text": s.customTheme.text, "--muted": t["--zinc-400"],
+      "--accent": s.customTheme.accent, "--on-accent": dark ? "#0b1220" : "#ffffff",
+      "--overlay": dark ? "#ffffff" : "#000000", "--glow": "transparent",
+    };
+    for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
+    root.style.colorScheme = dark ? "dark" : "light";
+  }
 }

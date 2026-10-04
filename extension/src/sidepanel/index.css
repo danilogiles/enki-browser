@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-:is(button, summary, input, select, textarea):focus-visible {
+/* Text areas sit inside cards that light up on focus-within; an inner ring would double it. */
+:is(button, summary, input, select):focus-visible {
   outline: 2px solid var(--color-enki-400);
   outline-offset: 2px;
 }
@@ -33,7 +34,7 @@
 }
 
 /*
- * Dark and Light are neutral greys, like the browser around the panel, with Enki's sky as the only
+ * Dark and Light are sober neutrals — near-black and off-white, as in Comet — with Enki's sky as the only
  * accent. The default is System, which picks between them from the OS — so does a fresh panel
  * before settings load (no data-theme yet). Enki's navy lives on as an optional theme.
  */
@@ -42,20 +43,20 @@
   --enki-400: #38bdf8;
   --enki-500: #0ea5e9;
   --enki-600: #0284c7;
-  --ink-950: #1f1f1f;
-  --ink-900: #2a2b2d;
-  --ink-800: #35363a;
-  --ink-700: #4a4c50;
+  --ink-950: #191a1a;
+  --ink-900: #202222;
+  --ink-800: #2a2c2c;
+  --ink-700: #3a3c3c;
 
-  --zinc-100: #e8eaed;
-  --zinc-200: #dadce0;
-  --zinc-300: #bdc1c6;
-  --zinc-400: #9aa0a6;
-  --zinc-500: #80868b;
-  --zinc-600: #5f6368;
+  --zinc-100: #e8e8e6;
+  --zinc-200: #d6d6d3;
+  --zinc-300: #b7b8b5;
+  --zinc-400: #8f918e;
+  --zinc-500: #82837f;
+  --zinc-600: #565856;
 
-  --app-bg: #1f1f1f;
-  --app-text: #e8eaed;
+  --app-bg: #191a1a;
+  --app-text: #e8e8e6;
 }
 
 [data-theme="light"],
@@ -64,20 +65,20 @@
   --enki-400: #0284c7;
   --enki-500: #0369a1;
   --enki-600: #075985;
-  --ink-950: #ffffff;
-  --ink-900: #f4f6f8;
-  --ink-800: #e9edf1;
-  --ink-700: #d3d9df;
+  --ink-950: #fcfcf9;
+  --ink-900: #f3f3ee;
+  --ink-800: #e9e9e3;
+  --ink-700: #d8d8d1;
 
-  --zinc-100: #1f1f1f;
-  --zinc-200: #303134;
-  --zinc-300: #3c4043;
-  --zinc-400: #5f6368;
-  --zinc-500: #80868b;
-  --zinc-600: #9aa0a6;
+  --zinc-100: #1b1c1b;
+  --zinc-200: #2c2d2b;
+  --zinc-300: #3d3e3c;
+  --zinc-400: #61625f;
+  --zinc-500: #82837f;
+  --zinc-600: #a3a49f;
 
-  --app-bg: #ffffff;
-  --app-text: #1f1f1f;
+  --app-bg: #fcfcf9;
+  --app-text: #1b1c1b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -87,20 +88,20 @@
     --enki-400: #38bdf8;
     --enki-500: #0ea5e9;
     --enki-600: #0284c7;
-    --ink-950: #1f1f1f;
-    --ink-900: #2a2b2d;
-    --ink-800: #35363a;
-    --ink-700: #4a4c50;
+    --ink-950: #191a1a;
+    --ink-900: #202222;
+    --ink-800: #2a2c2c;
+    --ink-700: #3a3c3c;
 
-    --zinc-100: #e8eaed;
-    --zinc-200: #dadce0;
-    --zinc-300: #bdc1c6;
-    --zinc-400: #9aa0a6;
-    --zinc-500: #80868b;
-    --zinc-600: #5f6368;
+    --zinc-100: #e8e8e6;
+    --zinc-200: #d6d6d3;
+    --zinc-300: #b7b8b5;
+    --zinc-400: #8f918e;
+    --zinc-500: #82837f;
+    --zinc-600: #565856;
 
-    --app-bg: #1f1f1f;
-    --app-text: #e8eaed;
+    --app-bg: #191a1a;
+    --app-text: #e8e8e6;
   }
 }
 
@@ -111,20 +112,20 @@
     --enki-400: #0284c7;
     --enki-500: #0369a1;
     --enki-600: #075985;
-    --ink-950: #ffffff;
-    --ink-900: #f4f6f8;
-    --ink-800: #e9edf1;
-    --ink-700: #d3d9df;
+    --ink-950: #fcfcf9;
+    --ink-900: #f3f3ee;
+    --ink-800: #e9e9e3;
+    --ink-700: #d8d8d1;
 
-    --zinc-100: #1f1f1f;
-    --zinc-200: #303134;
-    --zinc-300: #3c4043;
-    --zinc-400: #5f6368;
-    --zinc-500: #80868b;
-    --zinc-600: #9aa0a6;
+    --zinc-100: #1b1c1b;
+    --zinc-200: #2c2d2b;
+    --zinc-300: #3d3e3c;
+    --zinc-400: #61625f;
+    --zinc-500: #82837f;
+    --zinc-600: #a3a49f;
 
-    --app-bg: #ffffff;
-    --app-text: #1f1f1f;
+    --app-bg: #fcfcf9;
+    --app-text: #1b1c1b;
   }
 }
 

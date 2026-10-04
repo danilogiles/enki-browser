@@ -32,6 +32,8 @@ try {
     await panel.waitForTimeout(200);
   };
   const idle = () => panel.waitForFunction(() => !document.querySelector("button[title='Stop']"), null, { timeout: 20000 });
+  // New chat lives in the "more" (⋯) menu now.
+  const newChat = async () => { await panel.click("button[title='More']"); await panel.click("button[title='New chat']"); };
   const send = async (text) => {
     await panel.fill("textarea", text); await panel.press("textarea", "Enter");
     await panel.waitForFunction((text) => document.body.innerText.includes(text), text);
@@ -45,14 +47,14 @@ try {
   await panel.waitForSelector("textarea");
   check("conversation restored after panel reload", (await panel.textContent("body")).includes("remember this quality test"));
   check("restored conversation does not resume automatically", await panel.locator("button[title='Stop']").count() === 0);
-  await panel.click("button:has-text('Continue safely')");
+  await panel.click("button[title='More']"); await panel.click("button:has-text('Continue safely')");
   await panel.waitForTimeout(300); await idle();
   check("Continue explicitly reads the page first", (await panel.textContent("body")).includes("Read page (interactive)"));
 
-  await panel.click("button[title='New chat']");
+  await newChat();
   await configure("mock-lock");
   await panel.reload(); await panel.waitForSelector("textarea");
-  await panel.selectOption("#controlled-tab", String(target.tab));
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(target.tab)); await panel.keyboard.press("Escape");
   await panel.fill("textarea", "test tab lock"); await panel.press("textarea", "Enter");
   await panel.waitForSelector("button[title='Stop']");
   await panel.waitForFunction(() => /Waiting for|Preparing page|Connected|Model responding/.test(document.body.innerText));
@@ -64,19 +66,19 @@ try {
   })), [target.tab, other]);
   check("switching active tabs cannot redirect task input", values[0] === "locked target" && values[1] === "");
 
-  await panel.click("button[title='New chat']");
+  await newChat();
   await configure("mock-failure");
   await send("test repeated failures");
   check("repeated failure guard stops visibly", (await panel.textContent("body")).includes("same action failed three times"));
   check("completion summary reports failures", (await panel.textContent("body")).includes("3 failed"));
 
   await configure("mock-echo", "ask", { favoriteModels: ["mock-echo", "mock-reader"], askModel: "mock-echo", actModel: "mock-reader" });
-  await panel.click("summary:has-text('Quick model switch')");
+  await panel.click("button[title^='Model:']");
   await panel.fill("#model-search", "reader");
   await panel.click("button[title='mock-reader']");
   await panel.waitForTimeout(200);
   check("favorite model can be searched and selected", await panel.evaluate(async () => (await chrome.storage.local.get("enki:settings"))["enki:settings"].model) === "mock-reader");
-  await panel.click("button:has-text('Ask')"); await panel.waitForTimeout(200);
+  await panel.click("button[title^='Ask:']"); await panel.waitForTimeout(200);
   check("mode switch chooses preferred model", await panel.evaluate(async () => (await chrome.storage.local.get("enki:settings"))["enki:settings"].model) === "mock-echo");
 
   await configure("mock-probe", "ask");
@@ -91,17 +93,17 @@ try {
   await panel.getByRole("switch", { name: "Save conversations on this device" }).click();
   await panel.click("button:has-text('Save')");
   await panel.waitForTimeout(400);
-  check("disabling persistence deletes saved transcript", await panel.evaluate(async () => !(await chrome.storage.local.get("enki:conversation"))["enki:conversation"]));
+  check("disabling persistence deletes saved chats", await panel.evaluate(async () => { const s = await chrome.storage.local.get(null); return !s["enki:conversation"] && !s["enki:chats"] && !Object.keys(s).some((k) => k.startsWith("enki:chat:")); }));
   await configure("mock-no-headers");
   await panel.fill("textarea", "stop using keyboard"); await panel.press("textarea", "Enter");
   await panel.waitForSelector("button[title='Stop']"); await panel.press("textarea", "Escape"); await idle();
   check("Escape stops a waiting request", await panel.locator("button[title='Stop']").count() === 0);
-  await panel.click("button[title='New chat']");
+  await newChat();
   await configure("mock-agent", "act");
   await panel.reload(); await panel.waitForSelector("textarea");
   await panel.fill("textarea", "test new chat during approval"); await panel.press("textarea", "Enter");
   await panel.waitForSelector("button:has-text('Allow')");
-  await panel.click("button[title='New chat']"); await idle();
+  await newChat(); await idle();
   check("New chat cancels approval without leaving a stuck task", await panel.locator("button:has-text('Allow')").count() === 0);
   await configure("mock-echo");
   await send("fresh conversation after cancelled approval");
@@ -116,7 +118,7 @@ try {
   // Enki Home: a request typed on the new tab page must open the panel and be sent from it.
   // The real side panel is stubbed so the panel under test (a tab) is the one that picks it up.
   await configure("mock-echo", "ask");
-  await panel.click("button[title='New chat']"); await idle();
+  await newChat(); await idle();
   const home = await context.newPage();
   await home.goto(`chrome-extension://${id}/src/home/index.html`);
   await home.evaluate(() => { window.__opened = []; chrome.sidePanel.open = async (o) => { window.__opened.push(o); }; });
@@ -134,5 +136,34 @@ try {
   await home.waitForURL(/^https:\/\/example\.com\/?$/, { timeout: 15000 });
   check("an address typed on Enki Home is opened, not asked about", home.url().startsWith("https://example.com"));
   await home.close();
+  // The clean chat: steps folded behind an arrow, hideable; past chats under the ⋯ menu.
+  const visibleText = () => panel.evaluate(() => document.body.innerText);
+  await configure("mock-reader", "act");
+  await newChat(); await send("read the page 0");
+  const folded = await visibleText();
+  check("task steps are folded behind an arrow", /\d+ steps?/.test(folded) && !folded.includes("Read page") && (await panel.textContent("body")).includes("Read page"));
+  await panel.click("button[aria-expanded='false']");
+  check("the arrow expands the steps", (await visibleText()).includes("Read page"));
+  await configure("mock-reader", "act", { showSteps: false });
+  await newChat(); await send("read the page 0");
+  check("task steps can be hidden entirely", !(await panel.textContent("body")).includes("Read page"));
+
+  await configure("mock-echo", "ask");
+  await newChat(); await send("first chat about apples");
+  await newChat(); await send("second chat about pears");
+  await panel.click("button[title='More']");
+  const menuText = await visibleText();
+  check("past chats are listed under ⋯", menuText.includes("first chat about apples") && menuText.includes("second chat about pears"));
+  await panel.click("button[role='menuitem']:has-text('first chat about apples')"); await panel.waitForTimeout(300);
+  const reopened = await visibleText();
+  check("a past chat reopens from the list", reopened.includes("first chat about apples") && !reopened.includes("second chat about pears"));
+  await panel.reload(); await panel.waitForSelector("textarea");
+  check("the panel reopens the chat that was open", (await visibleText()).includes("first chat about apples"));
+  await newChat(); await panel.reload(); await panel.waitForSelector("textarea");
+  check("after New chat, reopening the panel starts empty", !(await visibleText()).includes("first chat about apples"));
+
+  await configure("mock-echo", "ask", { theme: "custom", customTheme: { background: "#102030", surface: "#203040", text: "#f0f0f0", accent: "#ff8800" } });
+  await panel.waitForTimeout(300);
+  check("your own colours are applied", await panel.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ink-950").trim()) === "#102030");
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

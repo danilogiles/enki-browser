@@ -70,7 +70,8 @@ try {
     await panel.waitForFunction((t) => document.body.innerText.includes(t), text, { timeout: 20000 });
     await panel.waitForFunction(() => !document.querySelector("button[title='Stop']"), null, { timeout });
     await panel.waitForTimeout(400);
-    return panel.evaluate(() => document.body.innerText);
+    // Notices and steps are folded away by default; read the whole page, not just what is shown.
+    return panel.evaluate(() => document.body.textContent);
   };
 
   /** Starts a fresh conversation with the given model, then sends one message. */
@@ -92,9 +93,12 @@ try {
 
   // 2. Inline <think> tags split across chunks must not leak into the answer.
   const think = await ask("mock-think-tags", "what is the answer");
+  // The reasoning is folded away with the steps, so "planning here" is in the page but must not be
+  // in what the user reads as the answer: check the visible text for that part.
+  const visible = await panel.evaluate(() => document.body.innerText);
   check(
     "inline <think> tags are routed to reasoning, not the answer",
-    /The answer is 42\./.test(think) && !/<\/?think/.test(think) && !/planning here/.test(think),
+    /The answer is 42\./.test(think) && !/<\/?think/.test(think) && !/planning here/.test(visible),
     think.split("\n").filter(Boolean).slice(-3).join(" | "),
   );
 
