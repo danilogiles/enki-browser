@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Enki Browser for Linux: starts the bundled Chromium with its own profile, the built-in
+# extensions and the privacy switches (the Windows counterpart is launcher/Launcher.cs).
+#
+# --class=enki-browser sets the window's WM_CLASS, which the .desktop file's StartupWMClass
+# matches; that is how the dock and taskbar know to show Enki's icon rather than Chromium's.
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+EXTRA=()
+if [[ -f "$HERE/portable" ]]; then
+  # A profile that travels with the folder cannot rely on this machine's keyring.
+  DATA="$HERE/User Data"
+  EXTRA+=(--password-store=basic)
+else
+  DATA="${XDG_CONFIG_HOME:-$HOME/.config}/enki-browser"
+fi
+DATA="${ENKI_BROWSER_USER_DATA:-$DATA}"
+
+# Chromium writes generated files (the blocker's indexed rule sets) into an unpacked extension's
+# folder. A system install under /opt is read-only to the user, so there the extensions are copied
+# once per build into the user's cache and loaded from that stable path instead.
+EXT_SRC="$HERE/extensions"
+if [[ ! -w "$EXT_SRC" ]]; then
+  CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/enki-browser/extensions"
+  STAMP="$(grep -o '"builtAt": *"[^"]*"' "$HERE/version.json" || true)"
+  if [[ "$(cat "$CACHE/.enki-build" 2>/dev/null || true)" != "$STAMP" ]]; then
+    rm -rf "$CACHE"
+    mkdir -p "$CACHE"
+    cp -a "$EXT_SRC/." "$CACHE/"
+    printf '%s' "$STAMP" > "$CACHE/.enki-build"
+  fi
+  EXT_SRC="$CACHE"
+fi
+EXTENSIONS=""
+for dir in "$EXT_SRC"/*/; do EXTENSIONS="${EXTENSIONS:+$EXTENSIONS,}${dir%/}"; done
+
+FLAGS=()
+while IFS= read -r line || [[ -n "$line" ]]; do
+  line="${line%$'\r'}"
+  [[ -z "${line//[[:space:]]/}" || "$line" == \#* ]] && continue
+  FLAGS+=("$line")
+done < "$HERE/config/flags.txt"
+
+exec "$HERE/chromium/chrome" \
+  --user-data-dir="$DATA" \
+  --load-extension="$EXTENSIONS" \
+  --class=enki-browser \
+  ${EXTRA[@]+"${EXTRA[@]}"} \
+  ${FLAGS[@]+"${FLAGS[@]}"} \
+  "$@"

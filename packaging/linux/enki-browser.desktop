@@ -1,0 +1,30 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Enki Browser
+GenericName=Web Browser
+GenericName[pt_BR]=Navegador
+GenericName[es]=Navegador web
+Comment=Private browser with an AI assistant
+Comment[pt_BR]=Navegador privado com assistente de IA
+Comment[es]=Navegador privado con asistente de IA
+Exec=@EXEC@ %U
+Icon=enki-browser
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupWMClass=enki-browser
+StartupNotify=true
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=New Window
+Name[pt_BR]=Nova janela
+Name[es]=Nueva ventana
+Exec=@EXEC@ --new-window
+
+[Desktop Action new-private-window]
+Name=New Private Window
+Name[pt_BR]=Nova janela anônima
+Name[es]=Nueva ventana privada
+Exec=@EXEC@ --incognito

@@ -1,8 +1,10 @@
 // Checks a built Enki Browser by using it, not by reading its config: starts it through the
 // real launcher with a throwaway profile, then asserts what a user would observe.
 //
-//   npm run build && npm run verify
-//   ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6 npm run verify   also run one Act task through a local OmniRoute
+//   npm run build && npm run verify                    Windows: out/EnkiBrowser
+//   node test/verify.mjs                               Linux: out/linux/enki-browser (or ENKI_LINUX_DIR)
+//   ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6 ...       also run one Act task through a local OmniRoute
+//   ENKI_NO_SANDBOX=1 ...                              containers without user namespaces only
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
@@ -12,9 +14,10 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-// The install layout: the stub and `current` at the top, the release in app/<version>/.
-const installRoot = path.join(root, "out", "EnkiBrowser");
-const app = path.join(installRoot, "app", readFileSync(path.join(installRoot, "current"), "utf8").trim());
+const linux = process.platform === "linux";
+// Windows: the stub and `current` at the top, the release in app/<version>/. Linux: one folder.
+const installRoot = linux ? (process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser")) : path.join(root, "out", "EnkiBrowser");
+const app = linux ? installRoot : path.join(installRoot, "app", readFileSync(path.join(installRoot, "current"), "utf8").trim());
 const version = JSON.parse(readFileSync(path.join(app, "version.json"), "utf8"));
 const port = 9333;
 const results = [];
@@ -38,8 +41,11 @@ await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const local = `http://127.0.0.1:${server.address().port}/`;
 
 const userData = mkdtempSync(path.join(os.tmpdir(), "enki-browser-verify-"));
-// Started through the stub, as the Start menu shortcut does: stub → launcher → Chromium.
-const proc = spawn(path.join(installRoot, "EnkiBrowser.exe"), [`--remote-debugging-port=${port}`, "about:blank"], {
+// Started the way the menu entry starts it: on Windows stub → launcher → Chromium, on Linux the
+// launcher script → Chromium.
+const launcher = linux ? path.join(installRoot, "enki-browser") : path.join(installRoot, "EnkiBrowser.exe");
+const extraArgs = process.env.ENKI_NO_SANDBOX === "1" ? ["--no-sandbox"] : [];
+const proc = spawn(launcher, [`--remote-debugging-port=${port}`, ...extraArgs, "about:blank"], {
   env: { ...process.env, ENKI_BROWSER_USER_DATA: userData },
   stdio: "ignore",
 });
@@ -56,7 +62,8 @@ try {
   const ctx = browser.contexts()[0];
   cdp = await browser.newBrowserCDPSession();
   const product = (await cdp.send("Browser.getVersion")).product;
-  check("browser starts through the launcher", /Chrome\/153\./.test(product), product);
+  // The Chromium major must match the one this build pinned, not one hard-coded here.
+  check("browser starts through the launcher", product.includes(`Chrome/${version.chromium.split(".")[0]}.`), product);
 
   // ---- built-in extensions
   await new Promise((r) => setTimeout(r, 2500));
@@ -195,14 +202,18 @@ try {
     const row = all(document).find((el) => el.id === "themeRow");
     return row ? (row.shadowRoot ?? row).textContent.replace(/\s+/g, " ").trim() : "";
   });
-  check("the Enki Browser theme is active", /Enki Browser/.test(themeRow), themeRow || "theme row not found");
+  // No custom theme: the Theme row offers no "Reset to default", so the window follows the
+  // system light or dark mode like other browsers.
+  check("the window follows the system theme (no custom theme)", !!themeRow && !/Reset to default|Redefinir|Restablecer/i.test(themeRow), themeRow || "theme row not found");
 
-  const winInfo = execFileSync("powershell.exe", ["-NoProfile", "-Command",
-    `$c = Join-Path '${app}' 'chromium\\chrome.exe'; ` +
-    `(Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $c -and $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle; ` +
-    `(Get-Item $c).VersionInfo.FileDescription`]).toString().trim().split(/\r?\n/);
-  check("the window title ends in Enki Browser", / - Enki Browser$/.test(winInfo[0] ?? ""), winInfo[0] ?? "no window");
-  check("chrome.exe describes itself as Enki Browser", winInfo.at(-1) === "Enki Browser", winInfo.at(-1));
+  if (!linux) {
+    const winInfo = execFileSync("powershell.exe", ["-NoProfile", "-Command",
+      `$c = Join-Path '${app}' 'chromium\\chrome.exe'; ` +
+      `(Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $c -and $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle; ` +
+      `(Get-Item $c).VersionInfo.FileDescription`]).toString().trim().split(/\r?\n/);
+    check("the window title ends in Enki Browser", / - Enki Browser$/.test(winInfo[0] ?? ""), winInfo[0] ?? "no window");
+    check("chrome.exe describes itself as Enki Browser", winInfo.at(-1) === "Enki Browser", winInfo.at(-1));
+  }
 
   // ---- the assistant itself
   await page.goto(`chrome-extension://${version.enkiExtensionId}/src/sidepanel/index.html`);
