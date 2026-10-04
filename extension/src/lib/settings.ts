@@ -179,7 +179,7 @@ export const PRESETS: Preset[] = [
   },
 ];
 
-export type ThemeId = "dark" | "light" | "system" | "midnight" | "nord" | "cyberpunk";
+export type ThemeId = "system" | "dark" | "light" | "navy" | "midnight" | "nord" | "cyberpunk";
 
 export type ThemeOption = {
   id: ThemeId;
@@ -188,9 +188,10 @@ export type ThemeOption = {
 };
 
 export const THEMES: ThemeOption[] = [
-  { id: "dark", label: "Enki Dark (default)", description: "Trust Buddy sky accents on navy chrome." },
-  { id: "light", label: "Light", description: "Clean white background with dark text and contrasts." },
-  { id: "system", label: "System (auto)", description: "Follows your operating system's light or dark setting." },
+  { id: "system", label: "System (default)", description: "Light or dark, following your operating system, like the browser around it." },
+  { id: "dark", label: "Dark", description: "Neutral dark greys with Enki's sky accent." },
+  { id: "light", label: "Light", description: "White and light greys with Enki's sky accent." },
+  { id: "navy", label: "Enki Navy", description: "The original look: sky accents on navy." },
   { id: "midnight", label: "Midnight (OLED)", description: "True black with indigo accents and high contrast for OLED screens." },
   { id: "nord", label: "Nord Frost", description: "Soft nordic palette in arctic blues." },
   { id: "cyberpunk", label: "Cyberpunk", description: "Obsidian background with amber and neon gold accents." },
@@ -236,7 +237,7 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   baseUrl: presetOf("nvidia").baseUrl,
   model: presetOf("nvidia").defaultModel,
-  theme: "dark",
+  theme: "system",
   autoApprove: false,
   // Follows the default preset: Nemotron reads text only.
   vision: !presetOf("nvidia").noVision,

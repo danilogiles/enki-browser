@@ -152,7 +152,7 @@ export function Home() {
           type="button"
           onClick={openPanel}
           title={configured ? `${t.model}: ${settings?.model}` : t.setup}
-          className="max-w-[16rem] truncate rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted transition hover:border-sky/40 hover:text-mist"
+          className="max-w-[16rem] truncate rounded-full border border-fg/10 bg-fg/5 px-3 py-1.5 text-xs text-muted transition hover:border-sky/40 hover:text-mist"
         >
           {configured ? settings?.model : t.setup}
         </button>
@@ -166,7 +166,7 @@ export function Home() {
 
         <form
           onSubmit={submit}
-          className="rise w-full rounded-3xl border border-white/10 bg-white/[0.06] p-3 shadow-[0_20px_60px_rgb(0_0_0/0.35)] backdrop-blur transition focus-within:border-sky/50 focus-within:bg-white/[0.08]"
+          className="rise w-full rounded-3xl border border-fg/10 bg-fg/[0.06] p-3 shadow-[0_12px_40px_rgb(0_0_0/0.14)] backdrop-blur transition focus-within:border-sky/50 focus-within:bg-fg/[0.08]"
           style={{ animationDelay: "80ms" }}
         >
           <textarea
@@ -181,7 +181,7 @@ export function Home() {
             className="block w-full resize-none bg-transparent px-2 pt-1 text-lg leading-relaxed text-mist outline-none placeholder:text-muted/70 focus-visible:outline-none"
           />
           <div className="mt-2 flex items-center gap-2">
-            <div role="radiogroup" aria-label={`${t.ask} / ${t.act}`} className="flex rounded-full bg-black/25 p-0.5 text-sm">
+            <div role="radiogroup" aria-label={`${t.ask} / ${t.act}`} className="flex rounded-full bg-fg/[0.06] p-0.5 text-sm">
               {([["ask", t.ask, t.askHint, MessageCircle], ["act", t.act, t.actHint, MousePointerClick]] as const).map(([m, label, hint, Icon]) => (
                 <button
                   key={m}
@@ -204,7 +204,7 @@ export function Home() {
                 disabled={!text.trim()}
                 title={t.search}
                 aria-label={t.search}
-                className="rounded-full p-2 text-muted transition hover:bg-white/10 hover:text-mist disabled:opacity-40"
+                className="rounded-full p-2 text-muted transition hover:bg-fg/10 hover:text-mist disabled:opacity-40"
               >
                 <Globe size={18} aria-hidden />
               </button>
@@ -213,7 +213,7 @@ export function Home() {
                 disabled={!text.trim()}
                 title={t.send}
                 aria-label={t.send}
-                className="rounded-full bg-sky p-2 text-deep transition hover:bg-sky/85 disabled:bg-white/10 disabled:text-muted"
+                className="rounded-full bg-sky p-2 text-deep transition hover:bg-sky/85 disabled:bg-fg/10 disabled:text-muted"
               >
                 <ArrowUp size={18} strokeWidth={2.5} aria-hidden />
               </button>
@@ -228,7 +228,7 @@ export function Home() {
               <button
                 type="button"
                 onClick={() => { setMode(s.mode); askEnki(s.text, s.mode); }}
-                className="group flex w-full items-start gap-2.5 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-4 py-3 text-left text-sm text-mist/85 transition hover:border-sky/30 hover:bg-white/[0.06] hover:text-mist"
+                className="group flex w-full items-start gap-2.5 rounded-2xl border border-fg/[0.07] bg-fg/[0.03] px-4 py-3 text-left text-sm text-mist/85 transition hover:border-sky/30 hover:bg-fg/[0.06] hover:text-mist"
               >
                 {s.mode === "act"
                   ? <MousePointerClick size={16} className="mt-0.5 shrink-0 text-sky/80" aria-hidden />

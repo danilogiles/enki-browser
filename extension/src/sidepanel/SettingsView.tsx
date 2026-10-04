@@ -106,7 +106,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
 
   /** Themes preview live, so leaving without saving must put the saved theme back. */
   const close = () => {
-    document.documentElement.setAttribute("data-theme", settings.theme || "dark");
+    document.documentElement.setAttribute("data-theme", settings.theme || "system");
     onClose();
   };
 
@@ -289,7 +289,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
             </p>
             <div className="grid grid-cols-1 gap-2.5">
               {THEMES.map((t) => {
-                const selected = (draft.theme || "dark") === t.id;
+                const selected = (draft.theme || "system") === t.id;
                 return (
                   <button
                     key={t.id}
