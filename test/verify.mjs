@@ -86,8 +86,12 @@ try {
     const walk = (n) => (n.shadowRoot ? walk(n.shadowRoot) : "") + [...n.childNodes].map((c) => (c.nodeType === 3 ? c.textContent : c.nodeType === 1 ? walk(c) : "")).join(" ");
     return walk(document.body).replace(/\s+/g, " ");
   });
-  // The engine list also names DuckDuckGo; the default is the one shown with a "Change" button.
-  check("DuckDuckGo is the default search engine", /DuckDuckGo Change/.test(settingsText), settingsText.match(/S+ Change/)?.[0] ?? "");
+  // The default is the one shown with a "Change" button: Enki, which answers in a tab.
+  check("Enki is the address bar's default search engine", /Enki Change/.test(settingsText), settingsText.match(/\S+ Change/)?.[0] ?? "");
+  // What a search from the address bar opens: Enki's answer page, at the URL the engine builds.
+  await page.goto(`chrome-extension://${version.enkiExtensionId}/src/sidepanel/index.html?q=${encodeURIComponent("enki verify")}`);
+  await page.waitForTimeout(1200);
+  check("an address bar search opens Enki's answer page", (await page.title()) === "enki verify — Enki", await page.title());
 
   // ---- HTTPS: a plain-http address must end up on https or behind the warning page
   await page.goto("http://example.com/").catch(() => undefined);

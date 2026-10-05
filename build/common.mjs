@@ -109,6 +109,37 @@ function withKey(dir, keyFile, extra = {}) {
   return { id: extensionIdFromKey(key), manifest };
 }
 
+/**
+ * Gives an extension's background service worker a file name that changes with its contents.
+ *
+ * Chromium keeps an extension's service worker, with every module it imports, in the profile's
+ * service worker store, and for extensions loaded from the command line it never replaced it:
+ * after an update the extension's pages were new but its background script was still the one
+ * from the first install (seen with Enki 0.3.0 running 0.2.0's worker, so its startup fix never
+ * ran). Clearing Chromium's record of the registration in Secure Preferences, or the extension's
+ * whole entry, did not help, and deleting the store would take every website's service workers
+ * with it. A new script URL does work: Chromium has to register it, and the new code runs.
+ */
+function freshWorker(dir) {
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const worker = manifest.background?.service_worker;
+  if (!worker) return;
+  const digest = createHash("sha256");
+  const walk = (d) => {
+    for (const name of readdirSync(d).sort()) {
+      const p = path.join(d, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (p !== manifestPath) digest.update(path.relative(dir, p)).update(readFileSync(p));
+    }
+  };
+  walk(dir);
+  const renamed = worker.replace(/(\.m?js)$/, `-${digest.digest("hex").slice(0, 10)}$1`);
+  cpSync(path.join(dir, worker), path.join(dir, renamed));
+  manifest.background.service_worker = renamed;
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+}
+
 /** Copies the built-in extensions into <app>/extensions and returns their ids. */
 export async function addExtensions(app) {
   step(`Fetching ${upstream.blocker.name} ${upstream.blocker.version}`);
@@ -134,6 +165,8 @@ export async function addExtensions(app) {
   cpSync(path.join(root, "shield"), shieldDir, { recursive: true });
   const shield = withKey(shieldDir, "shield-extension.pub");
   console.log(`  Enki Shield id: ${shield.id}`);
+
+  for (const dir of ["enki", "shield", "ublock-lite"]) freshWorker(path.join(app, "extensions", dir));
 
   // Icons up to 256 px live in icons/ (older Enki builds only had public/icons up to 128).
   const iconDir = existsSync(path.join(enkiDir, "icons", "icon16.png")) ? path.join(enkiDir, "icons") : path.join(enkiDir, "public", "icons");
