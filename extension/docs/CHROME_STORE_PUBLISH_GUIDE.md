@@ -46,7 +46,7 @@ Como o Enki solicita permissões avançadas (`debugger`, `<all_urls>`), o Google
 
 - Já criamos o arquivo completo em [`docs/PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 - **Opção recomendada:** Use a URL do arquivo no GitHub:
-  `https://github.com/devopsfuturasync/enkibrowser/blob/main/docs/PRIVACY_POLICY.md`
+  `https://github.com/danilogiles/enkibrowser/blob/main/docs/PRIVACY_POLICY.md`
   *(Ou ative o GitHub Pages do repositório para ter uma URL formatada).*
 
 ---

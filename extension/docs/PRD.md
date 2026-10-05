@@ -2,8 +2,8 @@
 
 **Version:** 1.0.0  
 **Status:** Approved / In Active Development  
-**Author:** Futurasync Team  
-**Repository:** [https://github.com/devopsfuturasync/enkibrowser](https://github.com/devopsfuturasync/enkibrowser)  
+**Author:** Enki contributors  
+**Repository:** [https://github.com/danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser)  
 
 ---
 

@@ -2,8 +2,8 @@
 
 **Effective Date:** September 2026  
 **Last Updated:** 4 October 2026  
-**Publisher:** DevOps Futurasync (Enki Open-Source Project)  
-**Contact:** devops@futurasync.com / GitHub Issues  
+**Publisher:** Enki contributors (open-source project)  
+**Contact:** [GitHub Issues](https://github.com/danilogiles/enkibrowser/issues); security problems through [private vulnerability reporting](https://github.com/danilogiles/enkibrowser/security/advisories/new)  
 
 ---
 
@@ -18,7 +18,7 @@ We believe privacy is a fundamental human right. Enki operates on a **Local-Firs
 
 ### 2.1 API Keys and Settings
 - **Storage:** All API keys (Anthropic, OpenAI, OmniRoute, or custom endpoints) and user settings (chosen provider, model, endpoint URL, theme, and behavior toggles) are stored exclusively in your browser's local sandbox via `chrome.storage.local`.
-- **Transmission:** API keys are sent directly to your chosen AI provider over encrypted HTTPS connections. They are never sent to Futurasync or any third-party telemetry service.
+- **Transmission:** API keys are sent directly to your chosen AI provider over encrypted HTTPS connections. They are never sent to the Enki project or any third-party telemetry service.
 
 ### 2.2 Web Page Content & DOM Data
 - **When Processed:** Enki only reads web page content (text, DOM structure, or screenshots) when you explicitly initiate an **Ask** or **Act** action.

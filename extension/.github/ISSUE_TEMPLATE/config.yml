@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Questions and ideas
+    url: https://github.com/danilogiles/enkibrowser/discussions
+    about: Ask, propose, or show what you built. Português e español são bem-vindos.
   - name: Report a security vulnerability
     url: https://github.com/danilogiles/enkibrowser/security/advisories/new
     about: Private report, including prompt-injection pages that make Enki act without being asked.

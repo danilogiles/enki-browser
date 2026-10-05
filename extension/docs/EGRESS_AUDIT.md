@@ -32,7 +32,7 @@ Only when the user configures a provider and runs Ask/Act (or connection test):
 | OpenRouter | `https://openrouter.ai/api/v1` |
 | Custom | User-supplied |
 
-Keys and page context go to **that** endpoint only. No Futurasync collector.
+Keys and page context go to **that** endpoint only. No Enki project collector.
 
 ## OmniRoute smoke allowlist (Danilo local)
 When provider = OmniRoute: expect traffic to **`localhost:20128`** (and whatever upstream OmniRoute itself calls — outside Enki’s process). Enki must not open additional analytics hosts during Ask/Act.

@@ -6,6 +6,11 @@ so anyone can check what it sends, where, and why.
 *Português e español são bem-vindos em issues e discussões — escreva na língua em que você se
 expressa melhor.*
 
+Questions, ideas and show-and-tell go in [Discussions](https://github.com/danilogiles/enkibrowser/discussions).
+The browser around Enki (Shields, updater, installer) has its own repository and guide:
+[danilogiles/enki-browser](https://github.com/danilogiles/enki-browser/blob/main/CONTRIBUTING.md).
+Every change, maintainers' included, goes through a pull request with the checks green.
+
 ## Where you can help
 
 Everything in this repository runs as a browser extension, so **you do not need to build

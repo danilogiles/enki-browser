@@ -14,7 +14,7 @@ Enki operates inside the user's personal browser where private sessions, cookies
 | **Credential Theft** | Prompt injection trying to extract or submit passwords, OTPs, or cards. | Hard block on typing into `type="password"` / password-like `autocomplete`. Never read or type credentials. |
 | **Unauthorized Action / CSRF** | AI clicking Delete / Buy / Send without consent. | Multilingual `SENSITIVE_ACTION` heuristics → Allow/Deny card before execution. |
 | **Malicious URL Redirection** | Navigate to `javascript:`, `chrome://`, `file:`, `data:`, etc. | Only `http://` and `https://` navigations allowed. |
-| **Silent data exfil (product)** | Extension phoning home with history or keys. | No Futurasync backend; no product telemetry; keys stay in `chrome.storage.local`; LLM traffic goes browser → chosen provider (or localhost gateway) only. |
+| **Silent data exfil (product)** | Extension phoning home with history or keys. | No Enki project backend; no product telemetry; keys stay in `chrome.storage.local`; LLM traffic goes browser → chosen provider (or localhost gateway) only. |
 | **Silent history exfil (AI)** | Agent or Companion Mode uploading browsing history without consent. | Ask/Act only send page context when the user starts a turn. **Companion Mode is Off** until kill-criteria below are met. |
 
 ---
