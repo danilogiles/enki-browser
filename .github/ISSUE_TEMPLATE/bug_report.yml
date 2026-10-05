@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in Enki Browser does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Security problems** go through [private vulnerability reporting](https://github.com/danilogiles/enki-browser/security/advisories/new), not here.
+        Português ou español: pode escrever na sua língua.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open https://example.com
+        2. Click the Shields button
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Enki Browser version
+      description: chrome://settings/help shows it ("Enki Browser 0.7.8 · Version …").
+      placeholder: "0.7.8"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows 11, Windows 10, Ubuntu / Debian, Other Linux, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed it
+      options: [Installer (EnkiBrowserSetup.exe), Portable zip, Scoop, .deb, install.sh (tar.gz)]
+  - type: textarea
+    id: log
+    attributes:
+      label: Update log or screenshots (optional)
+      description: For update problems, the last lines of `.update\update.log` in the install folder.

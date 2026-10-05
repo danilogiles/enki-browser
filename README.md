@@ -242,8 +242,11 @@ Honest list; each is on the roadmap.
 
 Most work on the assistant happens in [enkibrowser](https://github.com/danilogiles/enkibrowser)
 and needs only Node.js — see its [CONTRIBUTING.md](https://github.com/danilogiles/enkibrowser/blob/main/CONTRIBUTING.md).
-This repository is the browser around it: build, launcher, defaults, installer. Issues and pull
-requests are welcome; sign off your commits (`git commit -s`).
+This repository is the browser around it: build, launcher, Shields, defaults, installer — see
+[CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas go in
+[Discussions](https://github.com/danilogiles/enki-browser/discussions); issues labelled
+**good first issue** are a good place to start. Every change, maintainers' included, goes through
+a pull request with the checks green; sign off your commits (`git commit -s`).
 
 Security issues: report them [privately](https://github.com/danilogiles/enki-browser/security/advisories/new),
 never in a public issue.

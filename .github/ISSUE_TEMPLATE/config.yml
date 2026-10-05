@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/danilogiles/enki-browser/discussions
+    about: Ask, propose, or show what you built. Português e español são bem-vindos.
+  - name: Report a security vulnerability
+    url: https://github.com/danilogiles/enki-browser/security/advisories/new
+    about: Private report. Never post security problems in a public issue.
+  - name: A problem with the Enki assistant itself
+    url: https://github.com/danilogiles/enkibrowser/issues/new/choose
+    about: Answers, the side panel, models, connections — the assistant has its own repository.
