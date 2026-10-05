@@ -62,14 +62,28 @@ chrome.commands.onCommand.addListener(async (command) => {
  * so the window opened on Chromium's own new tab page instead of Enki Home. Once the override
  * exists, send those tabs to the new tab page again. Only builds that override the new tab
  * (Enki Browser's) have anything to fix; the store extension leaves the new tab alone.
+ *
+ * Both kinds of tab report chrome://newtab/, so the ones already showing Enki Home — pages of
+ * this extension — are told apart through runtime.getContexts and left alone (a reload would
+ * lose what the user started typing). runtime.onStartup was tried first and does not fire
+ * reliably for extensions loaded from the command line; the first run of the service worker in
+ * a browser session (session storage starts empty) is the dependable signal.
  */
 async function reopenEarlyNewTabs(): Promise<void> {
-  if (!(chrome.runtime.getManifest() as chrome.runtime.Manifest & { chrome_url_overrides?: { newtab?: string } }).chrome_url_overrides?.newtab) return;
+  const ours = new Set((await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.TAB] })).map((c) => c.tabId));
   for (const tab of await chrome.tabs.query({})) {
     const url = tab.pendingUrl || tab.url || "";
-    if (tab.id !== undefined && /^chrome:\/\/(newtab|new-tab-page(-third-party)?)\/?$/.test(url)) {
+    if (tab.id !== undefined && !ours.has(tab.id) && /^chrome:\/\/(newtab|new-tab-page(-third-party)?)\/?$/.test(url)) {
       await chrome.tabs.update(tab.id, { url: "chrome://newtab/" }).catch(() => undefined);
     }
   }
 }
-chrome.runtime.onStartup.addListener(() => { void reopenEarlyNewTabs(); });
+const overridesNewTab = !!(chrome.runtime.getManifest() as chrome.runtime.Manifest & { chrome_url_overrides?: { newtab?: string } }).chrome_url_overrides?.newtab;
+if (overridesNewTab) {
+  void chrome.storage.session.get("enki:session-started").then(async (v) => {
+    if (v["enki:session-started"]) return;
+    await chrome.storage.session.set({ "enki:session-started": Date.now() });
+    // The restored windows may still be opening; look again shortly after.
+    for (const delay of [0, 1500, 4000]) setTimeout(() => void reopenEarlyNewTabs(), delay);
+  });
+}
