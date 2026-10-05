@@ -2,7 +2,7 @@
  * Signing in to a remote MCP server the way the MCP spec describes: the server's 401 points to
  * its protected-resource metadata, that names the authorization server, Enki registers itself
  * there as a client (dynamic client registration, no app to pre-register), and the user signs in
- * on the service's own page in a browser window (chrome.identity.launchWebAuthFlow) with PKCE.
+ * on the service's own page in a small window, with PKCE.
  *
  * Enki never sees the user's password: only the service's page does. What comes back is a token
  * scoped to that service, kept in this browser's local extension storage.
@@ -92,10 +92,45 @@ async function tokenRequest(endpoint: string, body: Record<string, string>, clie
   };
 }
 
+/**
+ * The loopback address the service sends the user back to, as desktop MCP clients use. Nothing
+ * listens there: the sign-in window is watched, and the moment it heads to this address the code
+ * is read from the URL and the window closed.
+ *
+ * chrome.identity.launchWebAuthFlow was the first choice and works, but its return address is a
+ * chromiumapp.org subdomain, which ungoogled-chromium's domain substitution rewrites to
+ * "ch40m1umapp.qjz9zk" — an address real services can refuse to register.
+ */
+export const REDIRECT_URI = "http://127.0.0.1:33418/enki/oauth/callback";
+
+function signInWindow(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let tabId: number | undefined;
+    let windowId: number | undefined;
+    const finish = (fn: () => void) => {
+      chrome.webNavigation.onBeforeNavigate.removeListener(onNavigate);
+      chrome.windows.onRemoved.removeListener(onClosed);
+      fn();
+    };
+    const onNavigate = (d: { tabId: number; url: string }) => {
+      if (d.tabId !== tabId || !d.url.startsWith(REDIRECT_URI)) return;
+      finish(() => resolve(d.url));
+      if (windowId !== undefined) void chrome.windows.remove(windowId).catch(() => undefined);
+    };
+    const onClosed = (id: number) => { if (id === windowId) finish(() => reject(new Error("Sign-in was closed before it finished."))); };
+    chrome.webNavigation.onBeforeNavigate.addListener(onNavigate);
+    chrome.windows.onRemoved.addListener(onClosed);
+    chrome.windows.create({ url, type: "popup", width: 520, height: 720, focused: true }).then((w) => {
+      windowId = w?.id;
+      tabId = w?.tabs?.[0]?.id;
+    }, (e) => finish(() => reject(e)));
+  });
+}
+
 /** Opens the service's sign-in page and returns the token it grants. */
 export async function signIn(mcpUrl: string, wwwAuthenticate: string | null): Promise<Auth> {
   const { server, scope, resource } = await discover(mcpUrl, wwwAuthenticate);
-  const redirectUri = chrome.identity.getRedirectURL("mcp");
+  const redirectUri = REDIRECT_URI;
   if (!server.registration_endpoint) {
     throw new Error(`${new URL(server.authorization_endpoint).host} needs an app registered in advance, which Enki cannot do for you. Use a personal access token instead.`);
   }
@@ -125,9 +160,7 @@ export async function signIn(mcpUrl: string, wwwAuthenticate: string | null): Pr
   if (scope) q.scope = scope;
   for (const [k, v] of Object.entries(q)) authUrl.searchParams.set(k, v);
 
-  const back = await chrome.identity.launchWebAuthFlow({ url: authUrl.href, interactive: true });
-  if (!back) throw new Error("Sign-in was closed before it finished.");
-  const answer = new URL(back);
+  const answer = new URL(await signInWindow(authUrl.href));
   if (answer.searchParams.get("state") !== state) throw new Error("Sign-in answer did not match the request (state); ignored.");
   const code = answer.searchParams.get("code");
   if (!code) throw new Error(`Sign-in was refused: ${answer.searchParams.get("error_description") ?? answer.searchParams.get("error") ?? "no code"}`);

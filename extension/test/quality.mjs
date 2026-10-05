@@ -200,6 +200,51 @@ try {
   check("the header shows when unfiltered is on", await panel.locator("header >> text=unfiltered").count() === 1);
   await configure("mock-echo", "ask");
 
+  // Connections: add an MCP server from Settings, sign in (OAuth with registration and PKCE),
+  // then read tools run at once and write tools wait for the approval card.
+  await panel.click("button[title='Settings']");
+  await panel.click("button:has-text('Connections')");
+  await panel.click("button:has-text('Other MCP server')");
+  await panel.fill("input[aria-label='Connection name']", "Tracker");
+  await panel.fill("input[aria-label='MCP server URL']", "http://127.0.0.1:8787/mcp");
+  await panel.click("button:has-text('Add and connect')");
+  await panel.waitForFunction(() => document.body.innerText.includes("2 tools"), null, { timeout: 20000 }).catch(() => undefined);
+  check("an MCP server connects through its own sign-in and lists its tools", (await panel.textContent("body")).includes("2 tools"));
+  await panel.click("button[aria-label=\"Show Tracker's tools\"]");
+  check("read and write tools are told apart", (await panel.textContent("body")).includes("readSearch issues") || (await panel.locator("text=write").count()) >= 1);
+  await panel.click("button[title='Back']");
+  await configure("mock-mcp", "ask");
+  await newChat();
+  await panel.fill("textarea", "find checkout bugs and file one"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow')", { timeout: 20000 });
+  check("an app's write tool waits for approval; its read tool did not", (await panel.textContent("body")).includes("Tracker: create_issue") && (await panel.textContent("body")).includes("Tracker: search_issues"));
+  await panel.click("button:has-text('Allow')"); await idle(); await panel.waitForTimeout(300);
+  const appText = await panel.textContent("body");
+  check("app tool results come back to the model", appText.includes("APP-DONE") && appText.includes("Found MOCK-7") && appText.includes("Created MOCK-8"));
+  await panel.fill("textarea", "@tr");
+  check("typing @ suggests connected apps", (await panel.locator("[role=listbox] >> text=@tracker").count()) === 1);
+  await panel.fill("textarea", "");
+
+  // Saved tasks: made in Settings, run with /name plus extra words, in the task's own mode.
+  await panel.click("button[title='Settings']");
+  await panel.click("button:has-text('Connections')");
+  await panel.click("button:has-text('New task')");
+  await panel.fill("input[aria-label='Task name']", "standup");
+  await panel.selectOption("select[aria-label='Task mode']", "ask");
+  await panel.fill("textarea[aria-label='Task prompt']", "Say the standup words");
+  await panel.click("button:has-text('Save task')");
+  await panel.click("button[title='Back']");
+  await configure("mock-echo", "act");
+  await newChat();
+  await panel.fill("textarea", "/stand");
+  check("typing / suggests saved tasks", (await panel.locator("[role=listbox] >> text=/standup").count()) === 1);
+  await panel.press("textarea", "Tab");
+  await panel.type("textarea", "extra bit");
+  await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
+  const taskText = await panel.textContent("body");
+  check("a saved task sends its prompt plus the extra words", taskText.includes("Say the standup words") && taskText.includes("extra bit"));
+
   // The answer page: Enki as the address bar's search engine opens the panel as a tab with ?q=.
   const openBefore = await panel.evaluate(async () => (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"]);
   const answer = await context.newPage();

@@ -179,6 +179,20 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.equal(h[h.length - 1].parts[0].content[0].text.length, 15000); // the newest stays whole
     assert.match(h[2].parts[0].content[0].text, /cut to fit the context budget/);
   });
+  check('saved tasks and @apps expand at the start of a message', () => {
+    const { expand, suggestions } = require('../src/lib/shortcuts.ts');
+    const tasks = [{ id: '1', name: 'Daily Standup', prompt: 'List my open tickets', mode: 'act' }];
+    const apps = [{ id: 'a', name: 'Jira & Confluence', url: 'x', auth: 'oauth', enabled: true, status: 'connected', tools: [{ name: 'search', title: 'search', description: '', inputSchema: {}, readOnly: true }] }];
+    assert.deepEqual(expand('/daily-standup for today', tasks, apps).text, 'List my open tickets\n\nfor today');
+    assert.equal(expand('/daily-standup', tasks, apps).mode, 'act');
+    assert.equal(expand('/unknown hi', tasks, apps).text, '/unknown hi');
+    const at = expand('@jira-confluence open bugs', tasks, apps);
+    assert.equal(at.text, 'open bugs');
+    assert.match(at.hint, /jira_confluence__/);
+    assert.equal(expand('@jira-confluence x', tasks, [{ ...apps[0], enabled: false }]).hint, undefined);
+    assert.deepEqual(suggestions('/da', tasks, apps).map((s) => s.label), ['/daily-standup']);
+    assert.deepEqual(suggestions('/daily x', tasks, apps), []);
+  });
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');

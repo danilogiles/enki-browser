@@ -12,6 +12,9 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 - **Act mode**: give it a task. Enki navigates, clicks, types, scrolls and manages tabs, observing the page between steps.
 - **Current, sourced answers**: every message carries today's date, and Enki searches the web (Brave Search, then DuckDuckGo; no key needed) and reads the sources, even pages that build themselves with JavaScript, without leaving your tab. Answers cite their links.
 - **Charts and mind maps**: a table of numbers in an answer is drawn as a chart with Bar / Line / Pie / Table tabs; ```chart and ```mindmap blocks are drawn too.
+- **Connected apps (MCP)**: Settings → Connections links Jira & Confluence, Linear, Notion, Sentry, GitHub or any MCP server. You sign in on the app's own page (OAuth with dynamic registration and PKCE); then ask `@jira create a ticket for this bug`. Read tools run at once; anything that changes your data waits for your OK unless you allow that tool.
+- **Saved tasks**: a request you repeat, run with `/name` plus extra words, in the mode it was saved with. In Act mode it works on any site, apps without MCP included.
+- **Unfiltered tone** (developer mode): Enki's own tone rules off, so the model's policy is the only filter. The browser safety rules stay on.
 - **Answer page**: `src/sidepanel/index.html?q=…` answers a question in a full tab, which is how Enki Browser makes Enki its address bar search.
 - **Bring your own model**: Anthropic Claude, OpenAI, Google Gemini, Groq, OpenRouter, Ollama (local), or any OpenAI-compatible endpoint.
 - **Safety first**: sensitive clicks (send, buy, delete, publish...) show a confirmation card before they run. Enki never types passwords or payment details, never solves CAPTCHAs, and treats page text as data, not instructions.

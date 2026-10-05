@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Loader2,
   Palette,
+  Plug,
   RefreshCw,
   Sliders,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { createProvider } from "../lib/providers";
 import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
+import { ConnectionsTab } from "./ConnectionsTab";
 
 type Props = {
   settings: Settings;
@@ -23,7 +25,7 @@ type Props = {
   onClose: () => void;
 };
 
-type TabId = "model" | "appearance" | "behavior";
+type TabId = "model" | "appearance" | "behavior" | "connections";
 
 export function SettingsView({ settings, onSave, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("model");
@@ -140,9 +142,16 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           icon={<Sliders size={14} />}
           label="Behavior"
         />
+        <TabButton
+          active={activeTab === "connections"}
+          onClick={() => setActiveTab("connections")}
+          icon={<Plug size={14} />}
+          label="Connections"
+        />
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 text-sm">
+        {activeTab === "connections" && <ConnectionsTab />}
         {/* TAB 1: MODEL & PROVIDER SETUP */}
         {activeTab === "model" && (
           <Section title="Model Provider Setup">

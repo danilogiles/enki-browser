@@ -71,6 +71,55 @@ const server = http.createServer((req, res) => {
     return res.end(`<!doctype html><title>Live board</title><body><div id="app">Loading…</div>
 <script>setTimeout(() => { document.getElementById("app").textContent = "Live result: candidate A 51.2%, candidate B 48.8%"; }, 400)</script></body>`);
   }
+  // ---- a tiny MCP server behind OAuth, the way remote ones (Linear, Notion…) work: a 401 that
+  // points to protected-resource metadata, dynamic client registration, PKCE, then tools.
+  const base = `http://127.0.0.1:${port}`;
+  const send = (code, body, headers = {}) => { res.writeHead(code, { "Content-Type": "application/json", ...headers }); res.end(body === undefined ? "" : JSON.stringify(body)); };
+  if (req.method === "GET" && req.url === "/.well-known/oauth-protected-resource/mcp") return send(200, { resource: `${base}/mcp`, authorization_servers: [base] });
+  if (req.method === "GET" && req.url === "/.well-known/oauth-authorization-server") {
+    return send(200, { issuer: base, authorization_endpoint: `${base}/authorize`, token_endpoint: `${base}/token`, registration_endpoint: `${base}/register`, code_challenge_methods_supported: ["S256"] });
+  }
+  if (req.method === "GET" && req.url.startsWith("/authorize")) {
+    // Signs in at once: a real service shows its own login page here.
+    const q = new URL(req.url, base).searchParams;
+    if (!q.get("code_challenge") || q.get("client_id") !== "mock-client") return send(400, { error: "invalid_request" });
+    res.writeHead(302, { Location: `${q.get("redirect_uri")}?code=mock-code&state=${encodeURIComponent(q.get("state") ?? "")}` });
+    return res.end();
+  }
+  if (req.method === "POST" && (req.url === "/register" || req.url === "/token" || req.url === "/mcp")) {
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", () => {
+      if (req.url === "/register") return send(201, { client_id: "mock-client", redirect_uris: JSON.parse(raw).redirect_uris });
+      if (req.url === "/token") {
+        const form = new URLSearchParams(raw);
+        if (form.get("code") !== "mock-code" || !form.get("code_verifier")) return send(400, { error: "invalid_grant" });
+        return send(200, { access_token: "mock-token", refresh_token: "mock-refresh", expires_in: 3600, token_type: "Bearer" });
+      }
+      if (req.headers.authorization !== "Bearer mock-token") {
+        return send(401, { error: "unauthorized" }, { "WWW-Authenticate": `Bearer realm="OAuth", resource_metadata="${base}/.well-known/oauth-protected-resource/mcp"` });
+      }
+      const msg = JSON.parse(raw);
+      if (msg.id === undefined) return send(202);
+      const reply = (result, viaStream = false) => {
+        if (!viaStream) return send(200, { jsonrpc: "2.0", id: msg.id, result }, { "Mcp-Session-Id": "mock-session" });
+        res.writeHead(200, { "Content-Type": "text/event-stream", "Mcp-Session-Id": "mock-session" });
+        res.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", method: "notifications/progress", params: {} })}\n\n`);
+        res.end(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result })}\n\n`);
+      };
+      if (msg.method === "initialize") return reply({ protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "mock-tracker", version: "1" } });
+      if (msg.method === "tools/list") {
+        return reply({ tools: [
+          { name: "search_issues", description: "Search issues by text", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] }, annotations: { readOnlyHint: true } },
+          { name: "create_issue", description: "Create an issue", inputSchema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
+        ] });
+      }
+      if (msg.method === "tools/call" && msg.params.name === "search_issues") return reply({ content: [{ type: "text", text: `Found MOCK-7 "${msg.params.arguments.query} in checkout"` }] });
+      if (msg.method === "tools/call" && msg.params.name === "create_issue") return reply({ content: [{ type: "text", text: `Created MOCK-8 "${msg.params.arguments.title}"` }] }, true);
+      return send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "Method not found" } });
+    });
+    return;
+  }
   if (req.method === "GET" && req.url.startsWith("/page")) {
     res.writeHead(200, { "Content-Type": "text/html" });
     return res.end(PAGE);
@@ -139,6 +188,17 @@ const server = http.createServer((req, res) => {
           res,
           `I'll do that.\n<tool_call>\n{"name": "navigate", "arguments": {"url": "http://127.0.0.1:${port}/page?viatext=1"}}\n</tool_call>`,
         );
+      }
+      // Uses a connected app: searches it (read: runs at once), then creates an issue (write:
+      // waits for the approval card), then reports what both returned.
+      if (model === "mock-mcp") {
+        const toolsOffered = (JSON.parse(body).tools ?? []).map((t) => t.function?.name ?? t.name);
+        const search = toolsOffered.find((n) => n.endsWith("__search_issues"));
+        const create = toolsOffered.find((n) => n.endsWith("__create_issue"));
+        if (!search) return streamText(res, `no app tools offered (${toolsOffered.length} tools)`);
+        if (toolMsgs.length === 0) return streamToolCall(res, search, { query: "bug" });
+        if (toolMsgs.length === 1) return streamToolCall(res, create, { title: "From Enki" });
+        return streamText(res, `APP-DONE ${toolMsgs.map((m) => String(m.content).replace(/\s+/g, " ").slice(0, 80)).join(" || ")}`);
       }
       // Reports whether the system prompt carries the unfiltered tone section.
       if (model === "mock-tone") {

@@ -19,6 +19,8 @@ import { applyTheme } from "../lib/theme";
 import { Header } from "./Header";
 import { invalidateObservations } from "../lib/agent/context";
 import { diagnosticReport } from "../lib/diagnostics";
+import { connectorTools, loadConnections, onConnectionsChange, type Connection } from "../lib/connectors";
+import { expand, loadTasks, suggestions, type SavedTask } from "../lib/shortcuts";
 
 const MODE_KEY = "enki:mode";
 
@@ -44,6 +46,19 @@ export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<"chat" | "settings" | "logs">("chat");
   const [mode, setMode] = useState<Mode>("ask");
+  // Connected apps (Settings → Connections) and saved tasks, kept current while the panel is open.
+  const [apps, setApps] = useState<Connection[]>([]);
+  const [tasks, setTasks] = useState<SavedTask[]>([]);
+  useEffect(() => {
+    void loadConnections().then(setApps);
+    void loadTasks().then(setTasks);
+    const onTasks = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "local" && changes["enki:tasks"]) setTasks((changes["enki:tasks"].newValue as SavedTask[] | undefined) ?? []);
+    };
+    chrome.storage.onChanged.addListener(onTasks);
+    const off = onConnectionsChange(setApps);
+    return () => { off(); chrome.storage.onChanged.removeListener(onTasks); };
+  }, []);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [running, setRunning] = useState(false);
   const [approval, setApproval] = useState<{ label: string; resolve: (ok: boolean) => void } | null>(null);
@@ -315,6 +330,12 @@ export function App() {
   const send = useCallback(async (text: string, intent: "normal" | "continue" | "observe" = "normal") => {
     const executor = executorRef.current;
     if (!settings || !executor || !ready || abortRef.current || !text.trim()) return;
+    // /task runs a saved task in its own mode; @app points the request at one connected app.
+    // The answer page only answers, so a task saved for Act runs there as Ask.
+    const ex = intent === "normal" ? expand(text, tasks, apps) : ({ text: text.trim() } as ReturnType<typeof expand>);
+    text = ex.text;
+    const runMode: Mode = PAGE_QUERY ? "ask" : ex.mode ?? mode;
+    executor.setConnections(apps);
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(true);
@@ -334,7 +355,8 @@ export function App() {
       const context = PAGE_QUERY
         ? "[Current tab] none: this is Enki's answer page, opened from the address bar. There is no page to read; answer from your knowledge or, for anything current, from web_search and read_url."
         : current ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
-      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}\n\n${text.trim()}` }];
+      const hint = ex.hint ? `\n${ex.hint}` : "";
+      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}${hint}\n\n${text.trim()}` }];
       let thumb: string | undefined;
       if (settings.vision && settings.attachScreenshot && !restricted) {
         // captureVisibleTab fails transiently while a page is still painting and is limited to two
@@ -359,11 +381,11 @@ export function App() {
         { id: uid(), role: "user", text: text.trim(), screenshot: thumb },
         { id: assistantId, role: "assistant", segments: [], streaming: true }]);
       visible = true;
-      if (mode === "act") await executor.setActiveOverlay(true, "Enki is controlling this tab…");
-      const effectiveMode = intent === "observe" ? "ask" : mode;
+      if (runMode === "act") await executor.setActiveOverlay(true, "Enki is controlling this tab…");
+      const effectiveMode = intent === "observe" ? "ask" : runMode;
       await runTurn({ provider: createProvider(settings), model: settings.model, mode: effectiveMode,
         system: buildSystemPrompt(effectiveMode, settings.customInstructions, settings.devMode && !!settings.unfiltered), history,
-        tools: toolsForMode(effectiveMode, settings.vision), executor, maxSteps: settings.maxSteps,
+        tools: [...toolsForMode(effectiveMode, settings.vision), ...connectorTools(apps)], executor, maxSteps: settings.maxSteps,
         autoApprove: settings.autoApprove, requestApproval,
         onEvent: (e) => { if (historyRef.current === history) handleEvent(e); },
         signal: controller.signal, contextBudgetTokens: settings.contextBudgetTokens,
@@ -385,7 +407,7 @@ export function App() {
       setRunning(false);
       abortRef.current = null;
     }
-  }, [settings, ready, selectedTab, mode, requestApproval, handleEvent]);
+  }, [settings, ready, selectedTab, mode, requestApproval, handleEvent, tasks, apps]);
 
   const stop = () => abortRef.current?.abort();
   const retry = useCallback(() => {
@@ -552,6 +574,7 @@ export function App() {
         onToggleScreenshot={toggleScreenshot}
         mode={mode}
         onMode={PAGE_QUERY ? undefined : changeMode}
+        suggest={(v) => suggestions(v, tasks, apps)}
         onSettings={() => setView("settings")}
       />
     </div>
