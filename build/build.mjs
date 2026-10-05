@@ -147,6 +147,9 @@ csc(path.join(app, "EnkiBrowserLauncher.exe"), [src("Launcher.cs"), src("Updater
 // included because rcedit changed it; the rest of Chromium is shipped as ungoogled-chromium built it.
 const signed = [path.join(installRoot, "EnkiBrowser.exe"), path.join(app, "EnkiBrowserLauncher.exe"), path.join(app, "chromium", "chrome.exe")].map(signFile);
 console.log(signed.every(Boolean) ? "  signed EnkiBrowser.exe, EnkiBrowserLauncher.exe, chrome.exe" : "  not signed (ENKI_SIGN_COMMAND is not set)");
+// Each version carries the stub it was built with; the launcher puts it in place once the browser
+// has closed (Updater.RefreshStub), so the stub's icon and fixes reach existing installs.
+cpSync(path.join(installRoot, "EnkiBrowser.exe"), path.join(app, "EnkiBrowser.exe"));
 writeFileSync(path.join(installRoot, "current"), pkg.version);
 cpSync(ico, path.join(app, "enki.ico"));
 
