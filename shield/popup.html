@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Enki Shields</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main id="app">
+    <header class="site">
+      <img id="favicon" alt="" width="24" height="24">
+      <div class="site-text">
+        <div id="host" class="host"></div>
+        <div id="state" class="state"></div>
+      </div>
+      <button id="toggle" class="switch big" role="switch" aria-checked="true" aria-label="Shields for this site"><span></span></button>
+    </header>
+
+    <button id="count-box" class="count" aria-expanded="false">
+      <strong id="count">0</strong> <span id="count-label">trackers, ads, and more blocked</span>
+    </button>
+    <ul id="blocked" class="blocked" hidden></ul>
+
+    <section id="advanced">
+      <button id="advanced-toggle" class="section-head" aria-expanded="true">
+        <span>Advanced options</span><span class="chev">⌃</span>
+      </button>
+      <div id="advanced-body">
+        <label class="row">
+          <span class="ico">✋</span>
+          <span class="grow">Block trackers &amp; ads</span>
+          <select id="level" aria-label="Blocking level"></select>
+        </label>
+        <div class="row">
+          <span class="ico">🔒</span>
+          <span class="grow">Upgrade connections to HTTPS</span>
+          <span class="fixed">Always</span>
+        </div>
+        <div class="row">
+          <span class="ico">&lt;/&gt;</span>
+          <span class="grow">Block scripts</span>
+          <button id="scripts" class="switch" role="switch" aria-checked="false" aria-label="Block scripts on this site"><span></span></button>
+        </div>
+        <div class="row" title="Every site gets tiny random noise in canvas and layout readings, so they cannot be used to identify this browser.">
+          <span class="ico">◉</span>
+          <span class="grow">Block fingerprinting</span>
+          <span class="fixed">Standard</span>
+        </div>
+        <label class="row">
+          <span class="ico">🍪</span>
+          <span class="grow">Cookies</span>
+          <select id="cookies" aria-label="Cookies on this site">
+            <option value="">Block third-party cookies</option>
+            <option value="block">Block all cookies</option>
+          </select>
+        </label>
+        <div class="row">
+          <span class="ico">🧹</span>
+          <span class="grow">Forget me when I close this site</span>
+          <button id="forget" class="switch" role="switch" aria-checked="false" aria-label="Forget this site when its last tab closes"><span></span></button>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="buttons">
+        <button id="lists" class="pill">Filter lists</button>
+        <button id="global" class="pill">Global settings</button>
+      </div>
+      <p class="note">If this site seems broken, try Shields down. Blocking stays on everywhere else.</p>
+      <p class="note links"><a id="terms" href="#">Terms</a> · <a id="privacy" href="#">Privacy</a></p>
+    </footer>
+  </main>
+  <main id="not-web" hidden>
+    <p class="note">Shields work on websites. This page belongs to the browser.</p>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

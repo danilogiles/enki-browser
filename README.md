@@ -130,7 +130,8 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 |---|---|---|
 | AI assistant | Enki in the side panel, pinned to the toolbar | [danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser), MIT |
 | AI model | NVIDIA Nemotron 3 Ultra by default — free key from [build.nvidia.com](https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b), no credit card; or Claude, GPT, Gemini, Groq, OpenRouter, Ollama, OmniRoute | chosen in Enki's Settings |
-| Ads and trackers | Blocked (EasyList, EasyPrivacy, Peter Lowe's list, uBlock filters) | [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home), unmodified |
+| Ads and trackers | Blocked (EasyList, EasyPrivacy, Peter Lowe's list, uBlock filters) | [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home), with the small Shields patch described in [THIRD_PARTY.md](THIRD_PARTY.md) |
+| Shields button | Right of the address bar: how many trackers and ads were blocked on the site and which, Shields down for one site, blocking level, scripts, cookies and "forget me when I close this site" | Enki Shield (`shield/`) |
 | Malware sites | Blocked by uBlock's *Badware risks* and the URLhaus *Malicious URL Blocklist* | uBlock Origin Lite |
 | Address bar search | Enki: a search opens Enki's answer page, which searches the web and cites its sources. DuckDuckGo, Google, Bing and others are one click away in Settings → Search engine (suggestions while typing come from DuckDuckGo) | `config/initial_preferences.json` |
 | Connections | `http://` upgraded to `https://`, with a warning where a site has no HTTPS | same |
@@ -186,6 +187,8 @@ checks what a user would observe, not what the config says:
 - the same canvas drawing reads back differently on each load
 - `chrome://settings/cookies` has third-party cookies blocked
 - the browser does not keep running after its last window closes (so updates can install)
+- the Shields button counts what was blocked on a site, shows that number, Shields down lets that
+  site's trackers through and Shields up blocks them again; new profiles have it pinned
 - a new tab opens Enki Home; the About page and the window title say Enki Browser; About shows
   Enki Browser's version, Enki's logo (not Chromium's) and the Chromium credits; no custom theme
   is active; `chrome.exe` describes itself as Enki Browser
@@ -246,3 +249,9 @@ never in a public issue.
 
 Enki Browser's own code is MIT (see [LICENSE](LICENSE)). The bundled components keep their
 licenses — see [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## Terms and privacy
+
+[Terms of Use](TERMS.md) · [Privacy Policy](PRIVACY.md). In short: no accounts, no telemetry, and the
+project receives none of your data; the table in the privacy policy lists every request the
+browser makes and who receives it.

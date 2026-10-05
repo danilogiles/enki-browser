@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Enki Shields settings</title>
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    body { width: auto; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+    h1 { font-size: 20px; } h2 { font-size: 14px; margin-top: 28px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .card { background: var(--card); border-radius: 12px; padding: 4px 14px; }
+    .sites li { display: flex; gap: 10px; align-items: center; padding: 6px 0; }
+    .sites li span { flex: 1; } .sites { list-style: none; padding: 0; margin: 0; }
+    button.link { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; }
+  </style>
+</head>
+<body>
+  <h1>Enki Shields</h1>
+  <p class="state">Defaults for every site. Change one site from the Shields button next to the address bar.</p>
+  <h2>Everywhere</h2>
+  <div class="card">
+    <label class="row"><span class="grow">Block trackers &amp; ads</span><select id="level" aria-label="Default blocking level"></select></label>
+    <div class="row"><span class="grow">Show the number blocked on the Shields button</span><button id="badge" class="switch" role="switch" aria-checked="true" aria-label="Show the number blocked"><span></span></button></div>
+    <div class="row"><span class="grow">Upgrade connections to HTTPS</span><span class="fixed">Always · browser settings</span></div>
+    <div class="row"><span class="grow">Third-party cookies</span><span class="fixed">Blocked · browser settings</span></div>
+    <div class="row"><span class="grow">Fingerprinting</span><span class="fixed">Standard noise on every site</span></div>
+    <div class="row"><span class="grow">Phishing warnings</span><span class="fixed">On, list checked on this device</span></div>
+  </div>
+  <h2>Sites with their own settings</h2>
+  <div class="card"><ul id="sites" class="sites"></ul></div>
+  <p class="note links"><a href="https://github.com/danilogiles/enki-browser/blob/main/TERMS.md" target="_blank">Terms</a> · <a href="https://github.com/danilogiles/enki-browser/blob/main/PRIVACY.md" target="_blank">Privacy</a></p>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

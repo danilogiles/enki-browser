@@ -111,7 +111,7 @@ for (const file of ["chrome.exe", "chrome.dll"]) {
 rmSync(iconPatch);
 
 step("Writing browser defaults");
-writeDefaults(path.join(app, "chromium"), path.join(app, "config"), ext.enkiId);
+writeDefaults(path.join(app, "chromium"), path.join(app, "config"), ext.enkiId, ext.shieldId);
 
 step("Compiling the stub, the launcher and the installer");
 // The updater trusts exactly one key, compiled in: the public half of the release signing key.

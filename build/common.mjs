@@ -140,14 +140,35 @@ function freshWorker(dir) {
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
+/**
+ * Appends patches/ublock-lite-shields.js to uBlock's background script: Enki Shield's Shields
+ * panel may then read and set a site's filtering mode (and nothing else). The anchor check fails
+ * the build if a uBlock update reshapes the file, rather than shipping a patch that never runs.
+ */
+function patchBlocker(dir, shieldId) {
+  const file = path.join(dir, "js", "background.js");
+  const source = readFileSync(file, "utf8");
+  for (const anchor of ["runtime.onMessage.addListener((request, sender, callback) => {", "case 'setFilteringMode':", "case 'setDefaultFilteringMode':"]) {
+    if (!source.includes(anchor)) throw new Error(`uBlock Origin Lite changed: "${anchor}" is no longer in js/background.js; update patches/ublock-lite-shields.js`);
+  }
+  const patch = readFileSync(path.join(root, "patches", "ublock-lite-shields.js"), "utf8").replace("__ENKI_SHIELD_ID__", shieldId);
+  writeFileSync(file, source + patch);
+  console.log("  uBlock Origin Lite patched for the Shields panel (patches/ublock-lite-shields.js)");
+}
+
 /** Copies the built-in extensions into <app>/extensions and returns their ids. */
 export async function addExtensions(app) {
   step(`Fetching ${upstream.blocker.name} ${upstream.blocker.version}`);
   const blockerZip = await fetchPinned(upstream.blocker);
   const blockerTmp = path.join(out, "_blocker");
   extract(blockerZip, blockerTmp);
-  cpSync(findRoot(blockerTmp, "manifest.json"), path.join(app, "extensions", "ublock-lite"), { recursive: true });
+  const blockerDir = path.join(app, "extensions", "ublock-lite");
+  cpSync(findRoot(blockerTmp, "manifest.json"), blockerDir, { recursive: true });
   rmSync(blockerTmp, { recursive: true, force: true });
+  // uBlock ships without a key, so its id came from its folder — app\<version>\… — and every
+  // update gave it a new id and an empty storage: per-site modes and list choices were lost.
+  const blocker = withKey(blockerDir, "ublock-extension.pub");
+  console.log(`  uBlock Origin Lite id: ${blocker.id}`);
 
   step("Building Enki");
   const enkiDir = path.join(app, "extensions", "enki");
@@ -165,12 +186,14 @@ export async function addExtensions(app) {
   cpSync(path.join(root, "shield"), shieldDir, { recursive: true });
   const shield = withKey(shieldDir, "shield-extension.pub");
   console.log(`  Enki Shield id: ${shield.id}`);
+  patchBlocker(blockerDir, shield.id);
+  writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id }));
 
   for (const dir of ["enki", "shield", "ublock-lite"]) freshWorker(path.join(app, "extensions", dir));
 
   // Icons up to 256 px live in icons/ (older Enki builds only had public/icons up to 128).
   const iconDir = existsSync(path.join(enkiDir, "icons", "icon16.png")) ? path.join(enkiDir, "icons") : path.join(enkiDir, "public", "icons");
-  return { enkiId: enki.id, enkiVersion: enki.manifest.version, shieldId: shield.id, iconDir };
+  return { enkiId: enki.id, enkiVersion: enki.manifest.version, shieldId: shield.id, ublockId: blocker.id, iconDir };
 }
 
 /**
@@ -238,9 +261,10 @@ export async function replaceLogos(chromiumDir, chromiumVersion, iconDir) {
 }
 
 /** First-run defaults (read from next to the Chromium binary) and the launcher's switches. */
-export function writeDefaults(chromiumDir, configDir, enkiId) {
+export function writeDefaults(chromiumDir, configDir, enkiId, shieldId) {
   const prefs = JSON.parse(readFileSync(path.join(root, "config", "initial_preferences.json"), "utf8"));
-  prefs.extensions = { ...(prefs.extensions ?? {}), pinned_extensions: [enkiId] };
+  // Enki, and Enki Shield's Shields button right of the address bar, as Brave's lion is.
+  prefs.extensions = { ...(prefs.extensions ?? {}), pinned_extensions: [enkiId, shieldId].filter(Boolean) };
   writeFileSync(path.join(chromiumDir, "initial_preferences"), JSON.stringify(prefs, null, 2));
   mkdirSync(configDir, { recursive: true });
   cpSync(path.join(root, "config", "flags.txt"), path.join(configDir, "flags.txt"));

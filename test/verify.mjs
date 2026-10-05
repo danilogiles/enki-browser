@@ -111,6 +111,39 @@ try {
   await page.waitForTimeout(3000);
   const summary = trackers.map((u) => `${new URL(u).hostname}: ${outcome.get(u) ?? "no request seen"}`);
   check("ad and tracker scripts never load", trackers.every((u) => /BLOCKED_BY_CLIENT|neutered/.test(outcome.get(u) ?? "")), summary.join(", "));
+
+  // ---- the Shields button: what was blocked on this site, and Shields down for it
+  const shieldsPage = await page.context().newPage();
+  await shieldsPage.goto(`chrome-extension://${version.shieldExtensionId}/options.html`);
+  const siteTab = await shieldsPage.evaluate(async () => (await chrome.tabs.query({ url: "https://example.com/*" }))[0]?.id);
+  const openShields = async () => {
+    await shieldsPage.goto(`chrome-extension://${version.shieldExtensionId}/popup.html?tab=${siteTab}`);
+    await shieldsPage.waitForTimeout(800);
+    return shieldsPage.evaluate(() => ({ host: document.getElementById("host").textContent, count: Number(document.getElementById("count").textContent), up: document.getElementById("toggle").getAttribute("aria-checked") === "true", levels: !document.getElementById("level").disabled }));
+  };
+  const before = await openShields();
+  check("the Shields panel counts what was blocked on the site", before.host === "example.com" && before.count >= trackers.length && before.up, JSON.stringify(before));
+  check("the Shields panel reaches uBlock's per-site mode", before.levels);
+  const badgeText = await shieldsPage.evaluate((tabId) => chrome.action.getBadgeText({ tabId }), siteTab);
+  check("the Shields button shows the number blocked", badgeText === String(before.count), `badge "${badgeText}"`);
+  const firstRun = JSON.parse(readFileSync(path.join(app, "chromium", "initial_preferences"), "utf8"));
+  check("new profiles get the Shields button pinned next to the address bar", firstRun.extensions?.pinned_extensions?.includes(version.shieldExtensionId), JSON.stringify(firstRun.extensions?.pinned_extensions));
+  const loadTrackers = async () => {
+    outcome.clear();
+    await page.waitForLoadState("load").catch(() => undefined);
+    await page.evaluate((urls) => urls.forEach((u) => { const el = document.createElement("script"); el.src = u; document.head.appendChild(el); }), trackers);
+    await page.waitForTimeout(3000);
+    return trackers.map((u) => outcome.get(u) ?? "no request seen");
+  };
+  await shieldsPage.click("#toggle"); // Shields down, and the panel reloads the tab
+  await page.waitForTimeout(1500);
+  const down = await loadTrackers();
+  check("Shields down lets a site's trackers through", (await openShields()).up === false && down.some((o) => !/BLOCKED_BY_CLIENT|neutered/.test(o)), down.join(", "));
+  await shieldsPage.click("#toggle"); // and back up
+  await page.waitForTimeout(1500);
+  const up = await loadTrackers();
+  check("Shields up blocks them again", up.every((o) => /BLOCKED_BY_CLIENT|neutered/.test(o)), up.join(", "));
+  await shieldsPage.close();
   await page.goto(local);
 
   // ---- fingerprinting: the same drawing must not read back identically across page loads

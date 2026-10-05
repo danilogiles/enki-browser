@@ -48,7 +48,7 @@ for (const size of [48]) {
 }
 
 step("Defaults, launcher, installer");
-writeDefaults(path.join(app, "chromium"), path.join(app, "config"), ext.enkiId);
+writeDefaults(path.join(app, "chromium"), path.join(app, "config"), ext.enkiId, ext.shieldId);
 for (const f of ["enki-browser", "install.sh", "uninstall.sh", "enki-browser.desktop", "apparmor-profile"]) cpSync(path.join(pkgDir, f), path.join(app, f));
 for (const f of ["enki-browser", "install.sh", "uninstall.sh"]) chmodSync(path.join(app, f), 0o755);
 cpSync(path.join(root, "LICENSE"), path.join(app, "LICENSE"));
