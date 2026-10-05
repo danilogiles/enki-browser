@@ -171,6 +171,10 @@ try {
   await closeBrowser(liveBrowser);
   for (let i = 0; i < 80 && existsSync(path.join(live, "app", "0.0.0")); i++) await sleep(500);
   check("old versions are removed when the browser closes", !existsSync(path.join(live, "app", "0.0.0")) && existsSync(path.join(live, "app", "0.0.1")), liveLast());
+  // The stub shortcuts point at (and its icon) comes from the version now in use.
+  const shippedStub = path.join(live, "app", "0.0.2", "EnkiBrowser.exe");
+  for (let i = 0; i < 20 && existsSync(shippedStub) && sha(liveStub) !== sha(shippedStub); i++) await sleep(500);
+  check("the stub is updated once the browser closes", existsSync(shippedStub) && sha(liveStub) === sha(shippedStub), liveLast());
 } catch (e) {
   console.log(`ERROR ${e.message}`);
   console.log("--- update.log\n" + log());

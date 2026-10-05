@@ -140,6 +140,38 @@ static class Updater
         catch (Exception e) { Log(root, "old version cleanup skipped: " + e.Message); }
     }
 
+    [System.Runtime.InteropServices.DllImport("shell32.dll")]
+    static extern void SHChangeNotify(int eventId, uint flags, IntPtr item1, IntPtr item2);
+
+    /// Replaces the stub (root\EnkiBrowser.exe) with the copy this version ships, when they
+    /// differ. The stub was never updated, to keep updates from touching a program in use (the
+    /// 0.2–0.4 updater renamed the running launcher and an antivirus quarantined the install), so
+    /// installs kept the first stub forever — with its old icon in Explorer, the Start menu and the
+    /// Apps list. It is safe here: this runs when the browser has closed, nothing runs from the
+    /// stub (it exits as soon as it starts the launcher), nothing is renamed, and File.Replace
+    /// swaps it in one step. Afterwards Windows is told to refresh the icons it cached.
+    public static void RefreshStub(string root, string appDir)
+    {
+        try
+        {
+            string shipped = Path.Combine(appDir, "EnkiBrowser.exe");
+            string stub = Path.Combine(root, "EnkiBrowser.exe");
+            if (!File.Exists(shipped) || !File.Exists(stub) || Sha256(shipped) == Sha256(stub)) return;
+            string stubPath = Win.LongPath(stub);
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("EnkiBrowser"))
+            {
+                try { if (string.Equals(Win.LongPath(p.MainModule.FileName), stubPath, StringComparison.OrdinalIgnoreCase)) return; }
+                catch { }
+            }
+            string next = stub + ".new";
+            File.Copy(shipped, next, true);
+            File.Replace(next, stub, null);
+            SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero); // SHCNE_ASSOCCHANGED: rebuild icons
+            Log(root, "updated EnkiBrowser.exe from " + Path.GetFileName(appDir));
+        }
+        catch (Exception e) { Log(root, "could not update EnkiBrowser.exe: " + e.Message); }
+    }
+
     /// Points `current` at a version, replacing the file in one step so a crash mid-write can
     /// never leave it half written (and the stub falls back to the newest folder if it were).
     static void SetCurrent(string root, Version v)

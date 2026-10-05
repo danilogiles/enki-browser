@@ -3,7 +3,7 @@
 //
 // Layout (0.5+), chosen so that nothing is ever renamed or moved while it runs — the pattern
 // that made an antivirus quarantine the 0.2–0.4 self-updater:
-//   <root>\EnkiBrowser.exe    stub: opens the current version; never touched by updates
+//   <root>\EnkiBrowser.exe    stub: opens the current version; replaced only after the browser closes (Updater.RefreshStub)
 //   <root>\current            the version to open, e.g. "0.5.0"
 //   <root>\app\<version>\     one complete release; updates add a folder beside it
 using System;
