@@ -1,16 +1,27 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, Globe, MessageCircle, MousePointerClick, ShieldCheck } from "lucide-react";
 import logo from "../assets/logo.svg";
 import { putHandoff } from "../lib/handoff";
+// Loaded only when someone actually asks. A static import would put the whole panel — ~730 kB of
+// it — in the new tab page's critical path, and a new tab has to paint instantly.
+const App = lazy(() => import("../sidepanel/App").then((m) => ({ default: m.App })));
 import { legalLinks } from "../lib/legal";
 import { loadSettings, presetOf, type Settings } from "../lib/settings";
 import { customTokens, luminance } from "../lib/theme";
 
 /**
- * Enki Home: the new tab page of Enki Browser. One box that either asks Enki — the side panel
- * opens with the request already sent — or searches the web. The extension ships this page, but
- * only Enki Browser turns it on (its build adds the new-tab override to the manifest), so people
- * who install the extension in their own browser keep their new tab page.
+ * Enki Home: the new tab page of Enki Browser. One box that either asks Enki or searches the web.
+ * The extension ships this page, but only Enki Browser turns it on (its build adds the new-tab
+ * override to the manifest), so people who install the extension in their own browser keep their
+ * new tab page.
+ *
+ * ASK ANSWERS HERE. It used to slide the side panel out and hand the request over; now the answer
+ * appears on this page, in the tab the person is already looking at. It is the same conversation
+ * either way — the chat is shared, so opening the panel later shows this exact thread, and both
+ * follow each other live (see the sync note in App.tsx).
+ *
+ * ACT STILL GOES TO THE PANEL, and must. Act navigates the tab it is given, and this page IS a
+ * tab: the first navigation would destroy the surface the answer is being written on.
  */
 
 type Mode = "ask" | "act";
@@ -96,6 +107,8 @@ function asUrl(input: string): string | null {
 export function Home() {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<Mode>("ask");
+  /** The question being answered on this page, or null while Home is still just a box. */
+  const [asking, setAsking] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   // sidePanel.open must run inside the click, before any await, so the window is known up front.
   const windowId = useRef<number | undefined>(undefined);
@@ -116,6 +129,8 @@ export function Home() {
   const askEnki = (request: string, m: Mode) => {
     const q = request.trim();
     if (!q) return;
+    if (m === "ask") { setAsking(q); setText(""); return; }
+    // Act drives tabs, including this one — it belongs in the panel. See the note above.
     openPanel();
     void putHandoff(q, m);
     setText("");
@@ -139,6 +154,16 @@ export function Home() {
     if (e.altKey) searchWeb(text);
     else submit();
   };
+
+  // Answering in place: the page becomes the conversation, and the chat it joins is the one the
+  // side panel holds. Mounted rather than navigated to, so nothing in this tab is lost.
+  if (asking !== null) {
+    return (
+      <Suspense fallback={<div className="flex min-h-full items-center justify-center text-sm text-mist/60">…</div>}>
+        <App host="page" seed={asking} />
+      </Suspense>
+    );
+  }
 
   const configured = !!settings && (!!settings.apiKey || !!presetOf(settings.preset).keyOptional);
   const greeting = t.greeting[Math.floor(new Date().getHours() / 6)];

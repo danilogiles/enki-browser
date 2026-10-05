@@ -115,17 +115,23 @@ try {
   await panel.screenshot({ path: path.join(here, ".out/quality-panel.png"), fullPage: true });
   check("sidebar fits without horizontal overflow", await panel.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
-  // Enki Home: a request typed on the new tab page must open the panel and be sent from it.
+  // Enki Home, the half that still hands over. Ask now answers on the page itself — test/home.mjs
+  // covers that, and the shared conversation behind it. Act cannot: it navigates the tab it is
+  // given, and Home IS a tab, so it still opens the panel and sends the request from there.
   // The real side panel is stubbed so the panel under test (a tab) is the one that picks it up.
-  await configure("mock-echo", "ask");
+  await configure("mock-echo", "act");
   await newChat(); await idle();
   const home = await context.newPage();
   await home.goto(`chrome-extension://${id}/src/home/index.html`);
   await home.evaluate(() => { window.__opened = []; chrome.sidePanel.open = async (o) => { window.__opened.push(o); }; });
+  // The stored mode is read asynchronously on mount; typing first would exercise Ask instead.
+  await home.waitForFunction(
+    () => Array.from(document.querySelectorAll('[role="radio"][aria-checked="true"]')).some((e) => /Act|Agir|Actuar/.test(e.textContent ?? "")),
+    null, { timeout: 8000 });
   await home.fill("textarea", "hello from enki home");
   await home.press("textarea", "Enter");
   const opened = await home.evaluate(() => window.__opened);
-  check("Enki Home opens the side panel on Enter", opened.length === 1 && typeof opened[0].windowId === "number");
+  check("Enki Home opens the side panel for Act", opened.length === 1 && typeof opened[0].windowId === "number");
   // The open panel hears the handoff through storage.onChanged; no reload needed.
   await panel.waitForFunction(() => document.body.innerText.includes("Echo:") && document.body.innerText.includes("hello from enki home"), null, { timeout: 15000 });
   await idle();

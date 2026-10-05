@@ -13,8 +13,9 @@ import { SettingsView } from "./SettingsView";
 import { LogsView } from "./LogsView";
 import { log, setDevMode } from "../lib/debug";
 import { uid, type Segment, type TabInfo, type UiMessage } from "./types";
-import { snapshotConversation } from "../lib/conversation";
-import { clearChats, currentChat, deleteChat, listChats, loadChat, saveChat, setCurrentChat, type ChatEntry } from "../lib/history";
+import { restoreConversation, snapshotConversation } from "../lib/conversation";
+import { chatKey, clearChats, currentChat, deleteChat, listChats, loadChat, saveChat, setCurrentChat, type ChatEntry } from "../lib/history";
+import { acquireTurn, releaseTurn, renewTurn } from "../lib/turnlock";
 import { applyTheme } from "../lib/theme";
 import { Header } from "./Header";
 import { invalidateObservations } from "../lib/agent/context";
@@ -43,7 +44,20 @@ function nowLine(): string {
   return `[Now] ${local} (${zone}; ${now.toISOString().slice(0, 10)})`;
 }
 
-export function App() {
+/**
+ * Where this instance is mounted. The panel is the docked side panel; "page" is Enki Home
+ * answering in place, in its own tab, instead of sliding the panel out.
+ *
+ * Two things differ, and they are not the same thing, which is why there are two flags below:
+ * being a PAGE changes the shape (wide layout, no page under it to read, Ask only), while being
+ * ISOLATED changes whose conversation it is. The address bar's answer page is both. Enki Home is
+ * only the first — it deliberately shares the panel's chat, so the two stay one conversation.
+ */
+export type Host = "panel" | "page";
+
+export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {}) {
+  const isolated = !!PAGE_QUERY;
+  const asPage = isolated || host === "page";
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<"chat" | "settings" | "logs">("chat");
   const [mode, setMode] = useState<Mode>("ask");
@@ -81,6 +95,9 @@ export function App() {
   const historyRef = useRef<Message[]>([]);
   const executorRef = useRef<BrowserExecutor | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** savedAt of the snapshot this document last wrote, so its own echo off storage is not
+   *  mistaken for the other document having changed the conversation. */
+  const lastSavedAt = useRef(0);
 
   // ----- settings -----
   useEffect(() => {
@@ -89,7 +106,7 @@ export function App() {
       if (s.saveConversations) {
         setChats(await listChats());
       }
-      if (s.saveConversations && !PAGE_QUERY) {
+      if (s.saveConversations && !isolated) {
         // Reopen the chat that was open, not merely the newest: after New chat there is none.
         const open = await currentChat();
         const restored = open ? await loadChat(open) : null;
@@ -104,10 +121,10 @@ export function App() {
       const preset = presetOf(s.preset);
       if (!s.apiKey && !preset.keyOptional) setView("settings");
     });
-    if (!PAGE_QUERY) chrome.storage.local.get(MODE_KEY).then((v) => {
+    if (!isolated) chrome.storage.local.get(MODE_KEY).then((v) => {
       if (v[MODE_KEY] === "act" || v[MODE_KEY] === "ask") setMode(v[MODE_KEY]);
     });
-    if (PAGE_QUERY) document.title = `${PAGE_QUERY} — Enki`;
+    if (isolated) document.title = `${PAGE_QUERY} — Enki`;
     return onSettingsChange(setSettings);
   }, []);
 
@@ -122,9 +139,11 @@ export function App() {
     if (!settings.saveConversations) { void clearChats().then(() => setChats([])); return; }
     if (!messages.length) return;
     const id = chatId ?? uid();
-    if (!chatId) { setChatId(id); if (!PAGE_QUERY) void setCurrentChat(id); }
+    if (!chatId) { setChatId(id); if (!isolated) void setCurrentChat(id); }
     const persist = () => {
-      void saveChat(id, snapshotConversation(historyRef.current, messages))
+      const snapshot = snapshotConversation(historyRef.current, messages);
+      lastSavedAt.current = snapshot.savedAt;
+      void saveChat(id, snapshot)
         .then(() => listChats().then(setChats))
         .catch(() => setBanner("Could not save this conversation. Browser storage may be full."));
     };
@@ -136,6 +155,42 @@ export function App() {
     window.addEventListener("pagehide", persist);
     return () => { clearTimeout(timer); window.removeEventListener("pagehide", persist); };
   }, [messages, ready, running, settings?.saveConversations, chatId]);
+
+  // ----- the same conversation, open in two places -----
+  /**
+   * The side panel and Enki Home answering in place are separate documents holding one chat. The
+   * one that is not running follows the one that is, by re-reading the chat whenever it is saved
+   * — which happens every 250ms through a turn, so the idle view streams in near real time rather
+   * than jumping at the end.
+   *
+   * Three things are deliberately not re-read: our own writes (`lastSavedAt`), anything while we
+   * are running or aborting (our in-memory state is ahead of storage), and the answer page, whose
+   * chat is nobody else's.
+   */
+  useEffect(() => {
+    if (!chatId || isolated || !settings?.saveConversations) return;
+    const key = chatKey(chatId);
+    const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== "local" || !changes[key]?.newValue) return;
+      if (running || abortRef.current) return;
+      const restored = restoreConversation(changes[key].newValue);
+      if (!restored || restored.savedAt === lastSavedAt.current) return;
+      historyRef.current = restored.history;
+      // The page under us was read by the OTHER document, not this one: anything it observed is
+      // not ours to trust, so the next turn here reads the page again.
+      restoredRef.current = true;
+      setMessages(restored.messages);
+    };
+    chrome.storage.onChanged.addListener(onChange);
+    return () => chrome.storage.onChanged.removeListener(onChange);
+  }, [chatId, isolated, settings?.saveConversations, running]);
+
+  // A long turn keeps its claim fresh; the lock expires on its own if this document dies.
+  useEffect(() => {
+    if (!running || !chatId) return;
+    const timer = setInterval(() => void renewTurn(chatId), 30_000);
+    return () => clearInterval(timer);
+  }, [running, chatId]);
 
   useEffect(() => {
     if (!running) return;
@@ -335,8 +390,14 @@ export function App() {
     // The answer page only answers, so a task saved for Act runs there as Ask.
     const ex = intent === "normal" ? expand(text, tasks, apps) : ({ text: text.trim() } as ReturnType<typeof expand>);
     text = ex.text;
-    const runMode: Mode = PAGE_QUERY ? "ask" : ex.mode ?? mode;
+    const runMode: Mode = asPage ? "ask" : ex.mode ?? mode;
     executor.setConnections(apps);
+    // One turn at a time per conversation — see turnlock.ts. Without this, a question typed here
+    // while the other document is still answering would run a second turn over the same history.
+    if (!(await acquireTurn(chatId))) {
+      setBanner("Enki is still answering this conversation in its other window. Wait for it to finish, or start a new chat.");
+      return;
+    }
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(true);
@@ -353,8 +414,8 @@ export function App() {
       if (current?.id) { executor.lockTab(current.id); setSelectedTab(current.id); }
       if (controller.signal.aborted) return;
       const restricted = !current || isRestrictedUrl(current.url);
-      const context = PAGE_QUERY
-        ? "[Current tab] none: this is Enki's answer page, opened from the address bar. There is no page to read; answer from your knowledge or, for anything current, from web_search and read_url."
+      const context = asPage
+        ? "[Current tab] none: this is one of Enki's own pages, not a site. There is no page to read; answer from your knowledge or, for anything current, from web_search and read_url."
         : current ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
       const hint = ex.hint ? `\n${ex.hint}` : "";
       const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}${hint}\n\n${text.trim()}` }];
@@ -407,8 +468,9 @@ export function App() {
       executor.lockTab(null);
       setRunning(false);
       abortRef.current = null;
+      await releaseTurn();
     }
-  }, [settings, ready, selectedTab, mode, requestApproval, handleEvent, tasks, apps]);
+  }, [settings, ready, selectedTab, mode, requestApproval, handleEvent, tasks, apps, chatId]);
 
   const stop = () => abortRef.current?.abort();
   const retry = useCallback(() => {
@@ -420,10 +482,13 @@ export function App() {
   // A request typed on Enki Home arrives here. It waits for the panel to be ready and idle, in
   // the mode the user picked there, and for a usable provider — without one it opens Settings
   // and is sent as soon as they are saved.
-  const [handoff, setHandoff] = useState<Handoff | null>(PAGE_QUERY ? { text: PAGE_QUERY, mode: "ask", at: Date.now() } : null);
+  const [handoff, setHandoff] = useState<Handoff | null>(
+    PAGE_QUERY ? { text: PAGE_QUERY, mode: "ask", at: Date.now() }
+      : seed ? { text: seed, mode: "ask", at: Date.now() } : null);
   useEffect(() => {
-    // A request typed on Enki Home is for the side panel, not for an answer page.
-    if (PAGE_QUERY) return;
+    // A handoff is a request typed on Enki Home FOR THE PANEL. A page never claims one: the
+    // answer page has its own question, and Home answering in place already has what it typed.
+    if (asPage) return;
     const grab = () => void takeHandoff().then((h) => h && setHandoff(h));
     grab();
     return onHandoff(grab);
@@ -523,7 +588,7 @@ export function App() {
   const needsKey = !settings.apiKey && !presetOf(settings.preset).keyOptional;
 
   return (
-    <div className={`flex h-full flex-col ${PAGE_QUERY ? "page-mode mx-auto w-full max-w-3xl" : ""}`}>
+    <div className={`flex h-full flex-col ${asPage ? "page-mode mx-auto w-full max-w-3xl" : ""}`}>
       <Header
         settings={settings}
         running={running}
@@ -590,7 +655,7 @@ export function App() {
         vision={settings.vision}
         onToggleScreenshot={toggleScreenshot}
         mode={mode}
-        onMode={PAGE_QUERY ? undefined : changeMode}
+        onMode={asPage ? undefined : changeMode}
         suggest={(v) => suggestions(v, tasks, apps)}
         onSettings={() => setView("settings")}
       />

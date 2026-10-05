@@ -24,6 +24,9 @@ export function setCurrentChat(id: string | null): Promise<void> {
   return chrome.storage.local.set({ [CURRENT]: id ?? "" });
 }
 const PREFIX = "enki:chat:";
+/** The storage key one conversation lives under. Exported so another document can watch for the
+ *  moment this chat changes under it — the side panel and Enki Home now hold the same one. */
+export const chatKey = (id: string): string => PREFIX + id;
 /** Older chats beyond this are dropped; local storage is not an archive. */
 const MAX_CHATS = 50;
 
