@@ -168,5 +168,20 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.deepEqual(t.children.map((c) => c.label), ['Product', 'Marketing']);
     assert.deepEqual(t.children[0].children.map((c) => c.label), ['Pricing', 'Docs']);
   });
+  check('no source file carries text saved in the wrong encoding', () => {
+    // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
+    const path = require('node:path');
+    const garbled = /â[\u0080-¿–—€‚-„‘-”†-•…™]|Ã[\u0080-¿]/;
+    const found = [];
+    const walk = (dir) => {
+      for (const name of fs.readdirSync(dir)) {
+        const p = path.join(dir, name);
+        if (fs.statSync(p).isDirectory()) walk(p);
+        else if (/\.(tsx?|css|html)$/.test(name) && garbled.test(fs.readFileSync(p, 'utf8'))) found.push(p);
+      }
+    };
+    walk(path.join(__dirname, '..', 'src'));
+    assert.deepEqual(found, []);
+  });
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });
