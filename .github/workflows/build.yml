@@ -150,3 +150,31 @@ jobs:
             dist/enki-browser-*-linux-x64.tar.gz dist/enki-browser-*-linux-x64.tar.gz.sha256 \
             dist/enki-browser_*_amd64.deb dist/enki-browser_*_amd64.deb.sha256 \
             dist/enki-browser.json dist/update.json dist/update.json.sig
+
+  dco:
+    name: DCO sign-off
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # A sign-off is the contributor stating they may submit the change under the project's
+      # license (https://developercertificate.org). Lighter than a CLA, which keeps casual
+      # contributors away. `git commit -s` adds it.
+      - name: Every commit is signed off
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            if ! git log -1 --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+>'; then
+              echo "::error::Commit $(git log -1 --format='%h %s' "$sha") has no Signed-off-by line."
+              missing=1
+            fi
+          done
+          if [ "$missing" = 1 ]; then
+            echo "Fix with: git rebase --signoff $BASE && git push --force-with-lease"
+            exit 1
+          fi
