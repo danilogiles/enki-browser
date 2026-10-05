@@ -342,3 +342,9 @@ body {
   animation: enki-blink 1s infinite;
   margin-left: 1px;
 }
+
+/* The answer page (Enki as the address bar's search engine): a reading column, not a sidebar. */
+.page-mode .md {
+  font-size: 15px;
+  line-height: 1.65;
+}

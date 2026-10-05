@@ -52,6 +52,31 @@ export const READ_TOOLS: ToolDefinition[] = [
     description: "List the open tabs in the current window with their ids, titles and URLs.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
+  {
+    name: "web_search",
+    description:
+      "Search the web. Use it for anything current or outside the page: news, live results (elections, sports, markets), prices, weather, recent releases, facts you are not sure of. Returns titles, links and snippets; read the best sources with read_url before answering.",
+    inputSchema: {
+      type: "object",
+      properties: { query: { type: "string", description: "What to search for, in the most useful language for the topic." } },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "read_url",
+    description:
+      "Read the text of any web page by URL without leaving the current tab. Works on pages that build their content with JavaScript (live results, dashboards). Use it on links from web_search or on sites you know hold the answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Full https:// URL." },
+        max_chars: { type: "integer", description: "Truncate after this many characters (default 15000)." },
+      },
+      required: ["url"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 /** Tools that change the page or the browser. Only available in "Act" mode. */

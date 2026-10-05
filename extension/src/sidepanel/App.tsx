@@ -22,6 +22,24 @@ import { diagnosticReport } from "../lib/diagnostics";
 
 const MODE_KEY = "enki:mode";
 
+/**
+ * The date and time travel with every message: the model's own sense of "now" is its training
+ * cutoff, and without this it denied events happening that day (an election and its live results).
+ */
+/**
+ * Opened as a tab with ?q= — Enki as the address bar's search engine — the panel is an answer
+ * page: it asks the question at once in Ask mode, starts a fresh chat instead of reopening the
+ * panel's, and leaves the panel's current chat and mode alone.
+ */
+const PAGE_QUERY = new URLSearchParams(location.search).get("q")?.trim() || null;
+
+function nowLine(): string {
+  const now = new Date();
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const local = now.toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return `[Now] ${local} (${zone}; ${now.toISOString().slice(0, 10)})`;
+}
+
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<"chat" | "settings" | "logs">("chat");
@@ -54,6 +72,8 @@ export function App() {
       setSettings(s);
       if (s.saveConversations) {
         setChats(await listChats());
+      }
+      if (s.saveConversations && !PAGE_QUERY) {
         // Reopen the chat that was open, not merely the newest: after New chat there is none.
         const open = await currentChat();
         const restored = open ? await loadChat(open) : null;
@@ -68,9 +88,10 @@ export function App() {
       const preset = presetOf(s.preset);
       if (!s.apiKey && !preset.keyOptional) setView("settings");
     });
-    chrome.storage.local.get(MODE_KEY).then((v) => {
+    if (!PAGE_QUERY) chrome.storage.local.get(MODE_KEY).then((v) => {
       if (v[MODE_KEY] === "act" || v[MODE_KEY] === "ask") setMode(v[MODE_KEY]);
     });
+    if (PAGE_QUERY) document.title = `${PAGE_QUERY} — Enki`;
     return onSettingsChange(setSettings);
   }, []);
 
@@ -85,7 +106,7 @@ export function App() {
     if (!settings.saveConversations) { void clearChats().then(() => setChats([])); return; }
     if (!messages.length) return;
     const id = chatId ?? uid();
-    if (!chatId) { setChatId(id); void setCurrentChat(id); }
+    if (!chatId) { setChatId(id); if (!PAGE_QUERY) void setCurrentChat(id); }
     const persist = () => {
       void saveChat(id, snapshotConversation(historyRef.current, messages))
         .then(() => listChats().then(setChats))
@@ -310,8 +331,10 @@ export function App() {
       if (current?.id) { executor.lockTab(current.id); setSelectedTab(current.id); }
       if (controller.signal.aborted) return;
       const restricted = !current || isRestrictedUrl(current.url);
-      const context = current ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
-      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${context}\n\n${text.trim()}` }];
+      const context = PAGE_QUERY
+        ? "[Current tab] none: this is Enki's answer page, opened from the address bar. There is no page to read; answer from your knowledge or, for anything current, from web_search and read_url."
+        : current ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
+      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}\n\n${text.trim()}` }];
       let thumb: string | undefined;
       if (settings.vision && settings.attachScreenshot && !restricted) {
         // captureVisibleTab fails transiently while a page is still painting and is limited to two
@@ -374,8 +397,10 @@ export function App() {
   // A request typed on Enki Home arrives here. It waits for the panel to be ready and idle, in
   // the mode the user picked there, and for a usable provider — without one it opens Settings
   // and is sent as soon as they are saved.
-  const [handoff, setHandoff] = useState<Handoff | null>(null);
+  const [handoff, setHandoff] = useState<Handoff | null>(PAGE_QUERY ? { text: PAGE_QUERY, mode: "ask", at: Date.now() } : null);
   useEffect(() => {
+    // A request typed on Enki Home is for the side panel, not for an answer page.
+    if (PAGE_QUERY) return;
     const grab = () => void takeHandoff().then((h) => h && setHandoff(h));
     grab();
     return onHandoff(grab);
@@ -475,7 +500,7 @@ export function App() {
   const needsKey = !settings.apiKey && !presetOf(settings.preset).keyOptional;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className={`flex h-full flex-col ${PAGE_QUERY ? "page-mode mx-auto w-full max-w-3xl" : ""}`}>
       <Header
         settings={settings}
         running={running}
@@ -526,7 +551,7 @@ export function App() {
         vision={settings.vision}
         onToggleScreenshot={toggleScreenshot}
         mode={mode}
-        onMode={changeMode}
+        onMode={PAGE_QUERY ? undefined : changeMode}
         onSettings={() => setView("settings")}
       />
     </div>

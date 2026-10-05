@@ -165,5 +165,38 @@ try {
   await configure("mock-echo", "ask", { theme: "custom", customTheme: { background: "#102030", surface: "#203040", text: "#f0f0f0", accent: "#ff8800" } });
   await panel.waitForTimeout(300);
   check("your own colours are applied", await panel.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ink-950").trim()) === "#102030");
+
+  // Charts and mind maps: a table of numbers is drawn, with tabs to see it another way.
+  await configure("mock-visual", "ask");
+  await newChat(); await send("show the results");
+  check("a table of numbers and a mind map are drawn", await panel.locator("figure.enki-visual").count() === 2);
+  check("the chart opens as bars with Bar, Line, Pie and Table tabs",
+    (await panel.locator("[role=tab]").allTextContents()).join(",") === "Bar,Line,Pie,Table" && await panel.locator("[role=tab][aria-selected=true]").textContent() === "Bar");
+  await panel.click("[role=tab]:has-text('Pie')");
+  check("the Pie tab draws a slice per row", await panel.locator("svg[aria-label='Pie chart'] path").count() === 2);
+  await panel.click("[role=tab]:has-text('Table')");
+  check("the Table tab shows the numbers as written", (await panel.locator("figure.enki-visual table").textContent()).includes("1.200.000"));
+  check("the mind map has every node", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
+
+  // The web: a page that builds its content with JavaScript is rendered in a background tab,
+  // read, and closed again; the user's tab never moves.
+  await configure("mock-web", "ask");
+  const tabsBefore = await panel.evaluate(async () => (await chrome.tabs.query({})).length);
+  await newChat(); await send("what are the live results");
+  check("read_url reads a page that builds itself with JavaScript", (await panel.textContent("body")).includes("candidate A 51.2%"));
+  check("read_url closes the tab it opened", await panel.evaluate(async () => (await chrome.tabs.query({})).length) === tabsBefore);
+  await configure("mock-echo", "ask");
+  await newChat(); await send("what day is it");
+  check("every message tells the model the date", /\[Now\] \w+day, /.test(await panel.textContent("body")));
+
+  // The answer page: Enki as the address bar's search engine opens the panel as a tab with ?q=.
+  const openBefore = await panel.evaluate(async () => (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"]);
+  const answer = await context.newPage();
+  await answer.goto(`chrome-extension://${id}/src/sidepanel/index.html?q=${encodeURIComponent("who won today")}`);
+  await answer.waitForFunction(() => document.body.innerText.includes("Echo:") && !document.querySelector("button[title='Stop']"), null, { timeout: 20000 });
+  check("an address bar search is answered on its own page", (await answer.textContent("body")).includes("who won today") && await answer.title() === "who won today — Enki");
+  check("the answer page has no Act mode (acting would navigate the answer away)", await answer.locator("button[title^='Act:']").count() === 0);
+  check("the answer page leaves the panel's open chat alone", await panel.evaluate(async () => (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"]) === openBefore);
+  await answer.close();
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

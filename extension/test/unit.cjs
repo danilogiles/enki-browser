@@ -137,5 +137,36 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     const bad = extractTextToolCalls('{"tool": "mcp__puppeteer__click", "arguments": {}}', allowed);
     assert.equal(bad.calls.length, 0);
   });
+  const { parseNumber, dataFromTable, dataFromSpec, parseMindmap } = require('../src/lib/visual-data.ts');
+  check('numbers are read the way people write them', () => {
+    assert.equal(parseNumber('1.234.567'), 1234567);
+    assert.equal(parseNumber('1,234,567.5'), 1234567.5);
+    assert.equal(parseNumber('45,6%'), 45.6);
+    assert.equal(parseNumber('R$ 2.300'), 2300);
+    assert.equal(parseNumber('1.234'), 1234);
+    assert.equal(parseNumber('3.25'), 3.25);
+    assert.equal(parseNumber('-7'), -7);
+    assert.equal(parseNumber('Lula'), null);
+    assert.equal(parseNumber(''), null);
+  });
+  check('a table with numbers becomes chart data; one without does not', () => {
+    const d = dataFromTable(['Candidato', 'Votos', '%'], [['A', '1.000', '50,5'], ['B', '900', '45,5']]);
+    assert.deepEqual(d.labels, ['A', 'B']);
+    assert.deepEqual(d.series.map((s) => s.data), [[1000, 900], [50.5, 45.5]]);
+    assert.equal(dataFromTable(['Name', 'Role'], [['A', 'x'], ['B', 'y']]), null);
+    assert.equal(dataFromTable(['A', 'B'], [['x', '1']]), null); // one row is not a chart
+  });
+  check('chart blocks are read, and half-streamed ones are ignored', () => {
+    const d = dataFromSpec('{"type":"pie","labels":["a","b"],"series":[{"name":"s","data":[1,"2,5"]}]}');
+    assert.equal(d.type, 'pie');
+    assert.deepEqual(d.series[0].data, [1, 2.5]);
+    assert.equal(dataFromSpec('{"type":"bar","labels":["a"'), null);
+  });
+  check('mind map lists become a tree', () => {
+    const t = parseMindmap('Launch\n- Product\n  - Pricing\n  - Docs\n- Marketing\n  - Blog');
+    assert.equal(t.label, 'Launch');
+    assert.deepEqual(t.children.map((c) => c.label), ['Product', 'Marketing']);
+    assert.deepEqual(t.children[0].children.map((c) => c.label), ['Pricing', 'Docs']);
+  });
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });

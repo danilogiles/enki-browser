@@ -6,6 +6,7 @@
 import type { ImagePart, TextPart, ToolCallPart } from "../types";
 import type { ContentRequest, ContentResponse, LocatedElement, PageInfo } from "../protocol";
 import { SENSITIVE_ACTION } from "../protocol";
+import { formatResults, readDuckDuckGoPage, textOfHtml, webSearch } from "./web";
 
 export type ToolOutput = { content: Array<TextPart | ImagePart>; isError?: boolean };
 
@@ -101,6 +102,43 @@ export class BrowserExecutor {
 
   private async currentTabId(): Promise<number> {
     return (await this.currentTab()).id!;
+  }
+
+  /**
+   * A page's text without touching the user's tab. A plain fetch is enough for most pages; a page
+   * that builds itself with JavaScript (the TSE's live results, dashboards) says almost nothing in
+   * its HTML, so it is opened in a background tab, read once it has rendered, and closed.
+   */
+  private async readUrl(url: string, max: number): Promise<string> {
+    const cut = (t: string) => (t.length > max ? `${t.slice(0, max)}\n[…truncated at ${max} characters]` : t);
+    try {
+      const res = await fetch(url, { credentials: "omit" });
+      const type = res.headers.get("content-type") ?? "";
+      if (res.ok && /json|text\/plain|csv/.test(type)) return cut(`${url}\n\n${await res.text()}`);
+      if (res.ok && /html/.test(type)) {
+        const page = textOfHtml(await res.text());
+        if (page.text.length > 800) return cut(`${page.title} — ${res.url}\n\n${page.text}`);
+      }
+    } catch { /* blocked by CORS or the network: try rendering it */ }
+    return this.inBackgroundTab(url, async (tabId) => {
+      const fresh = await chrome.tabs.get(tabId);
+      const body = await this.send<string>(tabId, { type: "enki:text", maxChars: max });
+      return cut(`${fresh.title ?? ""} — ${fresh.url ?? url}\n\n${body}`);
+    });
+  }
+
+  /**
+   * Opens `url` in a tab the user does not switch to, lets it render, reads it and closes it.
+   */
+  private async inBackgroundTab<T>(url: string, read: (tabId: number) => Promise<T>): Promise<T> {
+    const tab = await chrome.tabs.create({ url, windowId: this.windowId, active: false });
+    try {
+      await this.waitForLoad(tab.id!, 20000);
+      await sleep(2500); // let live content arrive after load
+      return await read(tab.id!);
+    } finally {
+      await chrome.tabs.remove(tab.id!).catch(() => undefined);
+    }
   }
 
   private async send<T>(tabId: number, req: ContentRequest): Promise<T> {
@@ -356,6 +394,26 @@ export class BrowserExecutor {
             );
           },
         };
+      case "web_search": {
+        const query = (str("query") ?? "").trim();
+        return {
+          label: `Search the web: "${query}"`,
+          sensitive: false,
+          run: async () => ok(formatResults(query, await webSearch(query, (url) => this.inBackgroundTab(url, async (tabId) =>
+            (await chrome.scripting.executeScript({ target: { tabId }, func: readDuckDuckGoPage }))[0]?.result ?? [])))),
+        };
+      }
+      case "read_url": {
+        let url = (str("url") ?? "").trim();
+        if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+        if (!isValidWebNavigationUrl(url)) throw new Error(`read_url only reads http/https web pages, not "${url}".`);
+        const max = Math.max(500, Math.min(num("max_chars") ?? 15000, 60000));
+        return {
+          label: `Read ${new URL(url).host}`,
+          sensitive: false,
+          run: async () => ok(await this.readUrl(url, max)),
+        };
+      }
       case "navigate": {
         let url = (str("url") ?? "").trim();
         const isHistory = url === "back" || url === "forward";

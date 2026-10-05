@@ -62,7 +62,7 @@ export function compactHistory(history: Message[], keepLatest = 2): CompactionSt
         stats.screenshots++;
         return [{ type: "text", text: "[earlier screenshot removed]" } as TextPart];
       }
-      const stripped = part.text.replace(/^\[(?:Current tab|No active tab)\][^\n]*\n\n?/, "");
+      const stripped = part.text.replace(/^(?:\[Now\][^\n]*\n)?\[(?:Current tab|No active tab)\][^\n]*\n\n?/, "");
       if (stripped !== part.text) stats.headers++;
       return [{ ...part, text: stripped }];
     });

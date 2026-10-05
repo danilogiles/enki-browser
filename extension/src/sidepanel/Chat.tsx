@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { AlertTriangle, Ban, Check, ChevronDown, ChevronRight, Loader2, RotateCw, ShieldAlert, X } from "lucide-react";
 import logo from "../assets/logo.svg";
 import type { Mode } from "../lib/agent/prompt";
 import type { Segment, UiMessage } from "./types";
+import { visualComponents } from "./Visuals";
 
 /**
  * The conversation, kept clean: each reply shows its answer, with the work behind it — the steps,
@@ -107,7 +109,7 @@ function MessageView({ message, approval, onRetry, showSteps, showRunDetails, pr
       {awaiting && approval && <ApprovalCard label={approval.label} onDecide={approval.resolve} />}
       {texts.map((s, i) => (
         <div key={i} className={`md ${working && i === texts.length - 1 ? "cursor-blink" : ""}`}>
-          <Markdown>{s.text}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={visualComponents}>{s.text}</Markdown>
         </div>
       ))}
       {message.error && (

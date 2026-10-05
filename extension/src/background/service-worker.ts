@@ -56,3 +56,20 @@ chrome.commands.onCommand.addListener(async (command) => {
     await new Promise((r) => setTimeout(r, 150));
   }
 });
+
+/**
+ * At startup Chromium can paint the first new tab before command-line extensions have loaded,
+ * so the window opened on Chromium's own new tab page instead of Enki Home. Once the override
+ * exists, send those tabs to the new tab page again. Only builds that override the new tab
+ * (Enki Browser's) have anything to fix; the store extension leaves the new tab alone.
+ */
+async function reopenEarlyNewTabs(): Promise<void> {
+  if (!(chrome.runtime.getManifest() as chrome.runtime.Manifest & { chrome_url_overrides?: { newtab?: string } }).chrome_url_overrides?.newtab) return;
+  for (const tab of await chrome.tabs.query({})) {
+    const url = tab.pendingUrl || tab.url || "";
+    if (tab.id !== undefined && /^chrome:\/\/(newtab|new-tab-page(-third-party)?)\/?$/.test(url)) {
+      await chrome.tabs.update(tab.id, { url: "chrome://newtab/" }).catch(() => undefined);
+    }
+  }
+}
+chrome.runtime.onStartup.addListener(() => { void reopenEarlyNewTabs(); });

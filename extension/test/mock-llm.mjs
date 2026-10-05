@@ -64,6 +64,13 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/html" });
     return res.end(`<!doctype html><title>Heavy page</title><body><h1>Heavy</h1>${rows}</body>`);
   }
+  // A page that builds its content with JavaScript, like a live results board: its HTML alone
+  // says nothing, so read_url has to render it.
+  if (req.method === "GET" && req.url.startsWith("/live")) {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    return res.end(`<!doctype html><title>Live board</title><body><div id="app">Loading…</div>
+<script>setTimeout(() => { document.getElementById("app").textContent = "Live result: candidate A 51.2%, candidate B 48.8%"; }, 400)</script></body>`);
+  }
   if (req.method === "GET" && req.url.startsWith("/page")) {
     res.writeHead(200, { "Content-Type": "text/html" });
     return res.end(PAGE);
@@ -132,6 +139,31 @@ const server = http.createServer((req, res) => {
           res,
           `I'll do that.\n<tool_call>\n{"name": "navigate", "arguments": {"url": "http://127.0.0.1:${port}/page?viatext=1"}}\n</tool_call>`,
         );
+      }
+      // Answers with a table of numbers and a mind map: the chat should draw both.
+      if (model === "mock-visual") {
+        return streamText(res, [
+          "Results:", "",
+          "| Candidate | Votes | % |", "|---|---|---|", "| Ana | 1.200.000 | 51,2 |", "| Bruno | 1.140.000 | 48,8 |", "",
+          "```mindmap", "Launch", "- Product", "  - Pricing", "  - Docs", "- Marketing", "  - Blog", "```", "",
+        ].join("\n"));
+      }
+      // For a manual check against the real web (not used by the automated suites, which stay
+      // offline): searches for the user's words, reads the first result, reports both.
+      if (model === "mock-live") {
+        const question = userText.split("\n").filter(Boolean).at(-1) ?? "";
+        if (toolMsgs.length === 0) return streamToolCall(res, "web_search", { query: question });
+        if (toolMsgs.length === 1) {
+          const url = /https?:\/\/\S+/.exec(String(toolMsgs[0].content))?.[0] ?? "https://example.com";
+          return streamToolCall(res, "read_url", { url, max_chars: 1500 });
+        }
+        return streamText(res, `LIVE-DONE\n\nSEARCH: ${String(toolMsgs[0].content).slice(0, 700)}\n\nREAD: ${String(toolMsgs[1].content).slice(0, 700)}`);
+      }
+      // Reads a JavaScript-built page through read_url, then reports what it said.
+      if (model === "mock-web") {
+        const last = messages[messages.length - 1];
+        if (last?.role === "tool") return streamText(res, `From the source: ${String(last.content).replace(/\s+/g, " ").slice(0, 200)}`);
+        return streamToolCall(res, "read_url", { url: `http://127.0.0.1:${port}/live` });
       }
       // Reads the page once per turn, so repeated turns pile up page observations.
       if (model === "mock-reader") {

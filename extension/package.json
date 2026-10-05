@@ -1,6 +1,6 @@
 {
   "name": "enki",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Enki - open-source AI browser assistant. Bring your own model, see the page, let it act.",
   "type": "module",
@@ -22,6 +22,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "zod": "^4.5.4"
   },
   "devDependencies": {

@@ -15,7 +15,8 @@ type Props = {
   vision: boolean;
   onToggleScreenshot: () => void;
   mode: Mode;
-  onMode: (m: Mode) => void;
+  /** Omitted on the answer page, which only answers: acting there would navigate the answer away. */
+  onMode?: (m: Mode) => void;
   onSettings: () => void;
 };
 
@@ -40,7 +41,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
     <button
       type="button"
       disabled={running}
-      onClick={() => onMode(m)}
+      onClick={() => onMode?.(m)}
       title={title}
       aria-pressed={mode === m}
       className={`rounded-md p-1.5 transition disabled:opacity-50 ${mode === m ? "bg-ink-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-200"}`}
@@ -69,10 +70,12 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
           className="block max-h-44 w-full resize-none bg-transparent text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-500 disabled:opacity-50"
         />
         <div className="mt-1.5 flex items-center gap-1">
-          <div className="flex rounded-lg bg-ink-950/60 p-0.5">
-            {modeButton("ask", <Search size={15} />, "Ask: Enki reads the page and answers")}
-            {modeButton("act", <Monitor size={15} />, "Act: Enki can navigate, click and type")}
-          </div>
+          {onMode && (
+            <div className="flex rounded-lg bg-ink-950/60 p-0.5">
+              {modeButton("ask", <Search size={15} />, "Ask: Enki reads the page and answers")}
+              {modeButton("act", <Monitor size={15} />, "Act: Enki can navigate, click and type")}
+            </div>
+          )}
           {vision && (
             <button
               type="button"
