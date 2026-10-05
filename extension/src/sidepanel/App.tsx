@@ -21,6 +21,7 @@ import { invalidateObservations } from "../lib/agent/context";
 import { diagnosticReport } from "../lib/diagnostics";
 import { connectorTools, loadConnections, onConnectionsChange, type Connection } from "../lib/connectors";
 import { expand, loadTasks, suggestions, type SavedTask } from "../lib/shortcuts";
+import { legalLinks, TERMS_VERSION } from "../lib/legal";
 
 const MODE_KEY = "enki:mode";
 
@@ -555,6 +556,22 @@ export function App() {
         showRunDetails={settings.showRunDetails !== false}
         progress={running ? { ...progress, maxSteps: settings.maxSteps, elapsed, message: progress.message === "Waiting for provider" ? `Waiting for ${presetOf(settings.preset).label.split(" (")[0]}` : progress.message } as Progress : null}
       />
+
+      {settings.acceptedTerms !== TERMS_VERSION && (
+        <div role="note" className="mx-3 mb-1 rounded-xl border border-ink-700 bg-ink-900 px-3 py-2.5 text-xs text-zinc-300">
+          <p>
+            Enki can make mistakes: check what matters. It acts in your browser only for you, and asks before sending, buying or deleting anything.
+            By using Enki you agree to the{" "}
+            <a className="underline" href={legalLinks().terms} target="_blank" rel="noreferrer">Terms of Use</a> and the{" "}
+            <a className="underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">Privacy Policy</a>.
+          </p>
+          <div className="mt-2 flex justify-end">
+            <button type="button" className="rounded-md bg-enki-500 px-3 py-1 text-xs font-medium text-ink-950" onClick={() => { const next = { ...settings, acceptedTerms: TERMS_VERSION }; setSettings(next); void saveSettings(next); }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {needsKey && (
         <div className="mx-3 mb-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">

@@ -231,6 +231,8 @@ export type Settings = {
   devMode: boolean;
   /** Developer mode only: Enki's own tone rules off; the model's policy is the only filter. */
   unfiltered?: boolean;
+  /** The terms version the user acknowledged in the first-use notice (lib/legal.ts). */
+  acceptedTerms?: string;
   /** Extra instructions appended to the system prompt. */
   customInstructions: string;
   contextBudgetTokens: number;

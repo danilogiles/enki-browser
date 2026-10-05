@@ -1,7 +1,7 @@
 # Privacy Policy for Enki Browser Extension
 
 **Effective Date:** September 2026  
-**Last Updated:** September 2026  
+**Last Updated:** 4 October 2026  
 **Publisher:** DevOps Futurasync (Enki Open-Source Project)  
 **Contact:** devops@futurasync.com / GitHub Issues  
 
@@ -31,6 +31,19 @@ We believe privacy is a fundamental human right. Enki operates on a **Local-Firs
 - All actions are accompanied by a visible visual indicator on the screen notifying you that Enki is interacting with the page.
 - Sessions can be stopped at any time via the "Stop" button or by closing the side panel.
 
+### 2.4 Web Search and Reading Sources
+- To answer questions about current events, Enki can search the web (`web_search`) and read pages (`read_url`) without leaving your tab.
+- **What is sent:** only the search words, to Brave Search and, if it does not answer, DuckDuckGo; and an ordinary request to each page Enki reads. These requests carry no cookies.
+- Pages that need JavaScript are opened briefly in a background tab of your browser, read, and closed.
+
+### 2.5 Connected Apps (MCP)
+- In Settings → Connections you can connect apps such as Jira, Linear, Notion, Sentry or GitHub through their MCP servers.
+- You sign in on the app's own page; Enki keeps only the access token the app grants, in `chrome.storage.local`, and sends it only to that app.
+- Enki uses a connected app only for your requests. Tools that change data ask for your confirmation unless you allow that specific tool. Disconnecting deletes the token.
+
+### 2.6 Conversations
+- With "Save conversations on this device" on (the default), your chats are kept in `chrome.storage.local` so you can reopen them; screenshots and model reasoning are not saved. Turning the setting off deletes every saved chat.
+
 ---
 
 ## 3. Data Sharing and Third Parties
@@ -55,7 +68,7 @@ Enki complies strictly with the [Google Chrome Web Store Developer Program Polic
 
 ## 6. Open Source Verification
 Enki is 100% open-source. Anyone can audit the complete codebase, network calls, and security filters on GitHub:  
-[https://github.com/devopsfuturasync/enkibrowser](https://github.com/devopsfuturasync/enkibrowser)
+[https://github.com/danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser)
 
 ---
 

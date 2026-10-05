@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { ArrowUp, Globe, MessageCircle, MousePointerClick, ShieldCheck } from "lucide-react";
 import logo from "../assets/logo.svg";
 import { putHandoff } from "../lib/handoff";
+import { legalLinks } from "../lib/legal";
 import { loadSettings, presetOf, type Settings } from "../lib/settings";
 import { customTokens, luminance } from "../lib/theme";
 
@@ -244,6 +245,9 @@ export function Home() {
       <footer className="flex items-center justify-center gap-2 px-6 pb-6 text-xs text-muted/80">
         <ShieldCheck size={14} className="text-sky/80" aria-hidden />
         {t.privacy.join(" · ")}
+        <span aria-hidden>·</span>
+        <a className="underline-offset-2 hover:underline" href={legalLinks().terms} target="_blank" rel="noreferrer">Terms</a>
+        <a className="underline-offset-2 hover:underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">Privacy</a>
       </footer>
     </div>
   );

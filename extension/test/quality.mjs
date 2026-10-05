@@ -27,7 +27,7 @@ try {
     await panel.evaluate(async ({ model, mode, extra }) => {
       await chrome.storage.local.set({ "enki:settings": { preset: "custom", baseUrl: "http://127.0.0.1:8787/v1", apiKey: "test",
         model, vision: false, attachScreenshot: false, autoApprove: false, maxSteps: 10, requestTimeoutSec: 6,
-        theme: "dark", customInstructions: "", saveConversations: true, ...extra }, "enki:mode": mode });
+        theme: "dark", customInstructions: "", saveConversations: true, acceptedTerms: "1", ...extra }, "enki:mode": mode });
     }, { model, mode, extra });
     await panel.waitForTimeout(200);
   };
@@ -244,6 +244,13 @@ try {
   await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
   const taskText = await panel.textContent("body");
   check("a saved task sends its prompt plus the extra words", taskText.includes("Say the standup words") && taskText.includes("extra bit"));
+
+  // First use: a notice links the terms and the privacy policy until "Got it".
+  await configure("mock-echo", "ask", { acceptedTerms: undefined });
+  await panel.waitForTimeout(300);
+  check("first use shows the terms and privacy notice", (await panel.locator("[role=note] >> text=Terms of Use").count()) === 1);
+  await panel.click("[role=note] button:has-text('Got it')"); await panel.waitForTimeout(300);
+  check("Got it hides the notice for good", (await panel.locator("[role=note]").count()) === 0 && await panel.evaluate(async () => (await chrome.storage.local.get("enki:settings"))["enki:settings"].acceptedTerms === "1"));
 
   // The answer page: Enki as the address bar's search engine opens the panel as a tab with ?q=.
   const openBefore = await panel.evaluate(async () => (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"]);

@@ -18,6 +18,7 @@ import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
+import { legalLinks } from "../lib/legal";
 
 type Props = {
   settings: Settings;
@@ -430,6 +431,15 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 placeholder="e.g. Always answer in Portuguese. I'm a developer; be technical."
                 className={`${inputCls} resize-y`}
               />
+            </Section>
+
+            <Section title="About">
+              <p className="text-xs text-zinc-400">
+                Enki {chrome.runtime.getManifest().version} ·{" "}
+                <a className="underline" href={legalLinks().terms} target="_blank" rel="noreferrer">Terms of Use</a> ·{" "}
+                <a className="underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">Privacy Policy</a> ·{" "}
+                <a className="underline" href="https://github.com/danilogiles/enkibrowser" target="_blank" rel="noreferrer">Source code</a>
+              </p>
             </Section>
           </>
         )}
