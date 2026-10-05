@@ -103,4 +103,24 @@ $("lists").onclick = async () => {
   if (id) void open(`chrome-extension://${id}/dashboard.html#rulesets`);
 };
 $("global").onclick = () => chrome.runtime.openOptionsPage();
+
+// Burn (everything) and shred (this site) both ask first: they cannot be undone.
+let pending = null;
+const confirmBox = (kind) => {
+  pending = kind;
+  $("burn-text").textContent = kind === "burn"
+    ? "Close every tab and delete all history, cookies, site data, cache, download history and autofill? Passwords, bookmarks and Enki's settings are kept."
+    : `Delete ${host}'s cookies and site data and close its tabs?`;
+  $("burn-go").textContent = kind === "burn" ? "Burn" : "Shred";
+  $("burn-confirm").hidden = false;
+};
+$("burn").onclick = () => confirmBox("burn");
+$("shred").onclick = () => confirmBox("shred");
+$("burn-cancel").onclick = () => { pending = null; $("burn-confirm").hidden = true; };
+$("burn-go").onclick = async () => {
+  $("burn-go").disabled = true;
+  $("burn-text").textContent = pending === "burn" ? "Burning…" : "Shredding…";
+  await chrome.runtime.sendMessage(pending === "burn" ? { type: "shields:burn" } : { type: "shields:shred", host });
+  window.close();
+};
 void BADGE;

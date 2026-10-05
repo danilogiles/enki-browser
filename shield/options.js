@@ -1,5 +1,5 @@
 // Enki Shields' global settings, opened from the panel's "Global settings".
-import { BADGE, LEVELS, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
+import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,3 +35,17 @@ async function renderSites() {
   }));
 }
 await renderSites();
+
+// Burn: everything now, or every time the browser closes.
+const autoBurn = $("auto-burn");
+autoBurn.setAttribute("aria-checked", String((await chrome.storage.local.get(AUTO_BURN))[AUTO_BURN] === true));
+autoBurn.onclick = async () => {
+  const on = autoBurn.getAttribute("aria-checked") !== "true";
+  autoBurn.setAttribute("aria-checked", String(on));
+  await chrome.storage.local.set({ [AUTO_BURN]: on });
+  await applySites(await sites());
+};
+$("burn-now").onclick = async () => {
+  if (!confirm("Close every tab and delete all history, cookies, site data, cache, download history and autofill? Passwords, bookmarks and Enki's settings are kept.")) return;
+  await chrome.runtime.sendMessage({ type: "shields:burn" });
+};

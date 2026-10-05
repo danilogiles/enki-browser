@@ -77,7 +77,7 @@ try {
   check("Enki is loaded with its fixed id", extIds.has(version.enkiExtensionId), [...extIds].join(", "));
   check("the blocker is loaded", extIds.size >= 2, `${extIds.size} extensions running`);
 
-  const page = await ctx.newPage();
+  let page = await ctx.newPage();
 
   // ---- search engine: read what the settings page shows the user
   await page.goto("chrome://settings/search");
@@ -275,6 +275,43 @@ try {
   const panel = await page.evaluate(() => document.body.innerText);
   // With no provider chosen yet, the panel opens straight into setup; that is the first-run view.
   check("the Enki panel renders", /Enki|Settings/.test(panel) && /Model/.test(panel), panel.split("\n").slice(0, 3).join(" | "));
+
+  // ---- shred (one site) and burn (everything), last: burning closes every tab
+  // (the same browser context as the rest of the run)
+  const site = await ctx.newPage();
+  await site.goto("https://example.com/");
+  await site.evaluate(() => { localStorage.setItem("enki-verify", "1"); document.cookie = "enki_verify=1; max-age=3600; path=/"; });
+  const otherSite = await ctx.newPage();
+  await otherSite.goto("https://example.org/");
+  await otherSite.evaluate(() => localStorage.setItem("enki-verify", "1"));
+  const panelFor = async (url) => {
+    const p = await ctx.newPage();
+    await p.goto(`chrome-extension://${version.shieldExtensionId}/options.html`);
+    const tabId = await p.evaluate(async (u) => (await chrome.tabs.query({ url: u }))[0]?.id, url);
+    await p.goto(`chrome-extension://${version.shieldExtensionId}/popup.html?tab=${tabId}`);
+    await p.waitForTimeout(500);
+    return p;
+  };
+  const shred = await panelFor("https://example.com/*");
+  await shred.click("#shred"); await shred.click("#burn-go").catch(() => undefined);
+  await new Promise((r) => setTimeout(r, 1500));
+  const check1 = await ctx.newPage();
+  await check1.goto("https://example.com/");
+  const shredded = await check1.evaluate(() => ({ storage: localStorage.getItem("enki-verify"), cookie: document.cookie }));
+  const otherKept = await otherSite.evaluate(() => localStorage.getItem("enki-verify"));
+  check("Shred this site deletes that site's data and keeps others'", !shredded.storage && !/enki_verify/.test(shredded.cookie) && otherKept === "1", JSON.stringify({ shredded, otherKept }));
+  const burn = await panelFor("https://example.org/*");
+  await burn.click("#burn"); await burn.click("#burn-go").catch(() => undefined);
+  await new Promise((r) => setTimeout(r, 3000));
+  const left = ctx.pages().filter((p) => !p.isClosed());
+  const after = left[0] ?? await ctx.newPage();
+  await after.goto("https://example.org/");
+  const burnedStorage = await after.evaluate(() => localStorage.getItem("enki-verify"));
+  await after.goto("chrome://history/");
+  await after.waitForTimeout(1500);
+  const historyText = await after.evaluate(() => { const walk = (n) => (n.shadowRoot ? walk(n.shadowRoot) : "") + [...n.childNodes].map((c) => (c.nodeType === 3 ? c.textContent : c.nodeType === 1 ? walk(c) : "")).join(" "); return walk(document.body); });
+  check("Burn all data closes every tab and deletes history and site data", left.length <= 1 && !burnedStorage && !/example\.com/.test(historyText), `${left.length} tab(s) left · storage ${burnedStorage} · history mentions example.com: ${/example\.com/.test(historyText)}`);
+  page = after;
 
   if (process.env.ENKI_LIVE_MODEL) {
     const win = await page.evaluate(async () => (await chrome.windows.create({ url: "https://example.com/" })).id);

@@ -132,6 +132,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 | AI model | NVIDIA Nemotron 3 Ultra by default — free key from [build.nvidia.com](https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b), no credit card; or Claude, GPT, Gemini, Groq, OpenRouter, Ollama, OmniRoute | chosen in Enki's Settings |
 | Ads and trackers | Blocked (EasyList, EasyPrivacy, Peter Lowe's list, uBlock filters) | [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home), with the small Shields patch described in [THIRD_PARTY.md](THIRD_PARTY.md) |
 | Shields button | Right of the address bar: how many trackers and ads were blocked on the site and which, Shields down for one site, blocking level, scripts, cookies and "forget me when I close this site" | Enki Shield (`shield/`) |
+| Burn and shred | **Burn all data** (like DuckDuckGo's Fire Button) closes every tab and deletes history, cookies, site data, cache, download history and autofill, keeping passwords and bookmarks; **Shred this site** (like Brave's) does it for one site; optional burn every time the browser closes | Shields panel and its settings |
 | Malware sites | Blocked by uBlock's *Badware risks* and the URLhaus *Malicious URL Blocklist* | uBlock Origin Lite |
 | Address bar search | Enki: a search opens Enki's answer page, which searches the web and cites its sources. DuckDuckGo, Google, Bing and others are one click away in Settings → Search engine (suggestions while typing come from DuckDuckGo) | `config/initial_preferences.json` |
 | Connections | `http://` upgraded to `https://`, with a warning where a site has no HTTPS | same |
@@ -189,6 +190,8 @@ checks what a user would observe, not what the config says:
 - the browser does not keep running after its last window closes (so updates can install)
 - the Shields button counts what was blocked on a site, shows that number, Shields down lets that
   site's trackers through and Shields up blocks them again; new profiles have it pinned
+- Shred this site deletes that site's data and keeps other sites'; Burn all data leaves one tab and no
+  history or site data
 - a new tab opens Enki Home; the About page and the window title say Enki Browser; About shows
   Enki Browser's version, Enki's logo (not Chromium's) and the Chromium credits; no custom theme
   is active; `chrome.exe` describes itself as Enki Browser

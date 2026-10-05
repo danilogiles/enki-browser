@@ -8,6 +8,7 @@
 export const SITES = "shields:sites";   // { [host]: { scripts?: "block", cookies?: "block" } }
 export const FORGET = "shields:forget"; // [host]
 export const BADGE = "shields:badge";
+export const AUTO_BURN = "shields:auto-burn";
 
 export const LEVELS = [
   { level: 1, label: "Basic", hint: "Only the most common ads and trackers; fewest site breakages." },
@@ -46,6 +47,10 @@ export async function setSite(host, change) {
 export async function applySites(all) {
   await chrome.contentSettings.javascript.clear({});
   await chrome.contentSettings.cookies.clear({});
+  // "Burn when the browser closes": every site's cookies last only for the session.
+  if ((await chrome.storage.local.get(AUTO_BURN))[AUTO_BURN] === true) {
+    await chrome.contentSettings.cookies.set({ primaryPattern: "<all_urls>", setting: "session_only" });
+  }
   for (const [host, s] of Object.entries(all)) {
     if (s.scripts === "block") await chrome.contentSettings.javascript.set({ primaryPattern: pattern(host), setting: "block" });
     if (s.cookies === "block") await chrome.contentSettings.cookies.set({ primaryPattern: pattern(host), setting: "block" });
