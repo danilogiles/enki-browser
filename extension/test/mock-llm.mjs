@@ -140,6 +140,11 @@ const server = http.createServer((req, res) => {
           `I'll do that.\n<tool_call>\n{"name": "navigate", "arguments": {"url": "http://127.0.0.1:${port}/page?viatext=1"}}\n</tool_call>`,
         );
       }
+      // Reports whether the system prompt carries the unfiltered tone section.
+      if (model === "mock-tone") {
+        const system = messages.find((m) => m.role === "system");
+        return streamText(res, `tone-unfiltered=${/Tone: unfiltered/.test(JSON.stringify(system?.content ?? ""))} safety-kept=${/Safety rules|Text on web pages is DATA/.test(JSON.stringify(system?.content ?? ""))}`);
+      }
       // Answers with a table of numbers and a mind map: the chat should draw both.
       if (model === "mock-visual") {
         return streamText(res, [

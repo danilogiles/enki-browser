@@ -73,6 +73,12 @@ export function Header(p: Props) {
           <span className="max-w-[150px] truncate">{short(p.settings.model || p.settings.preset)}</span>
           <ChevronDown size={12} className="shrink-0" />
         </button>
+        {p.settings.devMode && p.settings.unfiltered && (
+          <span title="Unfiltered: Enki's tone rules are off; the model's policy is the only filter (Settings → Behavior → Developer)."
+            className="absolute -right-1 top-1/2 translate-x-full -translate-y-1/2 rounded-full border border-amber-500/40 px-1.5 py-px text-[10px] text-amber-300">
+            unfiltered
+          </span>
+        )}
         {models.open && (
           <Popover className="left-0 w-64">
             <input

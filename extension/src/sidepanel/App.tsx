@@ -362,7 +362,7 @@ export function App() {
       if (mode === "act") await executor.setActiveOverlay(true, "Enki is controlling this tab…");
       const effectiveMode = intent === "observe" ? "ask" : mode;
       await runTurn({ provider: createProvider(settings), model: settings.model, mode: effectiveMode,
-        system: buildSystemPrompt(effectiveMode, settings.customInstructions), history,
+        system: buildSystemPrompt(effectiveMode, settings.customInstructions, settings.devMode && !!settings.unfiltered), history,
         tools: toolsForMode(effectiveMode, settings.vision), executor, maxSteps: settings.maxSteps,
         autoApprove: settings.autoApprove, requestApproval,
         onEvent: (e) => { if (historyRef.current === history) handleEvent(e); },

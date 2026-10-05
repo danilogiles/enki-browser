@@ -189,6 +189,17 @@ try {
   await newChat(); await send("what day is it");
   check("every message tells the model the date", /\[Now\] \w+day, /.test(await panel.textContent("body")));
 
+  // Unfiltered tone: only in developer mode, shown in the header, and the safety rules stay.
+  await configure("mock-tone", "ask", { unfiltered: true, devMode: false });
+  await newChat(); await send("tone check one");
+  check("unfiltered does nothing outside developer mode", (await panel.textContent("body")).includes("tone-unfiltered=false") && await panel.locator("header >> text=unfiltered").count() === 0);
+  await configure("mock-tone", "act", { unfiltered: true, devMode: true });
+  await newChat(); await send("tone check two");
+  const toneText = await panel.textContent("body");
+  check("unfiltered in developer mode reaches the prompt and keeps the safety rules", toneText.includes("tone-unfiltered=true") && toneText.includes("safety-kept=true"));
+  check("the header shows when unfiltered is on", await panel.locator("header >> text=unfiltered").count() === 1);
+  await configure("mock-echo", "ask");
+
   // The answer page: Enki as the address bar's search engine opens the panel as a tab with ?q=.
   const openBefore = await panel.evaluate(async () => (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"]);
   const answer = await context.newPage();

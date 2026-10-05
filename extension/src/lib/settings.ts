@@ -229,6 +229,8 @@ export type Settings = {
   requestTimeoutSec: number;
   /** Show the Logs view and mirror every diagnostic entry to the console. */
   devMode: boolean;
+  /** Developer mode only: Enki's own tone rules off; the model's policy is the only filter. */
+  unfiltered?: boolean;
   /** Extra instructions appended to the system prompt. */
   customInstructions: string;
   contextBudgetTokens: number;

@@ -403,6 +403,14 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 checked={draft.devMode}
                 onChange={(v) => set("devMode", v)}
               />
+              {draft.devMode && (
+                <Toggle
+                  label="Unfiltered"
+                  hint="Turns off Enki's own tone rules: blunt, no disclaimers or moralizing, profanity allowed, no dodging crude or adult topics. Your model's own policy is then the only filter. The safety rules for acting in the browser stay on."
+                  checked={!!draft.unfiltered}
+                  onChange={(v) => set("unfiltered", v)}
+                />
+              )}
             </Section>
 
             <Section title="Custom instructions">
