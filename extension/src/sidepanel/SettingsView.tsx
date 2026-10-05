@@ -340,7 +340,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
             <Section title="Browsing Behavior">
               <Toggle label="Save conversations on this device" hint="Keeps your chats on this device, listed under ⋯ in the panel. Screenshots and reasoning are not saved. Turning off removes every saved chat." checked={draft.saveConversations} onChange={(v) => set("saveConversations", v)} />
               <label htmlFor="context-budget" className="block text-xs text-zinc-400">Input context budget (estimated tokens)</label>
-              <input id="context-budget" type="number" min={6000} max={200000} step={1000} value={draft.contextBudgetTokens} onChange={(e) => set("contextBudgetTokens", Math.max(6000, Math.min(200000, Number(e.target.value) || 24000)))} className={inputCls} />
+              <input id="context-budget" type="number" min={6000} max={200000} step={1000} value={draft.contextBudgetTokens} onChange={(e) => set("contextBudgetTokens", Math.max(6000, Math.min(200000, Number(e.target.value) || 64000)))} className={inputCls} />
               <p className="text-xs text-zinc-400">Older exchanges are summarized locally. Tool calls stay paired with results. Leave room for the model's response within its context limit.</p>
               <label htmlFor="max-output" className="block text-xs text-zinc-400">Max output tokens per step</label>
               <input id="max-output" type="number" min={512} max={32000} step={512} value={draft.maxOutputTokens} onChange={(e) => set("maxOutputTokens", Math.max(512, Math.min(32000, Number(e.target.value) || 4096)))} className={inputCls} />

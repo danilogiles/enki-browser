@@ -108,6 +108,8 @@ export class OpenAICompatProvider implements ChatProvider {
               : " (This provider needs an API key and none is set. Add it in Settings ⚙️ — the \"Get a key\" link there leads to the provider's page).";
         } else if (res.status === 429) {
           hint = " (Rate limit or credits exhausted. Try switching models in Settings ⚙️).";
+        } else if (res.status === 500) {
+          hint = " (The provider failed on its side. It is often a request too large for the model behind it, or a failing upstream: try again, start a new chat if it repeats, or pick another model in Settings ⚙️).";
         } else if (res.status === 502 || res.status === 503) {
           if (/playwright/i.test(detail)) {
             hint = " (The provider gateway requires Playwright/Chromium dependencies or failed upstream. Try switching model in Settings ⚙️).";

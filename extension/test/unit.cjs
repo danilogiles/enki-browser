@@ -168,6 +168,17 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.deepEqual(t.children.map((c) => c.label), ['Product', 'Marketing']);
     assert.deepEqual(t.children[0].children.map((c) => c.label), ['Pricing', 'Docs']);
   });
+  check('a long task trims its oldest tool results instead of stopping', () => {
+    const { trimToolResults } = require('../src/lib/agent/context.ts');
+    const result = (id, n) => ({ role: 'tool', parts: [{ type: 'tool_result', name: 'read_url', toolCallId: id, content: [{ type: 'text', text: 'x'.repeat(n) }] }] });
+    const h = [user('read three pages')];
+    for (let i = 0; i < 3; i++) h.push({ role: 'assistant', parts: [{ ...call, id: 'r' + i, name: 'read_url' }] }, result('r' + i, 15000));
+    assert.ok(estimateTokens(h) > 12000);
+    assert.ok(trimToolResults(h, 12000) > 0);
+    assert.ok(estimateTokens(h) <= 12000);
+    assert.equal(h[h.length - 1].parts[0].content[0].text.length, 15000); // the newest stays whole
+    assert.match(h[2].parts[0].content[0].text, /cut to fit the context budget/);
+  });
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');

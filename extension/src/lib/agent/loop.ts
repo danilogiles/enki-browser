@@ -9,7 +9,7 @@ import type {
 } from "../types";
 import type { BrowserExecutor, ToolOutput } from "../tools/executor";
 import { log } from "../debug";
-import { budgetHistory, compactHistory, estimateTokens, historySize } from "./context";
+import { budgetHistory, trimToolResults, compactHistory, estimateTokens, historySize } from "./context";
 import { CLAIMS_NO_TOOLS, extractTextToolCalls } from "./toolcall-text";
 
 export type AgentEvent =
@@ -116,6 +116,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
       const budget = Math.max(2000, (o.contextBudgetTokens ?? 24000) - Math.ceil(o.system.length / 3) - 2000);
       const summarized = budgetHistory(o.history, budget);
       if (summarized) onEvent({ type: "notice", message: `Summarized ${summarized} older messages to stay within the context budget.` });
+      if (estimateTokens(o.history) > budget) trimToolResults(o.history, budget);
       if (estimateTokens(o.history) > budget) throw new Error("The current request exceeds the context budget. Increase it in Settings, shorten the request, or start a new chat.");
       log.info("agent", `Step ${step + 1}/${o.maxSteps}`, {
         model: o.model,
@@ -299,7 +300,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
           log.info("tool", `${call.name}: ${plan.label}`, { input: call.input, sensitive: plan.sensitive });
           onEvent({ type: "tool_start", call, label: plan.label, sensitive: plan.sensitive });
           onEvent({ type: "status", message: `Executing ${call.name}`, step: step + 1 });
-          if (plan.sensitive && !o.autoApprove) {
+          if (plan.sensitive && (!o.autoApprove || plan.alwaysAsk)) {
             onEvent({ type: "approval_request", call, label: plan.label });
             onEvent({ type: "status", message: "Waiting for your approval", step: step + 1 });
             const approved = await o.requestApproval(plan.label, call);

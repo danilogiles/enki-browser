@@ -106,6 +106,32 @@ export function estimateTokens(history: Message[]): number {
   return Math.ceil(text.length / 3) + (images + toolImages) * 2000;
 }
 
+/**
+ * Within one task nothing can be summarized away (a tool call must stay paired with its result),
+ * so a long task — several web pages read, a few page snapshots — used to hit the budget and stop
+ * with "exceeds the context budget". Instead, the oldest large tool results are cut down to their
+ * opening, keeping the newest result whole, until the request fits. The model is told what was
+ * cut and can call the tool again if it still needs the rest.
+ */
+export function trimToolResults(history: Message[], budgetTokens: number, keepChars = 1500): number {
+  let trimmed = 0;
+  const toolTurns = history.flatMap((m, i) => (m.role === "tool" ? [i] : []));
+  for (const i of toolTurns.slice(0, -1)) {
+    if (estimateTokens(history) <= budgetTokens) break;
+    const message = history[i] as ToolMessage;
+    message.parts = message.parts.map((part) => ({
+      ...part,
+      content: part.content.map((c) => {
+        if (c.type !== "text" || c.text.length <= keepChars + 200) return c;
+        trimmed++;
+        return { ...c, text: `${c.text.slice(0, keepChars)}
+[…cut to fit the context budget; call ${part.name} again if you need the rest]` };
+      }),
+    }));
+  }
+  return trimmed;
+}
+
 /** Summarize complete exchanges only; never split a tool call from its results. No extra API call. */
 export function budgetHistory(history: Message[], budgetTokens: number): number {
   let removed = 0;

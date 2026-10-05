@@ -7,6 +7,7 @@ import type { ImagePart, TextPart, ToolCallPart } from "../types";
 import type { ContentRequest, ContentResponse, LocatedElement, PageInfo } from "../protocol";
 import { SENSITIVE_ACTION } from "../protocol";
 import { formatResults, readDuckDuckGoPage, textOfHtml, webSearch } from "./web";
+import { findTool, runTool, type Connection } from "../connectors";
 
 export type ToolOutput = { content: Array<TextPart | ImagePart>; isError?: boolean };
 
@@ -15,6 +16,8 @@ export type ToolPlan = {
   label: string;
   /** True when the action deserves a confirmation card before running. */
   sensitive: boolean;
+  /** Ask even with auto-approve on: a write to another service the user did not allow by name. */
+  alwaysAsk?: boolean;
   run: () => Promise<ToolOutput>;
 };
 
@@ -63,6 +66,9 @@ const KEY_CODES: Record<string, { code: string; vk: number; text?: string }> = {
 };
 
 export class BrowserExecutor {
+  /** Connected apps whose tools this executor may run (see lib/connectors). */
+  private connections: Connection[] = [];
+  setConnections(list: Connection[]): void { this.connections = list; }
   private lockedTabId: number | null = null;
   /**
    * Set only when an agent tool deliberately retargets the task (switch_tab / open_tab).
@@ -584,12 +590,29 @@ export class BrowserExecutor {
           },
         };
       }
-      default:
+      default: {
+        const found = findTool(this.connections, call.name);
+        if (found) {
+          const { conn, tool } = found;
+          return {
+            label: `${conn.name}: ${tool.title}`,
+            sensitive: !tool.readOnly && !tool.allowed,
+            alwaysAsk: !tool.readOnly && !tool.allowed,
+            run: async () => {
+              const r = await runTool(conn, tool, input as Record<string, unknown>);
+              return {
+                content: [text(r.text), ...r.images.map((i) => ({ type: "image" as const, mediaType: i.mediaType as ImagePart["mediaType"], data: i.data }))],
+                isError: r.isError,
+              };
+            },
+          };
+        }
         return {
           label: call.name,
           sensitive: false,
           run: async () => ({ content: [text(`Unknown tool "${call.name}".`)], isError: true }),
         };
+      }
     }
   }
 }

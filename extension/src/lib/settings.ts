@@ -256,7 +256,8 @@ export const DEFAULT_SETTINGS: Settings = {
   requestTimeoutSec: 180,
   devMode: false,
   customInstructions: "",
-  contextBudgetTokens: 24000,
+  // Today's models take far more than this; 24k stopped ordinary multi-page tasks.
+  contextBudgetTokens: 64000,
   maxOutputTokens: 4096,
   saveConversations: true,
   favoriteModels: [],
@@ -279,7 +280,10 @@ export function usesTextTools(settings: Settings): boolean {
 
 export async function loadSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(KEY);
-  return { ...DEFAULT_SETTINGS, ...(stored[KEY] as Partial<Settings> | undefined) };
+  const s = { ...DEFAULT_SETTINGS, ...(stored[KEY] as Partial<Settings> | undefined) };
+  // 24000 was the old default, kept by everyone who never touched it: give them the new one.
+  if (s.contextBudgetTokens === 24000) s.contextBudgetTokens = DEFAULT_SETTINGS.contextBudgetTokens;
+  return s;
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
