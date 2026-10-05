@@ -106,6 +106,40 @@ static class Updater
         Log(root, "installed " + m.Version + "; it opens the next time Enki Browser starts");
     }
 
+    /// Keeps the version `current` names, the newest other one (the way back) and the one this
+    /// launcher runs from; deletes the rest. The stub did this once per start with no retry and
+    /// failed silently whenever an antivirus was still scanning the files, so installs kept every
+    /// version ever downloaded; and the stub itself is never updated, so the fix lives here,
+    /// run when the browser closes, when nothing is in use.
+    public static void RemoveOldVersions(string root, string appDir)
+    {
+        try
+        {
+            string app = Path.Combine(root, "app");
+            string current = File.ReadAllText(Path.Combine(root, "current")).Trim();
+            var complete = new List<KeyValuePair<Version, string>>();
+            foreach (string dir in Directory.GetDirectories(app))
+            {
+                Version v;
+                if (Version.TryParse(Path.GetFileName(dir), out v) && File.Exists(Path.Combine(dir, "EnkiBrowserLauncher.exe")))
+                    complete.Add(new KeyValuePair<Version, string>(v, dir));
+            }
+            complete.Sort((a, b) => b.Key.CompareTo(a.Key));
+            string previous = null;
+            foreach (var kv in complete) if (Path.GetFileName(kv.Value) != current) { previous = Path.GetFileName(kv.Value); break; }
+            string own = Win.LongPath(appDir);
+            foreach (string dir in Directory.GetDirectories(app))
+            {
+                string name = Path.GetFileName(dir);
+                if (name == current || name == previous || string.Equals(Win.LongPath(dir), own, StringComparison.OrdinalIgnoreCase)) continue;
+                if (Win.BrowserProcesses(dir).Count > 0) continue;
+                try { Win.DeleteTree(dir); Log(root, "removed old version " + name); }
+                catch (Exception e) { Log(root, "could not remove old version " + name + ": " + e.Message); }
+            }
+        }
+        catch (Exception e) { Log(root, "old version cleanup skipped: " + e.Message); }
+    }
+
     /// Points `current` at a version, replacing the file in one step so a crash mid-write can
     /// never leave it half written (and the stub falls back to the newest folder if it were).
     static void SetCurrent(string root, Version v)

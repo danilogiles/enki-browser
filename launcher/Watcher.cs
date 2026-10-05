@@ -67,6 +67,8 @@ static class Watcher
             mutex.ReleaseMutex();
             // Started after the mutex is released, so the new version's launcher can watch in turn.
             if (restart) Relaunch(root, switches);
+            // The browser has closed (or restarted into another version): nothing old is in use.
+            else Updater.RemoveOldVersions(root, appDir);
         }
     }
 

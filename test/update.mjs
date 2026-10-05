@@ -164,7 +164,13 @@ try {
   await sleep(2000);
   const tabs = (await (await liveBrowser.newBrowserCDPSession()).send("Target.getTargets")).targetInfos.filter((t) => t.type === "page").map((t) => t.url);
   check("every tab comes back after the restart", tabs.some((u) => u.endsWith("/tab-a")) && tabs.some((u) => u.endsWith("/tab-b")), tabs.join(", "));
+  // A version older than the way back, appearing while the browser runs (the stub's own cleanup
+  // has already happened): the launcher removes it once the browser closes.
+  mkdirSync(path.join(live, "app", "0.0.0"), { recursive: true });
+  writeFileSync(path.join(live, "app", "0.0.0", "EnkiBrowserLauncher.exe"), "");
   await closeBrowser(liveBrowser);
+  for (let i = 0; i < 80 && existsSync(path.join(live, "app", "0.0.0")); i++) await sleep(500);
+  check("old versions are removed when the browser closes", !existsSync(path.join(live, "app", "0.0.0")) && existsSync(path.join(live, "app", "0.0.1")), liveLast());
 } catch (e) {
   console.log(`ERROR ${e.message}`);
   console.log("--- update.log\n" + log());
