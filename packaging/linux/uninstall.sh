@@ -6,7 +6,8 @@ PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}"
 DEST="$HOME/.local/opt/enki-browser"
 pkill -f "^$DEST/chromium/chrome" 2>/dev/null && sleep 1 || true
 rm -f "$HOME/.local/bin/enki-browser" "$PREFIX/applications/enki-browser.desktop"
-for size in 16 32 48 128 256; do rm -f "$PREFIX/icons/hicolor/${size}x${size}/apps/enki-browser.png"; done
+for size in 16 24 32 48 64 128 256 512; do rm -f "$PREFIX/icons/hicolor/${size}x${size}/apps/enki-browser.png"; done
+rm -f "$PREFIX/icons/hicolor/scalable/apps/enki-browser.svg"
 if [[ -f /etc/apparmor.d/enki-browser-user ]]; then
   echo "Removing the AppArmor profile (needs sudo)."
   sudo apparmor_parser -R /etc/apparmor.d/enki-browser-user 2>/dev/null || true

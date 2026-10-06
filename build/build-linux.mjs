@@ -5,11 +5,11 @@
 //   node build/build-linux.mjs   → out/linux/enki-browser/, enki-browser-<ver>-linux-x64.tar.gz
 //                                  and, where dpkg-deb exists, enki-browser_<ver>_amd64.deb
 //
-// Needs: node 22, git and npm (or ENKI_DIST), unzip, tar with xz, sharp-free (icons come from Enki).
+// Needs: node 22, git and npm (or ENKI_DIST), unzip, tar with xz. Icons come from brand/.
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { addExtensions, extract, fetchPinned, findRoot, hash, out, pkg, rebrand, replaceLogos, root, run, step, upstream, versionInfo, writeDefaults } from "./common.mjs";
+import { addExtensions, brand, extract, fetchPinned, findRoot, hash, out, pkg, rebrand, replaceLogos, root, run, step, upstream, versionInfo, writeDefaults } from "./common.mjs";
 
 if (process.platform !== "linux") throw new Error("build-linux.mjs builds the Linux edition and runs on Linux (CI, or Docker).");
 
@@ -34,17 +34,17 @@ const ext = await addExtensions(app);
 
 step("Enki Browser's look and name");
 rebrand(path.join(app, "chromium"));
-await replaceLogos(path.join(app, "chromium"), upstream.chromiumLinux.version, ext.iconDir);
+await replaceLogos(path.join(app, "chromium"), upstream.chromiumLinux.version);
 // The window icon comes from the .desktop entry (matched by WM_CLASS), so Chromium's bundled
 // product logos are replaced too for the places that use them directly.
+// The plated app icon, at the hicolor sizes desktops look for, plus the scalable SVG.
+const ICON_SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
 mkdirSync(path.join(app, "icons"), { recursive: true });
-for (const size of [16, 32, 48, 128, 256]) {
-  const src = path.join(ext.iconDir, `icon${size}.png`);
-  if (existsSync(src)) cpSync(src, path.join(app, "icons", `enki-browser-${size}.png`));
-}
+for (const size of ICON_SIZES) cpSync(path.join(brand, "icons", `enki-browser-${size}.png`), path.join(app, "icons", `enki-browser-${size}.png`));
+cpSync(path.join(brand, "enki-browser.svg"), path.join(app, "icons", "enki-browser.svg"));
 for (const size of [48]) {
   const logo = path.join(app, "chromium", `product_logo_${size}.png`);
-  if (existsSync(logo)) cpSync(path.join(ext.iconDir, `icon${size}.png`), logo);
+  if (existsSync(logo)) cpSync(path.join(brand, "icons", `enki-browser-${size}.png`), logo);
 }
 
 step("Defaults, launcher, installer");
@@ -83,11 +83,14 @@ if (hasDpkg) {
   mkdirSync(path.join(deb, "usr", "share", "applications"), { recursive: true });
   writeFileSync(path.join(deb, "usr", "share", "applications", "enki-browser.desktop"),
     readFileSync(path.join(pkgDir, "enki-browser.desktop"), "utf8").replaceAll("@EXEC@", "/usr/bin/enki-browser"));
-  for (const size of [16, 32, 48, 128, 256]) {
+  for (const size of ICON_SIZES) {
     const dir = path.join(deb, "usr", "share", "icons", "hicolor", `${size}x${size}`, "apps");
     mkdirSync(dir, { recursive: true });
     cpSync(path.join(app, "icons", `enki-browser-${size}.png`), path.join(dir, "enki-browser.png"));
   }
+  const scalable = path.join(deb, "usr", "share", "icons", "hicolor", "scalable", "apps");
+  mkdirSync(scalable, { recursive: true });
+  cpSync(path.join(app, "icons", "enki-browser.svg"), path.join(scalable, "enki-browser.svg"));
   mkdirSync(path.join(deb, "etc", "apparmor.d"), { recursive: true });
   writeFileSync(path.join(deb, "etc", "apparmor.d", "enki-browser"),
     readFileSync(path.join(pkgDir, "apparmor-profile"), "utf8").replace("@CHROME@", "/opt/enki-browser/chromium/chrome"));

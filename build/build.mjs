@@ -11,7 +11,7 @@ import { createPublicKey } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { addExtensions, extract, fetchPinned, findRoot, hash, out, pkg, rebrand, replaceLogos, root, run, step, upstream, versionInfo, writeDefaults } from "./common.mjs";
+import { addExtensions, brand, extract, fetchPinned, findRoot, hash, out, pkg, rebrand, replaceLogos, root, run, step, upstream, versionInfo, writeDefaults } from "./common.mjs";
 
 const updateKeyFile = process.env.UPDATE_PUBLIC_KEY_FILE ?? path.join(root, "config", "update-signing.pub");
 // out/EnkiBrowser is the install layout: the stub and `current` at the top, this release in
@@ -83,14 +83,15 @@ cpSync(findRoot(chromiumTmp, "chrome.exe"), path.join(app, "chromium"), { recurs
 rmSync(chromiumTmp, { recursive: true, force: true });
 
 const ext = await addExtensions(app);
-const pngs = [16, 32, 48, 128, 256].map((s) => path.join(ext.iconDir, `icon${s}.png`)).filter(existsSync).map((f) => readFileSync(f));
+// The plated app icon, at the sizes Windows asks for (16–64 across DPI scales, 256 for large views).
+const pngs = [16, 20, 24, 32, 40, 48, 64, 256].map((s) => readFileSync(path.join(brand, "icons", `enki-browser-${s}.png`)));
 const ico = path.join(out, "enki.ico");
 writeFileSync(ico, pngsToIco(pngs));
 
 step("Enki Browser's look and name");
 // No theme extension: the window follows the system's light or dark mode, like other browsers.
 rebrand(path.join(app, "chromium"));
-await replaceLogos(path.join(app, "chromium"), upstream.chromium.version, ext.iconDir);
+await replaceLogos(path.join(app, "chromium"), upstream.chromium.version);
 // chrome.exe's version strings are what Task Manager and "Open with" call it.
 const rcedit = await fetchPinned(upstream.rcedit);
 run(rcedit, [
