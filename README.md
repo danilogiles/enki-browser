@@ -39,7 +39,7 @@ needs only a free key.
 | **Scoop** | `scoop install https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser.json` — no installer runs; Scoop keeps it updated (`scoop update enki-browser`). |
 | **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too. |
 
-> **Antivirus warnings.** Releases are not yet code-signed (see [Code signing](#code-signing)).
+> **Antivirus warnings.** Releases are not yet code-signed (see [Code signing policy](#code-signing-policy)).
 > Windows SmartScreen will say the app is unrecognised — check the SHA-256, then *More info →
 > Run anyway* — and a behaviour-based antivirus may distrust an unsigned program that starts a
 > browser with extensions and installs updates: Bitdefender quarantined early releases.
@@ -89,16 +89,24 @@ An update is installed only if:
 `.update\update.log` in the install folder records every check. To turn updates off, create an
 empty file named `no-update` next to `EnkiBrowser.exe`.
 
-## Code signing
+## Code signing policy
 
-The build signs `EnkiBrowser.exe`, the launcher, `chrome.exe` and the installer whenever the
-`ENKI_SIGN_COMMAND` environment variable (in CI, the secret of the same name) holds a signing
-command with `{file}` where the path goes. Code-signing keys are now issued only in hardware or
-cloud HSMs, so this is a command rather than a certificate file. Two routes fit this project:
+See **[CODE_SIGNING.md](CODE_SIGNING.md)** for the full [Code signing policy](CODE_SIGNING.md)
+(team roles, what is signed, SignPath attribution, and privacy link).
 
-- **[SignPath Foundation](https://signpath.org)** — free code signing for open-source projects,
-  with a GitHub Actions integration. Needs the project to apply.
-- **Azure Trusted Signing** — paid, with identity verification of the publisher.
+The build can sign Windows PE files when the `ENKI_SIGN_COMMAND` environment variable (in CI, the
+secret of the same name) holds a signing command with `{file}` where the path goes. Code-signing
+keys are now issued only in hardware or cloud HSMs, so this is a command rather than a certificate
+file. Two routes fit this project:
+
+- **[SignPath Foundation](https://signpath.org)** — free Authenticode for open-source projects,
+  certificate by SignPath Foundation, with a GitHub Actions integration
+  (`signpath/github-action-submit-signing-request`). **Not approved yet**; until it is, releases
+  stay unsigned. Prefer that action for the installer and Enki-built PE files once live — do not
+  sign upstream `chrome.exe` with the Foundation certificate (include it unsigned; see
+  [CODE_SIGNING.md](CODE_SIGNING.md)).
+- **Azure Trusted Signing** — paid, with identity verification of the publisher; can use
+  `ENKI_SIGN_COMMAND` when configured.
 
 Until one is in place, releases are unsigned.
 
@@ -226,7 +234,7 @@ Honest list; each is on the roadmap.
 - **Updates need a restart**, like every browser: a downloaded fix is offered in a notification
   and waits for your click (or your next start). Incognito windows do not come back after it.
 - **Not code-signed yet**, so SmartScreen warns on install and a behaviour-based antivirus may
-  distrust the updater (see [Code signing](#code-signing)).
+  distrust the updater (see [Code signing policy](#code-signing-policy)).
 - **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line
   on the About page still names ungoogled-chromium after Enki Browser's version. Changing those needs Enki Browser's own Chromium build.
 - **"Enki started debugging this browser" bar** while Enki acts on a page. That is Chromium's
