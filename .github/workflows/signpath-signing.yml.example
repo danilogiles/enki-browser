@@ -1,0 +1,79 @@
+# EXAMPLE ONLY — do not rename to *.yml until SignPath Foundation has approved
+# the project and the SignPath GitHub App + secrets below are configured.
+#
+# Prefer this submit-signing-request flow for EnkiBrowser.exe,
+# EnkiBrowserLauncher.exe, and EnkiBrowserSetup*.exe.
+# Do NOT submit upstream chrome.exe / ungoogled-chromium binaries for signing
+# with the SignPath Foundation certificate (ship them unsigned in the package).
+#
+# First signed release target: 0.7.10 (bump package.json only when wiring this for real).
+#
+# Secrets / vars (set after approval):
+#   secrets.SIGNPATH_API_TOKEN     — SignPath API token (submitter)
+#   vars.SIGNPATH_ORGANIZATION_ID  — organization id from SignPath UI
+#   vars.SIGNPATH_PROJECT_SLUG     — e.g. enki-browser
+#   vars.SIGNPATH_POLICY_SLUG      — e.g. release-signing
+#
+# Also install the SignPath GitHub App on danilogiles/enki-browser so origin
+# verification can see the Actions build.
+#
+# Integrate into the existing windows build job (or a follow-on job that
+# downloads the unsigned artifact) roughly as follows:
+
+name: SignPath signing (example)
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: "Workflow run that produced unsigned Windows artifacts"
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  sign-windows:
+    name: Submit Enki PE + installer to SignPath
+    if: github.repository == 'danilogiles/enki-browser'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Replace with: download the unsigned build artifact from the main Build
+      # workflow, or build unsigned here with ENKI_SIGN_COMMAND unset.
+      - name: Placeholder — obtain unsigned Enki PE files + installer
+        shell: bash
+        run: |
+          echo "Copy EnkiBrowser.exe, EnkiBrowserLauncher.exe, EnkiBrowserSetup-*.exe"
+          echo "into unsigned/ — never include chromium/chrome.exe in this upload."
+          mkdir -p unsigned
+          exit 1
+
+      - name: Upload unsigned artifact for SignPath
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: enki-unsigned-to-sign
+          path: unsigned/
+          retention-days: 1
+
+      - name: Submit signing request
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: ${{ github.workspace }}/signed
+
+      - name: Upload signed files
+        uses: actions/upload-artifact@v4
+        with:
+          name: enki-signed-windows
+          path: signed/
+          retention-days: 14
