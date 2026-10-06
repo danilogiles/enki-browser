@@ -22,13 +22,23 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 
 Planned for a later phase: a **companion mode** that watches your browsing and proactively offers suggestions.
 
-## Enki Browser
+## Get Enki
 
-Prefer a whole browser with Enki already inside? **[Enki Browser](https://github.com/danilogiles/enki-browser)** is ungoogled-chromium — Chromium without Google's services or telemetry — with Enki pinned in the toolbar, uBlock Origin Lite blocking ads, trackers and malware sites, DuckDuckGo search, HTTPS upgrades, blocked third-party cookies and fingerprint noise, all on by default. Early alpha, Windows x64.
+**The easiest way: [Enki Browser](https://github.com/danilogiles/enki-browser)**, a private Chromium browser with Enki already inside, pinned in the toolbar and kept up to date:
 
-## Install (developer mode)
+| | |
+|---|---|
+| **Windows 10 / 11** | [**Download EnkiBrowserSetup.exe**](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowserSetup.exe) and run it (no administrator rights; Windows may say the app is unrecognised: *More info → Run anyway*) |
+| **Ubuntu / Debian** | [Download enki-browser_amd64.deb](https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser_amd64.deb), then `sudo apt install ./enki-browser_amd64.deb` |
+| **Other ways** | Portable zip, Scoop, any Linux distribution: [Enki Browser's install guide](https://github.com/danilogiles/enki-browser#install) |
 
-Enki is not on the Chrome Web Store yet. Load it unpacked:
+Enki Browser is ungoogled-chromium — Chromium without Google's services or telemetry — with Shields (uBlock Origin Lite blocking ads, trackers and malware sites, a per-site panel, phishing warnings), Burn all data, HTTPS upgrades, blocked third-party cookies and fingerprinting noise, all on by default, and Enki as its address bar search.
+
+**Already using Chrome, Edge, Brave or another Chromium browser?** Enki is not on the Chrome Web Store yet; load it from source as below.
+
+## Install in your own browser (developer mode)
+
+Load it unpacked:
 
 ```bash
 git clone https://github.com/danilogiles/enkibrowser.git
