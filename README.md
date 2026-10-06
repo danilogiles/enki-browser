@@ -12,6 +12,18 @@ or free models through OmniRoute.
 > **Status: early alpha, Windows x64 and Linux x64.** It works and is verified end to end (below),
 > but it is young: read [Known gaps](#known-gaps) before making it your main browser.
 
+## Download
+
+| | |
+|---|---|
+| **Windows 10 / 11** | [**Download EnkiBrowserSetup.exe**](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowserSetup.exe) and run it. It installs for your user (no administrator rights), adds Start menu and desktop shortcuts, and keeps itself up to date. |
+| **Ubuntu / Debian** | [Download enki-browser_amd64.deb](https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser_amd64.deb), then `sudo apt install ./enki-browser_amd64.deb` |
+| **Other ways** | Portable zip, Scoop, any Linux distribution: see [Install](#install) below. |
+
+Windows may say the app is unrecognised, because releases are not code-signed yet: choose
+*More info → Run anyway*. Then open Enki with the icon in the toolbar (or `Ctrl+Shift+E`) and pick
+a model in its Settings; the default, NVIDIA Nemotron, needs only a free key.
+
 ## Install
 
 Everything is on the [Releases](https://github.com/danilogiles/enki-browser/releases) page; check
@@ -54,16 +66,17 @@ restarts without your click. Your profile, history and Enki settings are untouch
 How it is laid out, and why:
 
 ```
-EnkiBrowser.exe     opens the version named in `current`; updates never replace it
-current             e.g. 0.5.0
-app\0.5.0\          one complete release (Chromium, extensions, launcher)
-app\0.5.1\          the next one, added by an update
+EnkiBrowser.exe     opens the version named in `current`; refreshed from it only after the browser closes
+current             e.g. 0.7.9
+app\0.7.8\          the previous release, kept as a way back
+app\0.7.9\          the current one (Chromium, extensions, launcher), added by an update
 ```
 
-An update only ever **adds** a folder and then rewrites `current`. Nothing that exists is renamed,
-moved or overwritten, and no running file is touched — so it can install while you browse, and it
-does not look like the self-replacing programs antivirus software hunts for. The previous version
-stays for rollback; older ones are removed once nothing runs from them.
+An update only ever **adds** a folder and then rewrites `current`. Nothing that exists is renamed
+or moved, and no running file is touched — so it can install while you browse, and it does not
+look like the self-replacing programs antivirus software hunts for. Once the browser has closed,
+`EnkiBrowser.exe` is refreshed from the new version (so its icon and fixes reach you) and versions
+older than the previous one are removed; the previous version stays for rollback.
 
 An update is installed only if:
 
