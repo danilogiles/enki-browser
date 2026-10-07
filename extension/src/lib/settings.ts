@@ -168,6 +168,7 @@ export const PRESETS: Preset[] = [
     recommended: [
       { id: "anthropic/claude-sonnet-4.6", note: "reliable tool use" },
       { id: "openrouter/auto", note: "OpenRouter picks per request" },
+      { id: "openrouter/free", note: "free-only router · tools/vision" },
     ],
     keyUrl: "https://openrouter.ai/keys",
   },
