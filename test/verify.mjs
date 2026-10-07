@@ -196,7 +196,10 @@ try {
   });
   check("third-party cookies are blocked", /block/i.test(cookieState ?? ""), cookieState ?? "no checked option found");
 
-  // ---- closing the last window must end the browser, or a staged update never installs
+  // ---- closing the last window must end the browser, or a staged update never installs.
+  // Not on macOS: Chromium there has no such setting (a Mac app runs until it is quit, ⌘Q, like
+  // every Mac app), and there is no updater waiting for the browser to close.
+  if (!mac) {
   await page.goto("chrome://settings/system");
   await page.waitForTimeout(1500);
   const background = await page.evaluate(() => {
@@ -205,6 +208,7 @@ try {
     return row ? { label: row.getAttribute("label") ?? row.label, checked: !!row.checked } : null;
   });
   check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
+  }
 
   // ---- Enki Shield: phishing protection checked on this device
   const shieldPage = `chrome-extension://${version.shieldExtensionId}/blocked.html?url=about%3Ablank`;
