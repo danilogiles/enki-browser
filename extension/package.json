@@ -1,0 +1,45 @@
+{
+  "name": "enki",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Enki - open-source AI browser assistant. Bring your own model, see the page, let it act.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "package": "npm run build && node scripts/package.mjs",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/icons.mjs",
+    "mock": "node test/mock-llm.mjs",
+    "test:e2e": "node test/e2e.mjs",
+    "test:home": "node test/home.mjs",
+    "test:resilience": "node test/resilience.mjs",
+    "test:unit": "node test/unit.cjs",
+    "test:quality": "node test/quality.mjs",
+    "test:voice": "node test/voice.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "@huggingface/transformers": "^4.3.1",
+    "lucide-react": "^1.40.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.7.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/chrome": "^0.2.8",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.63.0",
+    "sharp": "^0.35.4",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2"
+  }
+}

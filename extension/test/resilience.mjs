@@ -1,0 +1,217 @@
+// Exercises how Enki survives badly-behaved models: a gateway that stalls mid-stream, a model
+// that answers only in the reasoning channel, and one that emits inline <think> tags.
+//
+// Prereqs: `npm run build`, `node test/mock-llm.mjs` running, `npx playwright install chromium`.
+import path from "node:path";
+import os from "node:os";
+import { mkdtemp } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const dist = path.resolve(here, "..", "dist");
+
+const MOCK = "http://127.0.0.1:8787";
+const results = [];
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok });
+  console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
+};
+
+const context = await chromium.launchPersistentContext(await mkdtemp(path.join(os.tmpdir(), "enki-res-")), {
+  headless: false,
+  args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`],
+  viewport: { width: 420, height: 800 },
+});
+
+try {
+  let [sw] = context.serviceWorkers();
+  if (!sw) sw = await context.waitForEvent("serviceworker", { timeout: 15000 });
+  const extId = new URL(sw.url()).host;
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extId}/src/sidepanel/index.html`);
+
+  const configure = async (model, requestTimeoutSec = 60, mode = "ask") =>
+    panel.evaluate(
+      ({ mock, model, requestTimeoutSec, mode }) =>
+        chrome.storage.local.set({
+          "enki:settings": {
+            preset: "custom",
+            apiKey: "test",
+            baseUrl: `${mock}/v1`,
+            model,
+            theme: "dark",
+            autoApprove: false,
+            vision: false,
+            attachScreenshot: false,
+            maxSteps: 5,
+            requestTimeoutSec,
+            devMode: true,
+            customInstructions: "",
+            saveConversations: false,
+          },
+          "enki:mode": mode,
+        }),
+      { mock: MOCK, model, requestTimeoutSec, mode },
+    );
+
+  await configure("mock-echo");
+  const wid = await panel.evaluate(
+    async (mock) => (await chrome.windows.create({ url: `${mock}/page`, width: 900, height: 700 })).id,
+  );
+  const panelUrl = `chrome-extension://${extId}/src/sidepanel/index.html?window=${wid}`;
+
+  /** Sends one message into the conversation already on screen. */
+  const send = async (text, timeout = 60000) => {
+    await panel.fill("textarea", text);
+    await panel.press("textarea", "Enter");
+    // A fast mock can finish between polls, so anchor on the sent message appearing rather
+    // than on catching the Stop button while it exists.
+    await panel.waitForFunction((t) => document.body.innerText.includes(t), text, { timeout: 20000 });
+    await panel.waitForFunction(() => !document.querySelector("button[title='Stop']"), null, { timeout });
+    await panel.waitForTimeout(400);
+    // Notices and steps are folded away by default; read the whole page, not just what is shown.
+    return panel.evaluate(() => document.body.textContent);
+  };
+
+  /** Starts a fresh conversation with the given model, then sends one message. */
+  const ask = async (model, text, { timeout = 60000, requestTimeoutSec = 60, mode = "ask" } = {}) => {
+    await configure(model, requestTimeoutSec, mode);
+    await panel.goto(panelUrl);
+    await panel.waitForSelector("textarea", { timeout: 10000 });
+    await panel.waitForTimeout(600);
+    return send(text, timeout);
+  };
+
+  // 1. A model that only ever fills the reasoning channel must still show an answer.
+  const reasoning = await ask("mock-reasoning-only", "check my visa status");
+  check(
+    "reasoning-only reply is surfaced as the answer",
+    /open Gmail and check the visa status/.test(reasoning) && !/Reasoning/.test(reasoning),
+    reasoning.split("\n").filter(Boolean).slice(-3).join(" | "),
+  );
+
+  // 2. Inline <think> tags split across chunks must not leak into the answer.
+  const think = await ask("mock-think-tags", "what is the answer");
+  // The reasoning is folded away with the steps, so "planning here" is in the page but must not be
+  // in what the user reads as the answer: check the visible text for that part.
+  const visible = await panel.evaluate(() => document.body.innerText);
+  check(
+    "inline <think> tags are routed to reasoning, not the answer",
+    /The answer is 42\./.test(think) && !/<\/?think/.test(think) && !/planning here/.test(visible),
+    think.split("\n").filter(Boolean).slice(-3).join(" | "),
+  );
+
+  // 3. A model that reports success without calling a tool must be caught, not believed.
+  const liar = await ask("mock-liar", "open my drive", { mode: "act" });
+  const movedTo = await panel.evaluate(
+    async (w) => (await chrome.tabs.query({ active: true, windowId: w }))[0]?.url,
+    wid,
+  );
+  check(
+    "a claimed-but-unperformed action is retracted and retried",
+    !/opened your Google Drive/i.test(liar) && /moved=1/.test(movedTo ?? ""),
+    `tab=${movedTo} | ${liar.split("\n").filter(Boolean).slice(-3).join(" | ")}`,
+  );
+
+  // 4a. A provider that ignores tool definitions must be reported, and another system's tool
+  //     call must never be executed.
+  const noTools = await ask("mock-no-tools", "abre meu gmail", { mode: "act" });
+  const foreign = await send("abre o site do gmail eu ja estou logado");
+  const stillHere = await panel.evaluate(
+    async (w) => (await chrome.tabs.query({ active: true, windowId: w }))[0]?.url,
+    wid,
+  );
+  check(
+    "a provider ignoring tool definitions is reported, foreign tools are not run",
+    /answered as if Enki's tools did not exist/.test(noTools) &&
+      /mcp__puppeteer_core__evaluate_javascript/.test(foreign) &&
+      !/mail\.google\.com/.test(stillHere ?? ""),
+    `tab=${stillHere} | first="${noTools.split("\n").filter(Boolean).slice(-3).join(" | ")}"`,
+  );
+
+  // 4b. A call to a real Enki tool written as text should still be honoured.
+  const viaText = await ask("mock-text-toolcall", "open the test page", { mode: "act" });
+  const movedByText = await panel.evaluate(
+    async (w) => (await chrome.tabs.query({ active: true, windowId: w }))[0]?.url,
+    wid,
+  );
+  check(
+    "a tool call written as text is recovered and executed",
+    /viatext=1/.test(movedByText ?? "") && !/<tool_call>/.test(viaText),
+    `tab=${movedByText} | ${viaText.split("\n").filter(Boolean).slice(-3).join(" | ")}`,
+  );
+
+  // 5. Repeated page reads must not pile up: only the newest observations stay in context.
+  await panel.evaluate(
+    async ({ wid, mock }) => {
+      const [t] = await chrome.tabs.query({ active: true, windowId: wid });
+      await chrome.tabs.update(t.id, { url: `${mock}/heavy` });
+      await new Promise((r) => setTimeout(r, 2500));
+    },
+    { wid, mock: MOCK },
+  );
+  const sizes = [];
+  panel.on("console", (m) => {
+    const s = /contextChars: (\d+)/.exec(m.text());
+    const f = /freedChars: (\d+)/.exec(m.text());
+    if (s) sizes.push({ chars: Number(s[1]), freed: f ? Number(f[1]) : 0 });
+  });
+  // One conversation, three messages — reloading the panel would start over.
+  await ask("mock-reader", "read the page 0", { mode: "act" });
+  await send("read the page 1");
+  await send("read the page 2");
+  // Each read of /heavy is ~14k chars. Three of them unpruned would push the context past 40k;
+  // compaction should collapse the superseded ones and hold it well below that.
+  const peak = Math.max(...sizes.map((s) => s.chars), 0);
+  const freed = Math.max(...sizes.map((s) => s.freed), 0);
+  check(
+    "repeated page reads are compacted instead of accumulating",
+    freed > 8000 && peak < 40000,
+    `peak=${peak} freedInOneStep=${freed} (3 unpruned snapshots would exceed 40000)`,
+  );
+
+  // 6. A wedged gateway must fail with a message instead of spinning forever. The response
+  //    timeout is set to 6s here so the test does not sit through the 180s default.
+  const started = Date.now();
+  const stalled = await ask("mock-stall", "hello", { timeout: 40000, requestTimeoutSec: 6 });
+  const elapsed = Math.round((Date.now() - started) / 1000);
+  check(
+    "a stalled stream times out instead of hanging",
+    /sent nothing for 6s/.test(stalled) && elapsed < 35,
+    `${elapsed}s | ${stalled.split("\n").filter(Boolean).slice(-2).join(" | ")}`,
+  );
+  const noHeaders = await ask("mock-no-headers", "header timeout", { requestTimeoutSec: 6 });
+  check("gateway header timeout releases the composer", /response headers before the timeout/.test(noHeaders));
+  await configure("mock-echo");
+  await panel.waitForTimeout(300);
+  check("next interaction works after gateway timeout", /Echo:/.test(await send("recovered after timeout")));
+
+  // Use the normal scripted Act flow to reach its sensitive Buy action.
+  await configure("mock-act", 60, "act");
+  await panel.evaluate(async ({ wid, mock }) => {
+    const [t] = await chrome.tabs.query({ active: true, windowId: wid });
+    await chrome.tabs.update(t.id, { url: `${mock}/page` });
+  }, { wid, mock: MOCK });
+  await panel.goto(panelUrl);
+  await panel.waitForTimeout(1000);
+  await panel.fill("textarea", "type hello enki and buy");
+  await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow')", { timeout: 30000 });
+  await panel.click("button[title='Stop']");
+  await panel.waitForFunction(() => !document.querySelector("button[title='Stop']"), null, { timeout: 5000 });
+  check("Stop cancels pending approval", await panel.locator("button:has-text('Allow')").count() === 0);
+  const stoppedTitle = await panel.evaluate(async (wid) => (await chrome.tabs.query({ active: true, windowId: wid }))[0].title, wid);
+  check("cancelled approval does not execute purchase", !stoppedTitle.startsWith("BOUGHT:"));
+  await configure("mock-echo");
+  await panel.waitForTimeout(300);
+  check("next interaction works after Stop", /Echo:/.test(await send("recovered after stop")));
+} catch (e) {
+  check("run", false, e?.stack ?? String(e));
+} finally {
+  await context.close();
+}
+
+const failed = results.filter((r) => !r.ok);
+console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
+process.exit(failed.length ? 1 : 0);

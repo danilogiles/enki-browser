@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Enki does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Security problems** — including a web page that makes Enki do something you did not ask — go through [private vulnerability reporting](https://github.com/danilogiles/enkibrowser/security/advisories/new), not here.
+        Português ou español: pode escrever na sua língua.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Enki did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open https://example.com
+        2. In Act mode, ask "…"
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider and model
+      placeholder: "OmniRoute · cfp/moonshotai/kimi-k2.6"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "Chrome 141, Brave 1.84, Edge 141…"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Enki version
+      description: Shown in chrome://extensions.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        In the panel, press **Copy diagnostics** and paste it here. It contains no keys, URLs, page content or prompts.
+        Screenshots help too.
+      render: json

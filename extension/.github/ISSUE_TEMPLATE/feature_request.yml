@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest something Enki should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How you imagine it working. Rough is fine.
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and privacy
+      description: Would this send new data anywhere, or let the agent do something it cannot do today? Say so — it changes how the feature has to be built.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to work on this myself

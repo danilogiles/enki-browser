@@ -1,0 +1,18 @@
+services:
+  omniroute:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.omniroute
+    container_name: omniroute
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:20128:20128"
+    environment:
+      - NODE_ENV=production
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    volumes:
+      - omniroute-data:/app/data
+
+volumes:
+  omniroute-data:
+    name: omniroute-data
