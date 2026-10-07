@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Camera, CameraOff, Monitor, Search, Settings as SettingsIcon, Square } from "lucide-react";
+import { ArrowUp, Camera, CameraOff, Loader2, Mic, Monitor, Search, Settings as SettingsIcon, Square } from "lucide-react";
+import { askMicrophonePermission, startRecording, transcribe, uiLanguage, type Recording, type VoiceState } from "../lib/voice";
 import type { Mode } from "../lib/agent/prompt";
 
 /**
@@ -35,6 +36,44 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
     el.style.height = "0px";
     el.style.height = Math.min(Math.max(el.scrollHeight, 44), 180) + "px";
   }, [value]);
+
+  // Voice: click to talk, click again to stop; the text lands in the box to check before sending.
+  const [voice, setVoice] = useState<VoiceState>({ kind: "idle" });
+  const recording = useRef<Recording | null>(null);
+  useEffect(() => () => recording.current?.cancel(), []);
+  const toggleVoice = async () => {
+    if (voice.kind === "recording" && recording.current) {
+      const rec = recording.current;
+      recording.current = null;
+      setVoice({ kind: "transcribing" });
+      try {
+        const audio = await rec.stop();
+        const text = await transcribe(audio, (percent) => setVoice({ kind: "downloading", percent }), uiLanguage());
+        setValue((v) => (v.trim() ? `${v.trim()} ${text}` : text));
+        setVoice({ kind: "idle" });
+        ref.current?.focus();
+      } catch (e) {
+        setVoice({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+    if (voice.kind === "transcribing" || voice.kind === "downloading") return;
+    try {
+      recording.current = await startRecording();
+      setVoice({ kind: "recording", since: Date.now() });
+    } catch (e) {
+      if (e instanceof Error && e.message === "permission") {
+        askMicrophonePermission();
+        setVoice({ kind: "error", message: "Allow the microphone in the tab that opened, then press the microphone again." });
+      } else {
+        setVoice({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+      }
+    }
+  };
+  const voiceTitle = voice.kind === "recording" ? "Listening — click to stop"
+    : voice.kind === "transcribing" ? "Turning your voice into text…"
+    : voice.kind === "downloading" ? `Downloading the voice model, once (${voice.percent}%)`
+    : "Speak instead of typing (stays on this computer)";
 
   const submit = () => {
     if (disabled || running || !value.trim()) return;
@@ -106,6 +145,17 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
               {modeButton("act", <Monitor size={15} />, "Act: Enki can navigate, click and type")}
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => void toggleVoice()}
+            disabled={disabled || running}
+            title={voiceTitle}
+            aria-label={voiceTitle}
+            aria-pressed={voice.kind === "recording"}
+            className={`rounded-md p-1.5 transition disabled:opacity-50 ${voice.kind === "recording" ? "animate-pulse bg-red-500/20 text-red-300" : "text-zinc-500 hover:text-zinc-200"}`}
+          >
+            {voice.kind === "transcribing" || voice.kind === "downloading" ? <Loader2 size={15} className="animate-spin" /> : <Mic size={15} />}
+          </button>
           {vision && (
             <button
               type="button"
@@ -138,6 +188,11 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
           )}
         </div>
       </div>
+      {(voice.kind === "downloading" || voice.kind === "error") && (
+        <p role="status" className="mt-1 px-1 text-[11px] text-zinc-400">
+          {voice.kind === "downloading" ? `Downloading the voice model, once: ${voice.percent}%. After this, voice works offline.` : voice.message}
+        </p>
+      )}
     </div>
   );
 }

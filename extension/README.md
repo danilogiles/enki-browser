@@ -16,9 +16,10 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 - **Saved tasks**: a request you repeat, run with `/name` plus extra words, in the mode it was saved with. In Act mode it works on any site, apps without MCP included.
 - **Unfiltered tone** (developer mode): Enki's own tone rules off, so the model's policy is the only filter. The browser safety rules stay on.
 - **Answer page**: `src/sidepanel/index.html?q=…` answers a question in a full tab, which is how Enki Browser makes Enki its address bar search.
+- **Voice input**: press the microphone and speak instead of typing. Whisper runs on your computer, inside the browser; the audio never leaves it. The model (~80 MB) downloads once from Hugging Face the first time.
 - **Bring your own model**: Anthropic Claude, OpenAI, Google Gemini, Groq, OpenRouter, Ollama (local), or any OpenAI-compatible endpoint.
 - **Safety first**: sensitive clicks (send, buy, delete, publish...) show a confirmation card before they run. Enki never types passwords or payment details, never solves CAPTCHAs, and treats page text as data, not instructions.
-- **Private**: your API key lives in the browser's local extension storage and is sent only to the provider you chose. No backend, no telemetry.
+- **Private**: your API keys, connected-app tokens and saved chats are encrypted (AES-256-GCM) in the browser's local extension storage; a key is sent only to the provider you chose. No backend, no telemetry.
 
 Planned for a later phase: a **companion mode** that watches your browsing and proactively offers suggestions.
 

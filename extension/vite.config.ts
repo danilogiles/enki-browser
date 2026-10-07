@@ -18,6 +18,8 @@ export default defineConfig({
         sidepanel: "src/sidepanel/index.html",
         // Enki Home. Unused by the extension on its own; Enki Browser makes it the new tab page.
         home: "src/home/index.html",
+        // Asks for the microphone once (the side panel cannot show the prompt).
+        mic: "src/mic/index.html",
       },
     },
   },

@@ -56,4 +56,6 @@ export default defineManifest({
     "webNavigation",
   ],
   host_permissions: ["<all_urls>"],
+  // On-device voice runs Whisper in WebAssembly (lib/voice); nothing else changes from the default.
+  content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';" },
 });

@@ -15,10 +15,12 @@
     "test:home": "node test/home.mjs",
     "test:resilience": "node test/resilience.mjs",
     "test:unit": "node test/unit.cjs",
-    "test:quality": "node test/quality.mjs"
+    "test:quality": "node test/quality.mjs",
+    "test:voice": "node test/voice.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
+    "@huggingface/transformers": "^4.3.1",
     "lucide-react": "^1.40.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
