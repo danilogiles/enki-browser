@@ -140,7 +140,7 @@ try {
   check("the Shields panel reaches uBlock's per-site mode", before.levels);
   const badgeText = await shieldsPage.evaluate((tabId) => chrome.action.getBadgeText({ tabId }), siteTab);
   check("the Shields button shows the number blocked", badgeText === String(before.count), `badge "${badgeText}"`);
-  const firstRun = JSON.parse(readFileSync(path.join(app, "chromium", "initial_preferences"), "utf8"));
+  const firstRun = JSON.parse(readFileSync(mac ? path.join(app, "initial_preferences") : path.join(app, "chromium", "initial_preferences"), "utf8"));
   check("new profiles get the Shields button pinned next to the address bar", firstRun.extensions?.pinned_extensions?.includes(version.shieldExtensionId), JSON.stringify(firstRun.extensions?.pinned_extensions));
   const loadTrackers = async () => {
     outcome.clear();
