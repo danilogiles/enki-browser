@@ -200,14 +200,14 @@ try {
   // Not on macOS: Chromium there has no such setting (a Mac app runs until it is quit, ⌘Q, like
   // every Mac app), and there is no updater waiting for the browser to close.
   if (!mac) {
-  await page.goto("chrome://settings/system");
-  await page.waitForTimeout(1500);
-  const background = await page.evaluate(() => {
-    const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
-    const row = all(document).find((el) => el.tagName === "SETTINGS-TOGGLE-BUTTON" && /background/i.test(el.getAttribute("label") ?? el.label ?? ""));
-    return row ? { label: row.getAttribute("label") ?? row.label, checked: !!row.checked } : null;
-  });
-  check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
+    await page.goto("chrome://settings/system");
+    await page.waitForTimeout(1500);
+    const background = await page.evaluate(() => {
+      const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
+      const row = all(document).find((el) => el.tagName === "SETTINGS-TOGGLE-BUTTON" && /background/i.test(el.getAttribute("label") ?? el.label ?? ""));
+      return row ? { label: row.getAttribute("label") ?? row.label, checked: !!row.checked } : null;
+    });
+    check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
   }
 
   // ---- Enki Shield: phishing protection checked on this device

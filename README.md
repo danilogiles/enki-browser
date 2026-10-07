@@ -9,7 +9,7 @@ of Brave and DuckDuckGo. The assistant reads the page you are on and, when you l
 clicks and types for you — with the model *you* choose: Claude, GPT, Gemini, a local Ollama model,
 or free models through OmniRoute.
 
-> **Status: early alpha, Windows x64 and Linux x64.** It works and is verified end to end (below),
+> **Status: early alpha, Windows x64, macOS (Apple silicon and Intel) and Linux x64.** It works and is verified end to end (below),
 > but it is young: read [Known gaps](#known-gaps) before making it your main browser.
 
 ## Download
@@ -17,11 +17,12 @@ or free models through OmniRoute.
 | | |
 |---|---|
 | **Windows 10 / 11** | [**Download EnkiBrowserSetup.exe**](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowserSetup.exe) and run it. It installs for your user (no administrator rights), adds Start menu and desktop shortcuts, and keeps itself up to date. |
+| **macOS 12 or later** | [**Download for Apple silicon**](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowser-macos-arm64.dmg) (M1 and later) or [for Intel](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowser-macos-x64.dmg). Open the `.dmg` and drag Enki Browser to Applications. The first launch needs one extra step: see [macOS](#macos). |
 | **Ubuntu / Debian** | [Download enki-browser_amd64.deb](https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser_amd64.deb), then `sudo apt install ./enki-browser_amd64.deb` |
 | **Other ways** | Portable zip, Scoop, any Linux distribution: see [Install](#install) below. |
 
 Windows may say the app is unrecognised, because releases are not code-signed yet: choose
-*More info → Run anyway*. Then open Enki with the icon in the toolbar (or `Ctrl+Shift+E`) and pick
+*More info → Run anyway*. macOS will not open it the first time either: see [macOS](#macos). Then open Enki with the icon in the toolbar (or `Ctrl+Shift+E`) and pick
 a model in its Settings; the default, NVIDIA Nemotron, needs only a free key.
 
 ## Install
@@ -44,6 +45,25 @@ needs only a free key.
 > Run anyway* — and a behaviour-based antivirus may distrust an unsigned program that starts a
 > browser with extensions and installs updates: Bitdefender quarantined early releases.
 
+### macOS
+
+Open `EnkiBrowser-<version>-macos-arm64.dmg` (Apple silicon: M1 and later) or `-macos-x64.dmg`
+(Intel), and drag **Enki Browser** to **Applications**. macOS 12 or later. Your profile lives in
+`~/Library/Application Support/Enki Browser`.
+
+> **The first launch.** Releases are not notarized by Apple yet (that needs an Apple Developer
+> account), so the first time macOS says it could not verify Enki Browser and does not open it.
+> Check the download's SHA-256, then open **System Settings → Privacy & Security**, scroll to
+> *Security*, click **Open Anyway** next to Enki Browser and confirm. You do this once per
+> download. Or, in Terminal: `xattr -dr com.apple.quarantine "/Applications/Enki Browser.app"`.
+>
+> After the first launch and after each update, macOS may ask whether Enki Browser may use
+> "Chromium Safe Storage" in your keychain: that is the key that encrypts your saved passwords and
+> logins. Choose **Always Allow**.
+
+To update, download the new `.dmg` and drag Enki Browser to Applications again, replacing the old
+one; your profile is kept. To remove it, move the app to the Bin and delete the profile folder.
+
 ### Linux (x86_64)
 
 | How | |
@@ -56,8 +76,8 @@ Tested on Ubuntu 24.04 and Debian 12.
 
 ## Updates
 
-On Windows, Enki Browser updates itself (on Linux, install the new release the same way you
-installed it; Scoop installs are updated by Scoop). While the browser is open it looks for a newer
+On Windows, Enki Browser updates itself (on macOS and Linux, install the new release the same way
+you installed it; Scoop installs are updated by Scoop). While the browser is open it looks for a newer
 release every couple of hours, downloads it and installs it **beside the one you are using**. A
 notification then offers to restart now: every window and tab comes back, on the new version. If
 you ignore it, the next time you start Enki Browser you are on the new version anyway. Nothing
@@ -195,6 +215,11 @@ node test/update.mjs  # builds two versions and checks the updater: forged, tamp
 Requirements: Windows 10/11 x64, Node.js 22+, Git. The C# compiler that ships with Windows' .NET
 Framework builds the launcher; nothing else to install.
 
+The Linux edition is built on Linux with `node build/build-linux.mjs`. The macOS edition is built on
+a Mac with `node build/build-mac.mjs [--arch=arm64|x64]` (Xcode's command line tools for `clang`).
+It takes ungoogled-chromium's macOS app, renames it Enki Browser with its own icon and bundle id,
+adds the extensions, defaults and a small launcher, signs it ad hoc and packs the `.dmg`.
+
 The build compiles Enki from `extension/`; to reuse one already built: `ENKI_DIST=extension/dist npm run build`.
 
 ## Verified
@@ -241,9 +266,12 @@ Honest list; each is on the roadmap.
   warning for the debugger API extensions use; a built-in assistant will not need it.
 - **No Chrome Web Store.** As in ungoogled-chromium, extensions install from `.crx` files with a
   confirmation prompt. See [chromium-web-store](https://github.com/NeverDecaf/chromium-web-store).
-- **No automatic updates on Linux yet**: install each new release with the `.deb`, `install.sh` or
-  the one-line installer. No macOS build (it needs an Apple Developer account to notarise).
-- **x86_64 only.**
+- **No automatic updates on macOS and Linux yet**: install each new release with the `.dmg`, the
+  `.deb`, `install.sh` or the one-line installer.
+- **macOS: not notarized.** The first launch needs *Open Anyway* (see [macOS](#macos)), and after
+  an update macOS may ask again for the keychain item that encrypts your logins. A Developer ID
+  signature would end both; it needs an Apple Developer account.
+- **x86_64 only on Windows and Linux**; macOS has Apple silicon and Intel builds.
 
 ## Roadmap
 
@@ -257,7 +285,8 @@ Honest list; each is on the roadmap.
 4. **An assistant built to resist prompt injection:** the model that reads pages gets no tools, the
    agent needs per-site permission on sites you are logged in to, and every release must pass a
    public corpus of injection attacks.
-5. **macOS**, Linux auto-updates and ARM builds, with the community.
+5. ✅ **macOS** (0.8.0). Next: notarization, macOS and Linux auto-updates, and ARM builds for
+   Windows and Linux, with the community.
 
 ## Contributing
 

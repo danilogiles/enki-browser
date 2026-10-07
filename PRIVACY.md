@@ -1,6 +1,6 @@
 # Enki Browser Privacy Policy
 
-**Version 2 · Effective 7 October 2026**
+**Version 3 · Effective 8 October 2026**
 
 Enki Browser is an open-source web browser built on ungoogled-chromium, with the Enki AI
 assistant, uBlock Origin Lite and Enki Shield built in. This policy describes what the browser
@@ -26,7 +26,7 @@ included (`extension/`).
 | Requests to apps you connect (Jira, Linear, Notion, Sentry, GitHub, or other MCP servers) | That app | Only after you connect it in Settings → Connections, and only when Enki uses it for your request | Disconnect any app at any time; changes in an app wait for your confirmation unless you allow that tool |
 | Your address bar typing, for suggestions | DuckDuckGo's suggestion service | While you type in the address bar | Change or turn off suggestions in the browser's settings |
 | Nothing from voice input. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
-| Update checks | GitHub (the browser's release page) | About every two hours while the browser is open | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
+| Update checks | GitHub (the browser's release page) | About every two hours while the browser is open (Windows only; on macOS and Linux nothing is checked) | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
 
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:
@@ -39,17 +39,18 @@ third-party cookies, known trackers and ads, and the local network address WebRT
 | Enki's API keys and connected apps' tokens | the browser's local extension storage | Encrypted (AES-256-GCM) with a key the browser keeps non-exportable; shown only masked |
 | Enki's conversations, the list of chats and saved tasks | the same | Encrypted the same way |
 | Shields' per-site choices and "forget this site" list | Enki Shield's local storage | Encrypted the same way |
-| Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by Windows for your user account, in the portable version too |
+| Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by your account: by Windows (in the portable version too), by the login keychain on macOS, by the system keyring on Linux |
 | Your voice, when you use Enki's microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
-| History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker) to protect them if someone gets your disk |
+| History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker; macOS: FileVault, in System Settings → Privacy & Security) to protect them if someone gets your disk |
 
 Updates change only the program: your profile — history, bookmarks, logins, Enki's settings and
 chats, Shields' choices — is kept exactly as it was, and an update restart reopens your windows
 and tabs.
 
 Nothing of this is synced or backed up by the project. Removing the browser and its profile
-folder (`%LOCALAPPDATA%\EnkiBrowser` on Windows, `~/.config/enki-browser` on Linux) deletes it.
+folder (`%LOCALAPPDATA%\EnkiBrowser` on Windows, `~/Library/Application Support/Enki Browser` on
+macOS, `~/.config/enki-browser` on Linux) deletes it.
 
 ## Google services
 

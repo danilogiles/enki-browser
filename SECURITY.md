@@ -30,5 +30,5 @@ Enki Browser yet, tell us through the same channel.
 
 ## Supported versions
 
-Only the latest release. The browser updates itself on Windows; on Linux, install the newest
-release.
+Only the latest release. The browser updates itself on Windows; on macOS and Linux, install the
+newest release.
