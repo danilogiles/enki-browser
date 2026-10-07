@@ -14,6 +14,20 @@
     "sha256": "9529d5829ee58b22d97d0f4d6d5f9afaa4ce6cb34e591ac324be0cf3fa51f8e6",
     "license": "BSD-3-Clause (Chromium: BSD-3-Clause and others)"
   },
+  "chromiumMacArm64": {
+    "name": "ungoogled-chromium (macOS, Apple silicon)",
+    "version": "154.0.8037.57-1.1",
+    "url": "https://github.com/ungoogled-software/ungoogled-chromium-macos/releases/download/154.0.8037.57-1.1/ungoogled-chromium_154.0.8037.57-1.1_arm64-macos.dmg",
+    "sha256": "20b9b3104032c2011c89c8356fd94169565f3c9880ae281119ea189634a85e00",
+    "license": "BSD-3-Clause (Chromium: BSD-3-Clause and others)"
+  },
+  "chromiumMacX64": {
+    "name": "ungoogled-chromium (macOS, Intel)",
+    "version": "154.0.8037.57-1.1",
+    "url": "https://github.com/ungoogled-software/ungoogled-chromium-macos/releases/download/154.0.8037.57-1.1/ungoogled-chromium_154.0.8037.57-1.1_x86_64-macos.dmg",
+    "sha256": "58ee9436dcbc457fe6634bbc247ad03e0d1609ed5ce9954106ddce89944eb2ff",
+    "license": "BSD-3-Clause (Chromium: BSD-3-Clause and others)"
+  },
   "blocker": {
     "name": "uBlock Origin Lite",
     "version": "2026.930.1227",

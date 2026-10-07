@@ -3,8 +3,10 @@
 //
 //   npm run build && npm run verify                    Windows: out/EnkiBrowser
 //   node test/verify.mjs                               Linux: out/linux/enki-browser (or ENKI_LINUX_DIR)
+//   node test/verify.mjs                               macOS: out/mac-<arch>/Enki Browser.app (or ENKI_MAC_APP)
 //   ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6 ...       also run one Act task through a local OmniRoute
 //   ENKI_NO_SANDBOX=1 ...                              containers without user namespaces only
+//   ENKI_MOCK_KEYCHAIN=1 ...                           macOS CI runners: no keychain prompt to wait on
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
@@ -15,9 +17,12 @@ import { chromium } from "playwright-core";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const linux = process.platform === "linux";
+const mac = process.platform === "darwin";
 // Windows: the stub and `current` at the top, the release in app/<version>/. Linux: one folder.
-const installRoot = linux ? (process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser")) : path.join(root, "out", "EnkiBrowser");
-const app = linux ? installRoot : path.join(installRoot, "app", readFileSync(path.join(installRoot, "current"), "utf8").trim());
+// macOS: the .app, with Enki Browser's files in Contents/Resources/enki.
+const macApp = process.env.ENKI_MAC_APP ?? path.join(root, "out", `mac-${process.arch === "arm64" ? "arm64" : "x64"}`, "Enki Browser.app");
+const installRoot = linux ? (process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser")) : mac ? macApp : path.join(root, "out", "EnkiBrowser");
+const app = linux ? installRoot : mac ? path.join(macApp, "Contents", "Resources", "enki") : path.join(installRoot, "app", readFileSync(path.join(installRoot, "current"), "utf8").trim());
 const version = JSON.parse(readFileSync(path.join(app, "version.json"), "utf8"));
 const port = 9333;
 const results = [];
@@ -43,8 +48,10 @@ const local = `http://127.0.0.1:${server.address().port}/`;
 const userData = mkdtempSync(path.join(os.tmpdir(), "enki-browser-verify-"));
 // Started the way the menu entry starts it: on Windows stub → launcher → Chromium, on Linux the
 // launcher script → Chromium.
-const launcher = linux ? path.join(installRoot, "enki-browser") : path.join(installRoot, "EnkiBrowser.exe");
+const launcher = linux ? path.join(installRoot, "enki-browser") : mac ? path.join(macApp, "Contents", "MacOS", "Enki Browser") : path.join(installRoot, "EnkiBrowser.exe");
 const extraArgs = process.env.ENKI_NO_SANDBOX === "1" ? ["--no-sandbox"] : [];
+if (process.env.ENKI_MOCK_KEYCHAIN === "1") extraArgs.push("--use-mock-keychain");
+const startedAt = Date.now();
 const proc = spawn(launcher, [`--remote-debugging-port=${port}`, ...extraArgs, "about:blank"], {
   env: { ...process.env, ENKI_BROWSER_USER_DATA: userData },
   stdio: "ignore",
@@ -274,13 +281,32 @@ try {
   // system light or dark mode like other browsers.
   check("the window follows the system theme (no custom theme)", !!themeRow && !/Reset to default|Redefinir|Restablecer/i.test(themeRow), themeRow || "theme row not found");
 
-  if (!linux) {
+  if (mac) {
+    const info = path.join(macApp, "Contents", "Info.plist");
+    const read = (key) => { try { return execFileSync("plutil", ["-extract", key, "raw", info]).toString().trim(); } catch { return ""; } };
+    check("the app is called Enki Browser, with its own bundle id", read("CFBundleName") === "Enki Browser" && read("CFBundleIdentifier") === "io.github.danilogiles.EnkiBrowser", `${read("CFBundleName")} · ${read("CFBundleIdentifier")}`);
+    let signed = "";
+    try { execFileSync("codesign", ["--verify", "--deep", "--strict", macApp], { stdio: "pipe" }); } catch (e) { signed = e.stderr?.toString().trim() || "invalid"; }
+    check("the app's signature is intact (nothing was changed after signing)", signed === "", signed);
+    // The launcher execs Chromium: the browser runs in the process macOS started, so it is one app
+    // (the Dock's icon, links from other apps), not a launcher and a separate Chromium.
+    const comm = execFileSync("ps", ["-o", "comm=", "-p", String(proc.pid)]).toString().trim();
+    check("the browser runs in the app's own process", comm.endsWith("Enki Browser.app/Contents/MacOS/Chromium"), comm);
+  } else if (!linux) {
     const winInfo = execFileSync("powershell.exe", ["-NoProfile", "-Command",
       `$c = Join-Path '${app}' 'chromium\\chrome.exe'; ` +
       `(Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $c -and $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle; ` +
       `(Get-Item $c).VersionInfo.FileDescription`]).toString().trim().split(/\r?\n/);
     check("the window title ends in Enki Browser", / - Enki Browser$/.test(winInfo[0] ?? ""), winInfo[0] ?? "no window");
     check("chrome.exe describes itself as Enki Browser", winInfo.at(-1) === "Enki Browser", winInfo.at(-1));
+  }
+
+  if (mac) {
+    // The first-run defaults go through Chromium's own folder and must not stay there.
+    const leftover = path.join(os.homedir(), "Library", "Application Support", "Chromium", "Chromium Initial Preferences");
+    const wait = 70000 - (Date.now() - startedAt);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    check("the first-run defaults are removed from Chromium's folder afterwards", !existsSync(leftover), leftover);
   }
 
   // ---- the assistant itself
