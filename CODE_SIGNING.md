@@ -1,11 +1,14 @@
 # Code signing policy
 
-**Free code signing provided by SignPath.io, certificate by SignPath Foundation.**
+This page is the project's code signing policy. **GitHub Releases are
+currently unsigned** (Windows SmartScreen will still warn; check each download
+against its `.sha256` file).
 
-This page is the project's [SignPath Foundation](https://signpath.org/terms.html)
-code signing policy. Until SignPath Foundation approves the application and
-signing is wired in CI, **GitHub Releases stay unsigned** (Windows SmartScreen
-will still warn; check each download against its `.sha256` file).
+Our [SignPath Foundation](https://signpath.org/terms.html) application was not
+approved yet (October 2026): the Foundation looks for more public visibility
+than the project has today. We'll reapply once the project has more public
+visibility, or pick another signer. This policy applies to whichever signer is
+in place.
 
 ## Project
 
@@ -30,54 +33,54 @@ GitHub Actions (`.github/workflows/`).
 |---|---|---|
 | **Authors / Committers** | Danilo Giles de Souza ([@danilogiles](https://github.com/danilogiles)) | Trusted to modify source in this repository |
 | **Reviewers** | [@danilogiles](https://github.com/danilogiles), plus reviewers on each pull request | Review changes proposed by others (pull requests) before merge |
-| **Approvers** (signing requests) | [@danilogiles](https://github.com/danilogiles) (repository owner) | Manually approve each SignPath signing request for a release |
+| **Approvers** (signing requests) | [@danilogiles](https://github.com/danilogiles) (repository owner) | Approve signing for each release (if SignPath is used, manually approve each signing request) |
 
-Accounts that use SignPath and this repository use multi-factor authentication,
-as SignPath Foundation requires.
+Accounts that use the signing service and this repository use multi-factor
+authentication (SignPath Foundation requires this too).
 
 ## What we sign
 
-Once SignPath Foundation signing is live, Authenticode signatures from the
-SignPath Foundation certificate cover **only** PE files this project builds from
-its own source:
+Once a signer is in place, Authenticode signatures cover **only** PE files
+this project builds from its own source:
 
 - `EnkiBrowser.exe` — install-root stub (shortcuts point here)
 - `EnkiBrowserLauncher.exe` — per-version launcher / updater
 - `EnkiBrowserSetup*.exe` — Windows installer (and the unversioned
   `EnkiBrowserSetup.exe` release alias)
 
-**Not signed** with the SignPath Foundation certificate:
+**Not signed** with the project's certificate:
 
 - Upstream `chrome.exe` / other ungoogled-chromium binaries and libraries.
-  They are included **unsigned** in the zip and installer package, which
-  SignPath Foundation terms allow for upstream OSS binaries. The Foundation
-  certificate must not be used on upstream Chrome/Chromium binaries.
+  They are included **unsigned** in the zip and installer package. If SignPath
+  Foundation is used, its terms allow that for upstream OSS binaries, and the
+  Foundation certificate must not be used on upstream Chrome/Chromium binaries.
 
 Linux packages (`.deb`, tarball) are not Authenticode-signed.
 
 Update manifests (`update.json` / `update.json.sig`) use a separate
 RSA-3072 release key held only as a CI secret; that is not Authenticode and is
-unchanged by SignPath.
+unchanged by whichever Authenticode signer is chosen.
 
-## How signing works (once live)
+## How signing will work (once a signer is in place)
 
 1. A release tag (or the release path of GitHub Actions) builds Windows
    artifacts from this repository on `windows-latest`.
-2. Unsigned Enki PE files and/or the installer are uploaded as a workflow
-   artifact and submitted with
-   [`signpath/github-action-submit-signing-request`](https://github.com/signpath/github-action-submit-signing-request).
-3. An **Approver** manually clicks approve in SignPath for that request
-   (no fully automatic signing).
-4. Signed files are downloaded back into the workflow and published on
+2. The unsigned Enki PE files and/or the installer are signed in CI:
+   - if SignPath is used, they are uploaded as a workflow artifact and
+     submitted with
+     [`signpath/github-action-submit-signing-request`](https://github.com/signpath/github-action-submit-signing-request)
+     (see `.github/workflows/signpath-signing.yml.example`), and an
+     **Approver** manually approves each request (no fully automatic signing);
+   - other HSM/cloud signers (for example Azure Trusted Signing) use the
+     `ENKI_SIGN_COMMAND` hook documented in the README.
+3. Signed files are published on
    [Releases](https://github.com/danilogiles/enki-browser/releases).
 
-Prefer that GitHub Action over inventing a custom `ENKI_SIGN_COMMAND` for
-SignPath. `ENKI_SIGN_COMMAND` remains documented in the README as the generic
-hook for other HSM/cloud signers (for example Azure Trusted Signing). The
-current build script's optional `ENKI_SIGN_COMMAND` path must **not** be pointed
-at the Foundation certificate for `chrome.exe`.
+Whatever the signer, upstream `chrome.exe` is never submitted for signing, and
+`ENKI_SIGN_COMMAND` must **not** be pointed at a SignPath Foundation
+certificate for `chrome.exe`.
 
-Until SignPath is approved and the workflow above is enabled, releases remain
+Until a signer is in place and wired into the release workflow, releases remain
 unsigned.
 
 ## Privacy
@@ -92,8 +95,8 @@ specifically requested by the user (or the person installing or operating it).
 |---|---|
 | Privacy policy published | Yes — [PRIVACY.md](PRIVACY.md) |
 | This code signing policy published | Yes — this file |
-| SignPath Foundation application | Pending (not approved yet) |
-| Signed Windows releases | Not yet — first signed release planned as **0.7.10** after approval |
+| SignPath Foundation application | Not approved yet (Oct 2026); will reapply or pick another signer |
+| Signed Windows releases | Not yet — the first signed release will be a version bump after a signer is in place |
 | Unsigned releases meanwhile | Yes — honest: SmartScreen / AV warnings still apply |
 
 ## Reporting

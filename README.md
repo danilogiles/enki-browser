@@ -92,7 +92,7 @@ empty file named `no-update` next to `EnkiBrowser.exe`.
 ## Code signing policy
 
 See **[CODE_SIGNING.md](CODE_SIGNING.md)** for the full [Code signing policy](CODE_SIGNING.md)
-(team roles, what is signed, SignPath attribution, and privacy link).
+(team roles, what is signed, current status, and privacy link).
 
 The build can sign Windows PE files when the `ENKI_SIGN_COMMAND` environment variable (in CI, the
 secret of the same name) holds a signing command with `{file}` where the path goes. Code-signing
@@ -101,10 +101,10 @@ file. Two routes fit this project:
 
 - **[SignPath Foundation](https://signpath.org)** — free Authenticode for open-source projects,
   certificate by SignPath Foundation, with a GitHub Actions integration
-  (`signpath/github-action-submit-signing-request`). **Not approved yet**; until it is, releases
-  stay unsigned. Prefer that action for the installer and Enki-built PE files once live — do not
-  sign upstream `chrome.exe` with the Foundation certificate (include it unsigned; see
-  [CODE_SIGNING.md](CODE_SIGNING.md)).
+  (`signpath/github-action-submit-signing-request`). Our application was **not approved yet**
+  (October 2026); we'll reapply or pick another signer. If it is used, prefer that action for the
+  installer and Enki-built PE files — do not sign upstream `chrome.exe` with the Foundation
+  certificate (include it unsigned; see [CODE_SIGNING.md](CODE_SIGNING.md)).
 - **Azure Trusted Signing** — paid, with identity verification of the publisher; can use
   `ENKI_SIGN_COMMAND` when configured.
 

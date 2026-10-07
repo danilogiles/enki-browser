@@ -1,14 +1,16 @@
-# EXAMPLE ONLY — do not rename to *.yml until SignPath Foundation has approved
-# the project and the SignPath GitHub App + secrets below are configured.
+# EXAMPLE ONLY — do not rename to *.yml unless SignPath is the chosen signer and
+# the SignPath GitHub App + secrets below are configured. The SignPath Foundation
+# application was not approved yet (Oct 2026); see CODE_SIGNING.md.
 #
 # Prefer this submit-signing-request flow for EnkiBrowser.exe,
 # EnkiBrowserLauncher.exe, and EnkiBrowserSetup*.exe.
 # Do NOT submit upstream chrome.exe / ungoogled-chromium binaries for signing
 # with the SignPath Foundation certificate (ship them unsigned in the package).
 #
-# First signed release target: 0.7.10 (bump package.json only when wiring this for real).
+# First signed release: the version bump after a signer is in place (bump
+# package.json only when wiring this for real).
 #
-# Secrets / vars (set after approval):
+# Secrets / vars (set once SignPath is set up):
 #   secrets.SIGNPATH_API_TOKEN     — SignPath API token (submitter)
 #   vars.SIGNPATH_ORGANIZATION_ID  — organization id from SignPath UI
 #   vars.SIGNPATH_PROJECT_SLUG     — e.g. enki-browser
