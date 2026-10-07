@@ -12,7 +12,7 @@ import {
   RefreshCw,
   Sliders,
 } from "lucide-react";
-import { PRESETS, presetOf, THEMES, usesTextTools, type PresetId, type Settings } from "../lib/settings";
+import { maskKey, PRESETS, presetOf, THEMES, usesTextTools, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
 import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
@@ -50,11 +50,19 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
   };
 
   const preset = presetOf(draft.preset);
+  // The key saved for this provider (shown masked) versus one being typed.
+  const [replacingKey, setReplacingKey] = useState(false);
+  const savedKey = !replacingKey && draft.apiKey && draft.apiKey === (settings.apiKeys ?? {})[draft.preset] ? draft.apiKey : "";
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   const choosePreset = (id: PresetId) => {
     const p = presetOf(id);
-    setDraft((d) => ({ ...d, preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision, textTools: undefined, favoriteModels: [], askModel: "", actModel: "" }));
+    // Each provider keeps its own key: park this one's, bring the other's back.
+    setDraft((d) => {
+      const apiKeys = { ...(d.apiKeys ?? {}), [d.preset]: d.apiKey };
+      return { ...d, apiKeys, apiKey: apiKeys[id] ?? "", preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision, textTools: undefined, favoriteModels: [], askModel: "", actModel: "" };
+    });
+    setReplacingKey(false);
     setModels([]);
     setStatus(null);
   };
@@ -100,6 +108,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
     setSaving(true);
     try {
       await onSave({ ...draft, baseUrl: draft.baseUrl.trim(), model: draft.model.trim(), apiKey: draft.apiKey.trim(),
+        apiKeys: { ...(draft.apiKeys ?? {}), [draft.preset]: draft.apiKey.trim() },
         favoriteModels: [...new Set(draft.favoriteModels.map((m) => m.trim()).filter(Boolean))], askModel: draft.askModel.trim(), actModel: draft.actModel.trim() });
     } finally {
       setSaving(false);
@@ -158,6 +167,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           <Section title="Model Provider Setup">
             <label className="block text-xs text-zinc-400">Provider</label>
             <select
+              aria-label="Provider"
               disabled={probing}
               value={draft.preset}
               onChange={(e) => choosePreset(e.target.value as PresetId)}
@@ -191,20 +201,30 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
             <label className="mt-3 block text-xs text-zinc-400">
               API key {preset.keyOptional && <span className="text-zinc-600">(optional)</span>}
             </label>
-            <div className="flex gap-1">
-              <input
-                type={showKey ? "text" : "password"}
-                value={draft.apiKey}
-                onChange={(e) => set("apiKey", e.target.value)}
-                placeholder={preset.keyOptional ? "Leave empty if not needed" : preset.keyPlaceholder ?? "sk-…"}
-                autoComplete="off"
-                spellCheck={false}
-                className={inputCls}
-              />
-              <button type="button" onClick={() => setShowKey(!showKey)} className={iconBtn} title={showKey ? "Hide" : "Show"}>
-                {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
+            {savedKey && !replacingKey ? (
+              // A saved key is never shown again, only recognised: replace it or remove it.
+              <div className="flex items-center gap-1">
+                <span aria-label="Saved API key" className={`${inputCls} font-mono text-zinc-300`}>{maskKey(savedKey)}</span>
+                <button type="button" onClick={() => { setReplacingKey(true); set("apiKey", ""); }} className={`${iconBtn} py-1.5 text-xs`}>Replace</button>
+                <button type="button" onClick={() => { set("apiKey", ""); setDraft((d) => ({ ...d, apiKey: "", apiKeys: { ...(d.apiKeys ?? {}), [d.preset]: "" } })); setReplacingKey(true); }} className={`${iconBtn} py-1.5 text-xs`}>Remove</button>
+              </div>
+            ) : (
+              <div className="flex gap-1">
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={draft.apiKey}
+                  onChange={(e) => set("apiKey", e.target.value)}
+                  placeholder={preset.keyOptional ? "Leave empty if not needed" : preset.keyPlaceholder ?? "sk-…"}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="API key"
+                  className={inputCls}
+                />
+                <button type="button" onClick={() => setShowKey(!showKey)} className={iconBtn} title={showKey ? "Hide what you are typing" : "Show what you are typing"}>
+                  {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            )}
             {preset.keyUrl && (
               <a href={preset.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-enki-400 hover:underline">
                 Get a key <ExternalLink size={11} />

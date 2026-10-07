@@ -193,6 +193,14 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.deepEqual(suggestions('/da', tasks, apps).map((s) => s.label), ['/daily-standup']);
     assert.deepEqual(suggestions('/daily x', tasks, apps), []);
   });
+  check('saved keys are masked to a recognisable prefix and last four', () => {
+    const { maskKey } = require('../src/lib/settings.ts');
+    assert.equal(maskKey('nvapi-abcdefghijklmnop1234'), 'nvapi-••••••1234');
+    assert.equal(maskKey('sk-or-v1-abcdefghijklmnop9876'), 'sk-or-v1-••••••9876');
+    assert.equal(maskKey('sk-ant-api03-abcdefghij5555'), 'sk-ant-api03-••••••5555');
+    assert.equal(maskKey('short'), '••••••'); // too short to show any of it safely
+    assert.equal(maskKey(''), '');
+  });
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');

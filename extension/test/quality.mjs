@@ -216,6 +216,8 @@ try {
   await panel.click("button:has-text('Add and connect')");
   await panel.waitForFunction(() => document.body.innerText.includes("2 tools"), null, { timeout: 20000 }).catch(() => undefined);
   check("an MCP server connects through its own sign-in and lists its tools", (await panel.textContent("body")).includes("2 tools"));
+  const authStored = await panel.evaluate(async () => (await chrome.storage.local.get("enki:connection-auth"))["enki:connection-auth"]);
+  check("the app's sign-in token is stored encrypted", Object.values(authStored ?? {}).every((v) => typeof v === "string" && v.startsWith("enc:v1:")) && !JSON.stringify(authStored).includes("mock-token"));
   await panel.click("button[aria-label=\"Show Tracker's tools\"]");
   check("read and write tools are told apart", (await panel.textContent("body")).includes("readSearch issues") || (await panel.locator("text=write").count()) >= 1);
   await panel.click("button[title='Back']");
@@ -250,6 +252,45 @@ try {
   await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
   const taskText = await panel.textContent("body");
   check("a saved task sends its prompt plus the extra words", taskText.includes("Say the standup words") && taskText.includes("extra bit"));
+
+  // API keys belong to each provider, and a saved key is never shown again.
+  const NV = "nvapi-TESTKEY0000000000001111";
+  const OR = "sk-or-v1-TESTKEY000000000002222";
+  await configure("mock-echo", "ask", { preset: "nvidia", apiKey: NV, apiKeys: { nvidia: NV } });
+  await panel.click("button[title='Settings']");
+  check("a saved key is shown masked, never in full", (await panel.textContent("[aria-label='Saved API key']")) === "nvapi-••••••1111" && !(await panel.content()).includes(NV));
+  await panel.selectOption("select[aria-label='Provider']", "openrouter");
+  check("switching provider does not carry the other provider's key", (await panel.inputValue("input[aria-label='API key']")) === "");
+  await panel.fill("input[aria-label='API key']", OR);
+  await panel.click("button:has-text('Save')"); await panel.waitForTimeout(300);
+  await panel.click("button[title='Settings']");
+  await panel.selectOption("select[aria-label='Provider']", "nvidia");
+  check("switching back brings that provider's own key back", (await panel.textContent("[aria-label='Saved API key']")) === "nvapi-••••••1111" && !(await panel.content()).includes(OR));
+  await panel.click("button[title='Back']");
+  const raw = await panel.evaluate(async () => (await chrome.storage.local.get(null)));
+  const rawText = JSON.stringify(raw);
+  check("each provider's key is stored on its own, encrypted",
+    /^enc:v1:/.test(raw["enki:settings"].apiKeys.nvidia) && /^enc:v1:/.test(raw["enki:settings"].apiKeys.openrouter) && !raw["enki:settings"].apiKey,
+    JSON.stringify(Object.keys(raw["enki:settings"].apiKeys)));
+  check("no key appears in plain text anywhere in storage", !rawText.includes(NV) && !rawText.includes(OR) && !rawText.includes("TESTKEY"));
+  await panel.reload(); await panel.waitForSelector("textarea");
+  await panel.click("button[title='Settings']");
+  check("an encrypted key still works after a reload", (await panel.textContent("[aria-label='Saved API key']")) === "sk-or-v1-••••••2222");
+  await panel.click("button[title='Back']");
+  // Keys written as plain text by older versions are encrypted the first time they are read.
+  await configure("mock-echo", "ask", { preset: "nvidia", apiKey: NV, apiKeys: undefined });
+  await panel.reload(); await panel.waitForSelector("textarea"); await panel.waitForTimeout(300);
+  const migrated = await panel.evaluate(async () => (await chrome.storage.local.get("enki:settings"))["enki:settings"]);
+  check("a plain-text key from an older version is encrypted on first read", /^enc:v1:/.test(migrated.apiKeys?.nvidia) && !JSON.stringify(migrated).includes(NV));
+  // The provider gets the real key, decrypted: point the (now encrypted) settings at the mock.
+  await panel.evaluate(async () => {
+    const s = (await chrome.storage.local.get("enki:settings"))["enki:settings"];
+    await chrome.storage.local.set({ "enki:settings": { ...s, preset: "custom", baseUrl: "http://127.0.0.1:8787/v1", model: "mock-auth", apiKeys: { custom: s.apiKeys.nvidia } } });
+  });
+  await panel.reload(); await panel.waitForSelector("textarea");
+  await newChat(); await send("which key");
+  check("the provider receives the decrypted key, not the stored ciphertext", (await panel.textContent("body")).includes("auth-ends=1111 auth-encrypted=false"));
+  await configure("mock-echo", "ask");
 
   // First use: a notice links the terms and the privacy policy until "Got it".
   await configure("mock-echo", "ask", { acceptedTerms: undefined });

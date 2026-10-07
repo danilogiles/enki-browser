@@ -1,4 +1,5 @@
 import type { CustomTheme } from "./theme";
+import { decrypt, encrypt, isEncrypted } from "./secrets";
 
 export type ProviderKind = "anthropic" | "openai-compatible";
 
@@ -201,7 +202,13 @@ export const THEMES: ThemeOption[] = [
 
 export type Settings = {
   preset: PresetId;
+  /** The active provider's key; mirrors apiKeys[preset]. */
   apiKey: string;
+  /**
+   * Each provider's own key. With one shared field, switching from NVIDIA to OpenRouter kept
+   * sending the NVIDIA key, and switching back showed OpenRouter's.
+   */
+  apiKeys?: Partial<Record<PresetId, string>>;
   baseUrl: string;
   model: string;
   theme: ThemeId;
@@ -282,22 +289,55 @@ export function usesTextTools(settings: Settings): boolean {
   return settings.textTools ?? !!preset.textTools;
 }
 
-export async function loadSettings(): Promise<Settings> {
-  const stored = await chrome.storage.local.get(KEY);
-  const s = { ...DEFAULT_SETTINGS, ...(stored[KEY] as Partial<Settings> | undefined) };
+/** Stored settings → what the app uses: defaults filled in, keys per provider, keys decrypted. */
+async function fromStored(raw: Partial<Settings> | undefined): Promise<{ settings: Settings; hadPlainKeys: boolean }> {
+  const s: Settings = { ...DEFAULT_SETTINGS, ...raw };
   // 24000 was the old default, kept by everyone who never touched it: give them the new one.
   if (s.contextBudgetTokens === 24000) s.contextBudgetTokens = DEFAULT_SETTINGS.contextBudgetTokens;
-  return s;
+  // Before per-provider keys, the one key belonged to whichever provider was selected.
+  const stored = raw?.apiKeys ?? (s.apiKey ? { [s.preset]: s.apiKey } : {});
+  const keys: Partial<Record<PresetId, string>> = {};
+  let hadPlainKeys = false;
+  for (const [preset, value] of Object.entries(stored) as Array<[PresetId, string | undefined]>) {
+    if (!value) continue;
+    if (!isEncrypted(value)) hadPlainKeys = true;
+    keys[preset] = await decrypt(value);
+  }
+  s.apiKeys = keys;
+  s.apiKey = keys[s.preset] ?? "";
+  return { settings: s, hadPlainKeys };
 }
 
+export async function loadSettings(): Promise<Settings> {
+  const stored = await chrome.storage.local.get(KEY);
+  const { settings, hadPlainKeys } = await fromStored(stored[KEY] as Partial<Settings> | undefined);
+  // Keys saved before encryption existed are encrypted the first time they are read.
+  if (hadPlainKeys) await saveSettings(settings);
+  return settings;
+}
+
+/** "nvapi-••••••a1b2": enough to recognise a saved key, never enough to read it. */
+export function maskKey(key: string): string {
+  const k = key.trim();
+  if (!k) return "";
+  const prefix = /^([a-z0-9]{2,8}-){1,3}/i.exec(k)?.[0] ?? "";
+  return `${prefix}••••••${k.length > prefix.length + 8 ? k.slice(-4) : ""}`;
+}
+
+/** Keys go to storage encrypted (lib/secrets.ts), and only in apiKeys: apiKey is derived on load. */
 export async function saveSettings(settings: Settings): Promise<void> {
-  await chrome.storage.local.set({ [KEY]: settings });
+  const keys = { ...(settings.apiKeys ?? {}), [settings.preset]: settings.apiKey };
+  const apiKeys: Partial<Record<PresetId, string>> = {};
+  for (const [preset, value] of Object.entries(keys) as Array<[PresetId, string | undefined]>) {
+    if (value) apiKeys[preset] = await encrypt(value);
+  }
+  await chrome.storage.local.set({ [KEY]: { ...settings, apiKey: "", apiKeys } });
 }
 
 export function onSettingsChange(cb: (s: Settings) => void): () => void {
   const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area === "local" && changes[KEY]) {
-      cb({ ...DEFAULT_SETTINGS, ...(changes[KEY].newValue as Partial<Settings>) });
+      void fromStored(changes[KEY].newValue as Partial<Settings>).then(({ settings }) => cb(settings));
     }
   };
   chrome.storage.onChanged.addListener(listener);

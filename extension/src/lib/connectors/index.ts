@@ -12,6 +12,7 @@
 import type { ToolDefinition } from "../types";
 import { McpClient, McpHttpError, type CallResult, type McpTool } from "./mcp";
 import { refresh, signIn, type Auth } from "./oauth";
+import { decrypt, encrypt } from "../secrets";
 
 export type ConnectorTool = { name: string; title: string; description: string; inputSchema: Record<string, unknown>; readOnly: boolean; allowed?: boolean };
 
@@ -49,13 +50,19 @@ export async function saveConnections(list: Connection[]): Promise<void> {
   await chrome.storage.local.set({ [LIST]: list });
 }
 
+// Each connection's sign-in is stored as one encrypted string (lib/secrets.ts); entries written
+// before encryption existed are plain objects and get encrypted the first time they are read.
 async function authOf(id: string): Promise<Auth | undefined> {
-  return ((await chrome.storage.local.get(AUTH))[AUTH] as Record<string, Auth> | undefined)?.[id];
+  const value = ((await chrome.storage.local.get(AUTH))[AUTH] as Record<string, Auth | string> | undefined)?.[id];
+  if (!value) return undefined;
+  if (typeof value !== "string") { await setAuth(id, value); return value; }
+  const plain = await decrypt(value);
+  return plain ? (JSON.parse(plain) as Auth) : undefined;
 }
 
 export async function setAuth(id: string, auth: Auth | null): Promise<void> {
-  const all = ((await chrome.storage.local.get(AUTH))[AUTH] as Record<string, Auth> | undefined) ?? {};
-  if (auth) all[id] = auth; else delete all[id];
+  const all = ((await chrome.storage.local.get(AUTH))[AUTH] as Record<string, Auth | string> | undefined) ?? {};
+  if (auth) all[id] = await encrypt(JSON.stringify(auth)); else delete all[id];
   await chrome.storage.local.set({ [AUTH]: all });
 }
 

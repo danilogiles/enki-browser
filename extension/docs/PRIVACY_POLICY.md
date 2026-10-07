@@ -18,6 +18,7 @@ We believe privacy is a fundamental human right. Enki operates on a **Local-Firs
 
 ### 2.1 API Keys and Settings
 - **Storage:** All API keys (Anthropic, OpenAI, OmniRoute, or custom endpoints) and user settings (chosen provider, model, endpoint URL, theme, and behavior toggles) are stored exclusively in your browser's local sandbox via `chrome.storage.local`.
+- **Encryption:** API keys, each kept separately for its provider, and connected apps' access tokens are encrypted (AES-256-GCM) before they are stored. The encryption key is created by the browser as non-exportable and kept in Enki's own storage, so keys never sit in plain text in your profile. Saved keys are shown only masked (for example `nvapi-••••••a1b2`); to change one you replace it.
 - **Transmission:** API keys are sent directly to your chosen AI provider over encrypted HTTPS connections. They are never sent to the Enki project or any third-party telemetry service.
 
 ### 2.2 Web Page Content & DOM Data

@@ -200,6 +200,12 @@ const server = http.createServer((req, res) => {
         if (toolMsgs.length === 1) return streamToolCall(res, create, { title: "From Enki" });
         return streamText(res, `APP-DONE ${toolMsgs.map((m) => String(m.content).replace(/\s+/g, " ").slice(0, 80)).join(" || ")}`);
       }
+      // Echoes the end of the key the request was sent with: the provider must get the real key,
+      // decrypted, never the stored ciphertext.
+      if (model === "mock-auth") {
+        const auth = String(req.headers.authorization ?? "");
+        return streamText(res, `auth-ends=${auth.slice(-4)} auth-encrypted=${auth.includes("enc:v1:")}`);
+      }
       // Reports whether the system prompt carries the unfiltered tone section.
       if (model === "mock-tone") {
         const system = messages.find((m) => m.role === "system");
