@@ -458,7 +458,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 Enki {chrome.runtime.getManifest().version} ·{" "}
                 <a className="underline" href={legalLinks().terms} target="_blank" rel="noreferrer">Terms of Use</a> ·{" "}
                 <a className="underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">Privacy Policy</a> ·{" "}
-                <a className="underline" href="https://github.com/danilogiles/enkibrowser" target="_blank" rel="noreferrer">Source code</a>
+                <a className="underline" href="https://github.com/danilogiles/enki-browser" target="_blank" rel="noreferrer">Source code</a>
               </p>
             </Section>
           </>

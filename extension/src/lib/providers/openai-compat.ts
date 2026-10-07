@@ -23,7 +23,7 @@ export class OpenAICompatProvider implements ChatProvider {
     const h: Record<string, string> = { "Content-Type": "application/json" };
     if (this.opts.apiKey) h.Authorization = `Bearer ${this.opts.apiKey}`;
     if (this.opts.baseUrl.includes("openrouter.ai")) {
-      h["HTTP-Referer"] = "https://github.com/danilogiles/enkibrowser";
+      h["HTTP-Referer"] = "https://github.com/danilogiles/enki-browser";
       h["X-Title"] = "Enki";
     }
     return h;

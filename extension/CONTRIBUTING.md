@@ -6,14 +6,15 @@ so anyone can check what it sends, where, and why.
 *Português e español são bem-vindos em issues e discussões — escreva na língua em que você se
 expressa melhor.*
 
-Questions, ideas and show-and-tell go in [Discussions](https://github.com/danilogiles/enkibrowser/discussions).
-The browser around Enki (Shields, updater, installer) has its own repository and guide:
-[danilogiles/enki-browser](https://github.com/danilogiles/enki-browser/blob/main/CONTRIBUTING.md).
+Questions, ideas and show-and-tell go in [Discussions](https://github.com/danilogiles/enki-browser/discussions).
+Enki lives in `extension/` of the Enki Browser repository; the browser around it (Shields,
+updater, installer) is the rest of the repository, with its own guide:
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 Every change, maintainers' included, goes through a pull request with the checks green.
 
 ## Where you can help
 
-Everything in this repository runs as a browser extension, so **you do not need to build
+Everything in `extension/` runs as a browser extension, so **you do not need to build
 Chromium to contribute**. Node.js and any Chromium browser (Chrome, Brave, Edge, Chromium) are
 enough.
 
@@ -32,8 +33,8 @@ comment on it so two people don't do the same work.
 ## Getting started
 
 ```bash
-git clone https://github.com/danilogiles/enkibrowser.git
-cd enkibrowser
+git clone https://github.com/danilogiles/enki-browser.git
+cd enki-browser/extension
 npm install
 npm run build
 ```
@@ -94,15 +95,15 @@ should read before touching the code.
 ## Security issues
 
 **Do not open a public issue for a vulnerability.** Use GitHub's
-[private vulnerability reporting](https://github.com/danilogiles/enkibrowser/security/advisories/new)
+[private vulnerability reporting](https://github.com/danilogiles/enki-browser/security/advisories/new)
 so it can be fixed before it is public. Prompt-injection pages that make Enki do something the
 user did not ask for count as vulnerabilities.
 
 ## Conduct
 
-Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+Everyone taking part follows the [Code of Conduct](../CODE_OF_CONDUCT.md).
 
 ## License
 
-Enki is [MIT licensed](LICENSE). By contributing you agree your contribution is released under
+Enki is [MIT licensed](../LICENSE). By contributing you agree your contribution is released under
 the same license.

@@ -4,7 +4,7 @@
  * own privacy policy applies.
  */
 const BROWSER = "https://github.com/danilogiles/enki-browser/blob/main/";
-const EXTENSION = "https://github.com/danilogiles/enkibrowser/blob/main/docs/";
+const EXTENSION = "https://github.com/danilogiles/enki-browser/blob/main/extension/docs/";
 
 /** Bumped when the terms change enough to ask again. */
 export const TERMS_VERSION = "1";

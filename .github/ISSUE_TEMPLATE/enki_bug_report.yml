@@ -1,11 +1,11 @@
-name: Bug report
+name: Bug in Enki, the assistant
 description: Something in Enki does not work as it should.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. **Security problems** — including a web page that makes Enki do something you did not ask — go through [private vulnerability reporting](https://github.com/danilogiles/enkibrowser/security/advisories/new), not here.
+        Thanks for reporting. **Security problems** — including a web page that makes Enki do something you did not ask — go through [private vulnerability reporting](https://github.com/danilogiles/enki-browser/security/advisories/new), not here.
         Português ou español: pode escrever na sua língua.
   - type: textarea
     id: what

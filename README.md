@@ -3,7 +3,7 @@
 **A private, open-source Chromium browser with an AI assistant built in. Bring your own model.**
 
 Enki Browser is [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium)
-— Chromium without Google's services or telemetry — with the [Enki](https://github.com/danilogiles/enkibrowser)
+— Chromium without Google's services or telemetry — with the [Enki](extension/)
 assistant in the side panel, a tracker blocker on by default, and privacy defaults in the spirit
 of Brave and DuckDuckGo. The assistant reads the page you are on and, when you let it, navigates,
 clicks and types for you — with the model *you* choose: Claude, GPT, Gemini, a local Ollama model,
@@ -149,7 +149,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 
 | | Default | Where it comes from |
 |---|---|---|
-| AI assistant | Enki in the side panel, pinned to the toolbar | [danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser), MIT |
+| AI assistant | Enki in the side panel, pinned to the toolbar | [`extension/`](extension/), MIT |
 | AI model | NVIDIA Nemotron 3 Ultra by default — free key from [build.nvidia.com](https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b), no credit card; or Claude, GPT, Gemini, Groq, OpenRouter, Ollama, OmniRoute | chosen in Enki's Settings |
 | Ads and trackers | Blocked (EasyList, EasyPrivacy, Peter Lowe's list, uBlock filters) | [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home), with the small Shields patch described in [THIRD_PARTY.md](THIRD_PARTY.md) |
 | Shields button | Right of the address bar: how many trackers and ads were blocked on the site and which, Shields down for one site, blocking level, scripts, cookies and "forget me when I close this site" | Enki Shield (`shield/`) |
@@ -195,7 +195,7 @@ node test/update.mjs  # builds two versions and checks the updater: forged, tamp
 Requirements: Windows 10/11 x64, Node.js 22+, Git. The C# compiler that ships with Windows' .NET
 Framework builds the launcher; nothing else to install.
 
-To build against a local Enki checkout: `ENKI_DIST=../enkibrowser/dist npm run build`.
+The build compiles Enki from `extension/`; to reuse one already built: `ENKI_DIST=extension/dist npm run build`.
 
 ## Verified
 
@@ -261,9 +261,9 @@ Honest list; each is on the roadmap.
 
 ## Contributing
 
-Most work on the assistant happens in [enkibrowser](https://github.com/danilogiles/enkibrowser)
-and needs only Node.js — see its [CONTRIBUTING.md](https://github.com/danilogiles/enkibrowser/blob/main/CONTRIBUTING.md).
-This repository is the browser around it: build, launcher, Shields, defaults, installer — see
+One repository, two parts. Most work on the assistant happens in [`extension/`](extension/) and
+needs only Node.js — see [extension/CONTRIBUTING.md](extension/CONTRIBUTING.md). The rest is the
+browser around it: build, launcher, Shields, defaults, installer — see
 [CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas go in
 [Discussions](https://github.com/danilogiles/enki-browser/discussions); issues labelled
 **good first issue** are a good place to start. Every change, maintainers' included, goes through

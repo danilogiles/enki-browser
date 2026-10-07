@@ -3,7 +3,7 @@
 **Effective Date:** September 2026  
 **Last Updated:** 7 October 2026  
 **Publisher:** Enki contributors (open-source project)  
-**Contact:** [GitHub Issues](https://github.com/danilogiles/enkibrowser/issues); security problems through [private vulnerability reporting](https://github.com/danilogiles/enkibrowser/security/advisories/new)  
+**Contact:** [GitHub Issues](https://github.com/danilogiles/enki-browser/issues); security problems through [private vulnerability reporting](https://github.com/danilogiles/enki-browser/security/advisories/new)  
 
 ---
 
@@ -75,7 +75,7 @@ Enki complies strictly with the [Google Chrome Web Store Developer Program Polic
 
 ## 6. Open Source Verification
 Enki is 100% open-source. Anyone can audit the complete codebase, network calls, and security filters on GitHub:  
-[https://github.com/danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser)
+[https://github.com/danilogiles/enki-browser](https://github.com/danilogiles/enki-browser)
 
 ---
 

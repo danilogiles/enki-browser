@@ -140,7 +140,7 @@ export async function signIn(mcpUrl: string, wwwAuthenticate: string | null): Pr
     credentials: "omit",
     body: JSON.stringify({
       client_name: "Enki",
-      client_uri: "https://github.com/danilogiles/enkibrowser",
+      client_uri: "https://github.com/danilogiles/enki-browser",
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],

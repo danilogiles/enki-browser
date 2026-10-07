@@ -3,7 +3,7 @@
 **Version:** 1.0.0  
 **Status:** Approved / In Active Development  
 **Author:** Enki contributors  
-**Repository:** [https://github.com/danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser)  
+**Repository:** [https://github.com/danilogiles/enki-browser](https://github.com/danilogiles/enki-browser)  
 
 ---
 

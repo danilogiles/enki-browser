@@ -1,4 +1,4 @@
-name: CI
+name: Extension
 
 on:
   push:
@@ -11,8 +11,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: extension-${{ github.ref }}
   cancel-in-progress: true
+
+# Enki, the extension, lives in extension/ and is tested on its own here: the suites load it in
+# Playwright's Chromium, no browser build needed. No path filter, because these checks are required
+# and a required check that never runs blocks the pull request.
+defaults:
+  run:
+    working-directory: extension
 
 jobs:
   check:
@@ -25,6 +32,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: extension/package-lock.json
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test:unit
@@ -32,7 +40,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: enki-extension-dist
-          path: dist/
+          path: extension/dist/
           retention-days: 14
 
   browser:
@@ -45,6 +53,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: extension/package-lock.json
       - run: npm ci
       - run: npm run build
       # Stable Chrome refuses --load-extension, so the suites need Playwright's Chromium.
@@ -64,34 +73,6 @@ jobs:
         with:
           name: browser-test-output
           path: |
-            test/.out/
-            mock.log
+            extension/test/.out/
+            extension/mock.log
           retention-days: 7
-
-  dco:
-    name: DCO sign-off
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      # A sign-off is the contributor stating they may submit the change under the project's
-      # license (https://developercertificate.org). Lighter than a CLA, which keeps casual
-      # contributors away. `git commit -s` adds it.
-      - name: Every commit is signed off
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          missing=0
-          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
-            if ! git log -1 --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+>'; then
-              echo "::error::Commit $(git log -1 --format='%h %s' "$sha") has no Signed-off-by line."
-              missing=1
-            fi
-          done
-          if [ "$missing" = 1 ]; then
-            echo "Fix with: git rebase --signoff $BASE && git push --force-with-lease"
-            exit 1
-          fi

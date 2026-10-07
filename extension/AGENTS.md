@@ -6,7 +6,7 @@ Welcome, AI Agent or Assistant! This guide provides critical architectural conte
 
 ## 1. Project At A Glance
 
-- **Repository:** `enkibrowser`
+- **Repository:** `enki-browser`, folder `extension/` (the rest of the repository is the browser around it)
 - **Product:** Open-source AI browser assistant operating inside a Chromium side panel (Manifest V3).
 - **Core Stack:**
   - Runtime: Chromium Extension (MV3)
@@ -22,7 +22,7 @@ Welcome, AI Agent or Assistant! This guide provides critical architectural conte
 ## 2. Directory Structure & Key Files
 
 ```
-enkibrowser/
+extension/
 ├── docs/
 │   ├── PRD.md               # Product requirements and roadmap
 │   ├── ARCHITECTURE.md      # Detailed system architecture and message flows

@@ -1,7 +1,7 @@
 // End-to-end test of the updater with a throwaway signing key: installs version A, serves
 // version B from a local feed, and checks every refusal and the real update.
 //
-//   ENKI_DIST=../enkibrowser/dist node test/update.mjs      (ENKI_DIST optional; saves two clones)
+//   ENKI_DIST=extension/dist node test/update.mjs         (ENKI_DIST optional; saves two Enki builds)
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
