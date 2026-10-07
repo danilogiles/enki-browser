@@ -8,7 +8,7 @@
 //   ENKI_NO_SANDBOX=1 ...                              containers without user namespaces only
 //   ENKI_MOCK_KEYCHAIN=1 ...                           macOS CI runners: no keychain prompt to wait on
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -52,9 +52,12 @@ const launcher = linux ? path.join(installRoot, "enki-browser") : mac ? path.joi
 const extraArgs = process.env.ENKI_NO_SANDBOX === "1" ? ["--no-sandbox"] : [];
 if (process.env.ENKI_MOCK_KEYCHAIN === "1") extraArgs.push("--use-mock-keychain");
 const startedAt = Date.now();
+// What the launcher and Chromium print goes to a file, shown if the browser never starts.
+const launchLog = path.join(os.tmpdir(), `enki-browser-verify-${process.pid}.log`);
+const logFd = openSync(launchLog, "w");
 const proc = spawn(launcher, [`--remote-debugging-port=${port}`, ...extraArgs, "about:blank"], {
   env: { ...process.env, ENKI_BROWSER_USER_DATA: userData },
-  stdio: "ignore",
+  stdio: ["ignore", logFd, logFd],
 });
 
 let browser;
@@ -65,7 +68,11 @@ try {
     await new Promise((r) => setTimeout(r, 500));
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`).catch(() => undefined);
   }
-  if (!browser) throw new Error("Enki Browser did not start (no debug endpoint after 30s).");
+  if (!browser) {
+    const tail = readFileSync(launchLog, "utf8").split("\n").slice(-60).join("\n");
+    console.log(`--- launcher and browser output (${launchLog}) ---\n${tail}\n---`);
+    throw new Error("Enki Browser did not start (no debug endpoint after 30s).");
+  }
   const ctx = browser.contexts()[0];
   cdp = await browser.newBrowserCDPSession();
   const product = (await cdp.send("Browser.getVersion")).product;
