@@ -3,7 +3,7 @@
 // the Linux counterpart; what both share is in common.mjs.
 //
 //   node build/build.mjs              full build → out/EnkiBrowser, the zip and EnkiBrowserSetup-<ver>.exe
-//   ENKI_DIST=<path> node build/...   use an already built Enki dist/ instead of cloning (local dev)
+//   ENKI_DIST=<path> node build/...   use an already built Enki dist/ instead of building extension/
 //
 // Nothing here compiles Chromium. The browser is ungoogled-chromium's official build; what makes
 // it Enki Browser is the extensions, the defaults and the launcher that ties them together.

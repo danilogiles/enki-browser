@@ -174,9 +174,13 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          # The extension's history up to its move into extension/ (danilogiles/enkibrowser). Its
+          # early commits predate the sign-off rule, and a sign-off is the author's own statement,
+          # so it cannot be added for them afterwards. Every commit after this one is checked.
+          IMPORTED: f5cce0d9690ee3e26ab12c78a50889313a081c9a
         run: |
           missing=0
-          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD" "^$IMPORTED"); do
             if ! git log -1 --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+>'; then
               echo "::error::Commit $(git log -1 --format='%h %s' "$sha") has no Signed-off-by line."
               missing=1

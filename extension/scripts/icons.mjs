@@ -1,0 +1,43 @@
+// Renders the Enki mascot (a friendly robot whose head is a shield) to the PNG sizes Chrome and Windows expect.
+// Usage: npm run icons
+import sharp from "sharp";
+import { mkdir, writeFile } from "node:fs/promises";
+
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfe7ee"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- The head is the shield: friendly assistant and protection in one shape. -->
+  <path d="M128 16 C150 30 180 38 214 40 C220 40 224 45 224 51 V116 C224 176 186 220 128 242 C70 220 32 176 32 116 V51 C32 45 36 40 42 40 C76 38 106 30 128 16 Z"
+        fill="url(#shell)" stroke="#0f172a" stroke-opacity="0.22" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Visor -->
+  <rect x="62" y="84" width="132" height="70" rx="35" fill="url(#visor)"/>
+  <!-- Eyes -->
+  <g filter="url(#glow)" fill="#38bdf8">
+    <rect x="90" y="101" width="24" height="36" rx="12"/>
+    <rect x="142" y="101" width="24" height="36" rx="12"/>
+  </g>
+  <!-- A small highlight so it reads as glossy, not flat -->
+  <path d="M70 60 C92 52 112 46 128 36" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+</svg>`;
+
+await mkdir("public/icons", { recursive: true });
+await mkdir("src/assets", { recursive: true });
+await writeFile("src/assets/logo.svg", svg);
+// 256 is for Windows (Enki Browser's taskbar and Start menu icon at high DPI). Each size is
+// rasterised from the vector at its own density rather than scaled from a smaller bitmap.
+for (const size of [16, 32, 48, 128, 256]) {
+  await sharp(Buffer.from(svg), { density: Math.max(72, (72 * size) / 256 * 4) }).resize(size, size).png().toFile(`public/icons/icon${size}.png`);
+}
+console.log("icons written to public/icons");

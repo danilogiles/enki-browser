@@ -5,8 +5,8 @@
 Enki Browser is an open-source web browser built on ungoogled-chromium, with the Enki AI
 assistant, uBlock Origin Lite and Enki Shield built in. This policy describes what the browser
 does with your data. Every claim here can be checked in the source code at
-[github.com/danilogiles/enki-browser](https://github.com/danilogiles/enki-browser) and
-[github.com/danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser).
+[github.com/danilogiles/enki-browser](https://github.com/danilogiles/enki-browser), the assistant
+included (`extension/`).
 
 ## The short version
 

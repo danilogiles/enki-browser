@@ -1,0 +1,16 @@
+FROM diegosouzapw/omniroute:latest
+
+USER root
+
+# Set shared path for Playwright Chromium binaries
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Install Playwright, Chromium headless browser, and all required OS system dependencies
+RUN mkdir -p /ms-playwright && \
+    npm install playwright --legacy-peer-deps && \
+    npx playwright install chromium && \
+    npx playwright install-deps chromium && \
+    chmod -R 777 /ms-playwright && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+USER node

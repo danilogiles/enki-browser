@@ -10,7 +10,7 @@ own license. Exact versions and download hashes are pinned in `upstream.json`.
 | uBlock Origin Lite | Ad and tracker blocker, shipped as a separate extension with one small addition (below). | GPL-3.0 | https://github.com/uBlockOrigin/uBOL-home |
 | Enki Shield | Phishing warnings (`shield/`), written for Enki Browser. | MIT | this repository |
 | Transformers.js and ONNX Runtime Web | Inside Enki: run the Whisper speech model on your computer for voice input. Unmodified. | Apache-2.0 (Transformers.js), MIT (ONNX Runtime Web) | https://github.com/huggingface/transformers.js, https://github.com/microsoft/onnxruntime |
-| Enki | The AI assistant in the side panel, and Enki Home. The build adds a fixed `key` to its manifest so its extension id is stable, and makes Enki Home the new tab page. | MIT | https://github.com/danilogiles/enkibrowser |
+| Enki | The AI assistant in the side panel, and Enki Home. The build adds a fixed `key` to its manifest so its extension id is stable, and makes Enki Home the new tab page. | MIT | this repository, `extension/` |
 
 Data downloaded at run time, not shipped: Enki Shield fetches
 [phishing-filter](https://gitlab.com/malware-filter/phishing-filter) (filters CC BY-SA 4.0; sources

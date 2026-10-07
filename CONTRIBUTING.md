@@ -9,16 +9,19 @@ expressa melhor.*
 Questions, ideas and show-and-tell go in [Discussions](https://github.com/danilogiles/enki-browser/discussions).
 Bugs and concrete proposals go in [Issues](https://github.com/danilogiles/enki-browser/issues).
 
-## Two repositories
+## One repository, two parts
 
-| | Repository | What lives there |
+| | Folder | What lives there |
 |---|---|---|
-| The assistant | [danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser) | Enki itself: the side panel, Enki Home, the agent, web search, connections (MCP), charts. It is a Chromium extension and works in any Chromium browser. |
-| The browser | this repository | Packaging ungoogled-chromium with Enki, Enki Shield (Shields button, burn, phishing warnings) and uBlock Origin Lite; the launcher, the signed updater, the installer, Linux packages, privacy defaults. |
+| The assistant | [`extension/`](extension/) | Enki itself: the side panel, Enki Home, the agent, web search, connections (MCP), charts. It is a Chromium extension and works in any Chromium browser. |
+| The browser | everything else | Packaging ungoogled-chromium with Enki, Enki Shield (Shields button, burn, phishing warnings) and uBlock Origin Lite; the launcher, the signed updater, the installer, Linux packages, privacy defaults. |
 
-Most AI work happens in **enkibrowser**; you do not need to build this browser to work on Enki.
+Most AI work happens in **`extension/`**, which has its own guide,
+[extension/CONTRIBUTING.md](extension/CONTRIBUTING.md): you do not need to build the browser to
+work on Enki. Until October 2026 the assistant lived in its own repository,
+`danilogiles/enkibrowser`, now archived.
 
-## Where you can help here
+## Where you can help in the browser
 
 | Area | Where it lives | Good for |
 |---|---|---|
@@ -45,8 +48,8 @@ node build/build-linux.mjs    # Linux: the .deb and the tarball
 ```
 
 The first build downloads ungoogled-chromium and uBlock Origin Lite at the pinned versions in
-`upstream.json` and checks their SHA-256. To build with a local Enki instead of its `main`,
-point `ENKI_DIST` at its `dist/` folder.
+`upstream.json` and checks their SHA-256, and builds Enki from `extension/`. To reuse an Enki
+already built, point `ENKI_DIST` at its `dist/` folder.
 
 Changing only `shield/`? Load `out/EnkiBrowser/app/<version>/extensions/shield` in any Chromium
 browser as an unpacked extension to iterate, then rebuild.
@@ -59,7 +62,9 @@ node test/update.mjs    # the signed updater end to end: forged, tampered and ol
 node test/setup.mjs     # the installer (Windows)
 ```
 
-CI runs them on Windows and Linux for every pull request, and they must pass before a merge.
+CI runs them on Windows and Linux for every pull request, together with the extension's own
+suites (see [extension/CONTRIBUTING.md](extension/CONTRIBUTING.md)), and they must pass before a
+merge.
 
 ## What a pull request needs
 
@@ -82,7 +87,7 @@ These protect people who trust the browser with everything they do online.
 4. **Third-party code keeps its license** and is listed in `THIRD_PARTY.md`; a patch to it is a
    published file in `patches/`.
 5. **Enki's safety rules hold** (no typing passwords, confirmation before sensitive actions, page
-   text is data): see the assistant's repository.
+   text is data): see [extension/CONTRIBUTING.md](extension/CONTRIBUTING.md).
 
 ## Security
 

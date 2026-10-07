@@ -21,12 +21,6 @@
     "sha256": "13dd17bcc9720abbf5006793b0a4f7b672d34b394db2e6198daa7ef282b20361",
     "license": "GPL-3.0, shipped unmodified as a separate extension"
   },
-  "enki": {
-    "name": "Enki",
-    "repo": "https://github.com/danilogiles/enkibrowser.git",
-    "ref": "main",
-    "license": "MIT"
-  },
   "rcedit": {
     "name": "rcedit",
     "version": "2.0.0",

@@ -77,14 +77,13 @@ export function buildEnki() {
     console.log(`  using ENKI_DIST=${dist}`);
     return dist;
   }
-  const src = path.join(cache, "enki-src");
-  rmSync(src, { recursive: true, force: true });
-  run("git", ["clone", "--depth", "1", "--branch", upstream.enki.ref, upstream.enki.repo, src]);
+  // Enki lives in extension/ (until October 2026 it was cloned from danilogiles/enkibrowser at
+  // build time), so a release is one commit: the browser and the assistant it ships, together.
+  const src = path.join(root, "extension");
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   run(npm, ["ci"], { cwd: src, shell: true });
   run(npm, ["run", "build"], { cwd: src, shell: true });
-  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: src }).toString().trim();
-  console.log(`  built Enki at ${commit}`);
+  console.log(`  built Enki from extension/`);
   return path.join(src, "dist");
 }
 
