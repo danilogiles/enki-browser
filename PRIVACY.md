@@ -1,6 +1,6 @@
 # Enki Browser Privacy Policy
 
-**Version 1 · Effective 4 October 2026**
+**Version 2 · Effective 7 October 2026**
 
 Enki Browser is an open-source web browser built on ungoogled-chromium, with the Enki AI
 assistant, uBlock Origin Lite and Enki Shield built in. This policy describes what the browser
@@ -25,6 +25,7 @@ does with your data. Every claim here can be checked in the source code at
 | Pages Enki reads for you (`read_url`) | The website itself | When Enki reads a source | Like opening the page yourself, without your cookies for that request |
 | Requests to apps you connect (Jira, Linear, Notion, Sentry, GitHub, or other MCP servers) | That app | Only after you connect it in Settings → Connections, and only when Enki uses it for your request | Disconnect any app at any time; changes in an app wait for your confirmation unless you allow that tool |
 | Your address bar typing, for suggestions | DuckDuckGo's suggestion service | While you type in the address bar | Change or turn off suggestions in the browser's settings |
+| Nothing from voice input. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
 | Update checks | GitHub (the browser's release page) | About every two hours while the browser is open | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
 
@@ -39,6 +40,7 @@ third-party cookies, known trackers and ads, and the local network address WebRT
 | Enki's conversations, the list of chats and saved tasks | the same | Encrypted the same way |
 | Shields' per-site choices and "forget this site" list | Enki Shield's local storage | Encrypted the same way |
 | Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by Windows for your user account, in the portable version too |
+| Your voice, when you use Enki's microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
 | History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker) to protect them if someone gets your disk |
 
