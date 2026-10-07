@@ -43,7 +43,7 @@ We believe privacy is a fundamental human right. Enki operates on a **Local-Firs
 - Enki uses a connected app only for your requests. Tools that change data ask for your confirmation unless you allow that specific tool. Disconnecting deletes the token.
 
 ### 2.6 Conversations
-- With "Save conversations on this device" on (the default), your chats are kept in `chrome.storage.local` so you can reopen them; screenshots and model reasoning are not saved. Turning the setting off deletes every saved chat.
+- With "Save conversations on this device" on (the default), your chats are kept in `chrome.storage.local` so you can reopen them, **encrypted (AES-256-GCM)** like your keys, list of chats and saved tasks included; screenshots and model reasoning are not saved. Turning the setting off deletes every saved chat.
 
 ---
 

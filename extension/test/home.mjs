@@ -41,7 +41,9 @@ const storedMessages = (page) =>
   page.evaluate(async () => {
     const id = (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"];
     const key = `enki:chat:${id}`;
-    return ((await chrome.storage.local.get(key))[key]?.messages ?? []);
+    // Chats are stored sealed now; the envelope keeps the message count in the clear.
+    const stored = (await chrome.storage.local.get(key))[key];
+    return stored?.messages ?? Array(stored?.count ?? 0).fill(null);
   });
 
 const userDataDir = await mkdtemp(path.join(os.tmpdir(), "enki-home-"));

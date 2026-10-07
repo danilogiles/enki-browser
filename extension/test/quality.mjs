@@ -253,6 +253,28 @@ try {
   const taskText = await panel.textContent("body");
   check("a saved task sends its prompt plus the extra words", taskText.includes("Say the standup words") && taskText.includes("extra bit"));
 
+  // Conversations, the chat list and saved tasks are stored encrypted, never as readable text.
+  await panel.waitForTimeout(500);
+  const sealed = await panel.evaluate(async () => chrome.storage.local.get(null));
+  const sealedText = JSON.stringify(sealed);
+  const chatKeys = Object.keys(sealed).filter((k) => k.startsWith("enki:chat:"));
+  check("conversations and the chat list are stored encrypted",
+    chatKeys.length > 0 && chatKeys.every((k) => /^enc:v1:/.test(sealed[k].sealed)) && /^enc:v1:/.test(sealed["enki:chats"]?.sealed ?? ""),
+    `${chatKeys.length} chats`);
+  check("saved tasks are stored encrypted", /^enc:v1:/.test(sealed["enki:tasks"]?.sealed ?? ""));
+  check("no conversation text or task prompt is readable in storage", !sealedText.includes("Say the standup words") && !sealedText.includes("extra bit") && !sealedText.includes("Echo:"));
+  // A chat saved in plain text by an older version is sealed when read, and still opens.
+  await panel.evaluate(async () => {
+    const plain = { version: 1, savedAt: 1, history: [{ role: "user", parts: [{ type: "text", text: "old plain question" }] }], messages: [{ id: "m1", role: "user", text: "old plain question" }] };
+    await chrome.storage.local.set({ "enki:chats": [{ id: "old", title: "old plain question", updatedAt: Date.now() }], "enki:chat:old": plain, "enki:current-chat": "old" });
+  });
+  await panel.reload(); await panel.waitForSelector("textarea"); await panel.waitForTimeout(800);
+  const migratedChat = await panel.evaluate(async () => chrome.storage.local.get(["enki:chats", "enki:chat:old"]));
+  check("an old plain-text chat is encrypted on first read and still opens",
+    (await panel.textContent("body")).includes("old plain question") && /^enc:v1:/.test(migratedChat["enki:chats"]?.sealed ?? "") && /^enc:v1:/.test(migratedChat["enki:chat:old"]?.sealed ?? ""),
+    JSON.stringify(Object.keys(migratedChat)));
+  await newChat();
+
   // API keys belong to each provider, and a saved key is never shown again.
   const NV = "nvapi-TESTKEY0000000000001111";
   const OR = "sk-or-v1-TESTKEY000000000002222";

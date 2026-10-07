@@ -13,8 +13,8 @@ import { SettingsView } from "./SettingsView";
 import { LogsView } from "./LogsView";
 import { log, setDevMode } from "../lib/debug";
 import { uid, type Segment, type TabInfo, type UiMessage } from "./types";
-import { restoreConversation, snapshotConversation } from "../lib/conversation";
-import { chatKey, clearChats, currentChat, deleteChat, listChats, loadChat, saveChat, setCurrentChat, type ChatEntry } from "../lib/history";
+import { snapshotConversation } from "../lib/conversation";
+import { chatKey, clearChats, currentChat, deleteChat, listChats, loadChat, openStoredChat, saveChat, setCurrentChat, storedSavedAt, type ChatEntry } from "../lib/history";
 import { acquireTurn, releaseTurn, renewTurn } from "../lib/turnlock";
 import { applyTheme } from "../lib/theme";
 import { Header } from "./Header";
@@ -68,7 +68,7 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
     void loadConnections().then(setApps);
     void loadTasks().then(setTasks);
     const onTasks = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area === "local" && changes["enki:tasks"]) setTasks((changes["enki:tasks"].newValue as SavedTask[] | undefined) ?? []);
+      if (area === "local" && changes["enki:tasks"]) void loadTasks().then(setTasks);
     };
     chrome.storage.onChanged.addListener(onTasks);
     const off = onConnectionsChange(setApps);
@@ -173,13 +173,16 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
     const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area !== "local" || !changes[key]?.newValue) return;
       if (running || abortRef.current) return;
-      const restored = restoreConversation(changes[key].newValue);
-      if (!restored || restored.savedAt === lastSavedAt.current) return;
-      historyRef.current = restored.history;
-      // The page under us was read by the OTHER document, not this one: anything it observed is
-      // not ours to trust, so the next turn here reads the page again.
-      restoredRef.current = true;
-      setMessages(restored.messages);
+      const value = changes[key].newValue;
+      if (storedSavedAt(value) === lastSavedAt.current) return; // our own write
+      void openStoredChat(value).then((restored) => {
+        if (!restored || restored.savedAt === lastSavedAt.current || abortRef.current) return;
+        historyRef.current = restored.history;
+        // The page under us was read by the OTHER document, not this one: anything it observed
+        // is not ours to trust, so the next turn here reads the page again.
+        restoredRef.current = true;
+        setMessages(restored.messages);
+      });
     };
     chrome.storage.onChanged.addListener(onChange);
     return () => chrome.storage.onChanged.removeListener(onChange);

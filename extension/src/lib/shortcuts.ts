@@ -9,17 +9,23 @@
  */
 import type { Mode } from "./agent/prompt";
 import { toolName, type Connection } from "./connectors";
+import { decrypt, encrypt } from "./secrets";
 
 export type SavedTask = { id: string; name: string; prompt: string; mode: Mode };
 
 const KEY = "enki:tasks";
 
+// Saved tasks are prompts the user wrote, stored sealed like chats (lib/secrets.ts); a list
+// written before sealing is sealed the first time it is read.
 export async function loadTasks(): Promise<SavedTask[]> {
-  return ((await chrome.storage.local.get(KEY))[KEY] as SavedTask[] | undefined) ?? [];
+  const raw = (await chrome.storage.local.get(KEY))[KEY] as SavedTask[] | { sealed: string } | undefined;
+  if (!raw) return [];
+  if (Array.isArray(raw)) { await saveTasks(raw); return raw; }
+  try { return JSON.parse((await decrypt(raw.sealed)) || "[]") as SavedTask[]; } catch { return []; }
 }
 
 export async function saveTasks(tasks: SavedTask[]): Promise<void> {
-  await chrome.storage.local.set({ [KEY]: tasks });
+  await chrome.storage.local.set({ [KEY]: { sealed: await encrypt(JSON.stringify(tasks)) } });
 }
 
 /** What follows / or @: lowercase, no spaces or accents. */
