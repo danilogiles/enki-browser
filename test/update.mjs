@@ -53,6 +53,8 @@ mkdirSync(feedDir);
 const zipName = "EnkiBrowser-0.0.2-windows-x64.zip";
 cpSync(path.join(root, "out", zipName), path.join(feedDir, zipName));
 const zipSha = sha(path.join(feedDir, zipName));
+// A page to visit, so the update test has real history, cookies and site storage to carry over.
+writeFileSync(path.join(feedDir, "page.html"), "<!doctype html><title>Enki test page</title><h1>Enki test page</h1>");
 
 // ---- local feed: /<name>.json and /<name>.json.sig
 const server = http.createServer((req, res) => {
@@ -86,9 +88,12 @@ const ourProcesses = () => {
 const chromes = () => ourProcesses().filter((p) => p.endsWith("chrome.exe"));
 // The stub hands --enki-update-check to the current launcher and exits at once; wait for that
 // launcher to finish its check.
+// Only the launcher doing the check: a running browser's own launcher stays alive beside it.
+const checkRunning = () => execFileSync("powershell.exe", ["-NoProfile", "-Command",
+  `@(Get-CimInstance Win32_Process -Filter "name='EnkiBrowserLauncher.exe'" | Where-Object { $_.ExecutablePath -like '${install}\\*' -and $_.CommandLine -like '*--enki-update-check*' }).Count`]).toString().trim() !== "0";
 const updateOnce = async (feed) => {
   await run(["--enki-update-check"], { ENKI_BROWSER_UPDATE_FEED: feed });
-  for (let i = 0; i < 240 && ourProcesses().some((p) => p.endsWith("EnkiBrowserLauncher.exe")); i++) await sleep(500);
+  for (let i = 0; i < 240 && checkRunning(); i++) await sleep(500);
 };
 
 let browser;
@@ -150,12 +155,48 @@ try {
   const liveLast = () => liveLog().trim().split("\n").at(-1) ?? "";
   const inNew = () => { const c = liveChromes(); return c.length > 0 && c.every((p) => p.includes("\\app\\0.0.2\\")); };
   const liveStub = path.join(live, "EnkiBrowser.exe");
-  spawn(liveStub, ["--remote-debugging-port=9453", `${base}/tab-a`], { env: { ...process.env, ENKI_BROWSER_UPDATE_FEED: genuine, ENKI_BROWSER_UPDATE_NOW: "1" }, stdio: "ignore" });
+  // A pin made from an open window points at chrome.exe itself, and a profile added from the
+  // profile menu starts without Enki Browser's defaults: the launcher fixes both before starting.
+  const shortcuts = path.join(tmp, "shortcuts");
+  mkdirSync(shortcuts, { recursive: true });
+  const pin = path.join(shortcuts, "Enki Browser.lnk");
+  const chromeExe = path.join(live, "app", "0.0.1", "chromium", "chrome.exe");
+  execFileSync("powershell.exe", ["-NoProfile", "-Command",
+    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut('${pin}'); $l.TargetPath = '${chromeExe}'; $l.Arguments = '--profile-directory="Profile 1"'; $l.Save()`]);
+  mkdirSync(path.join(live, "User Data", "Profile 1"), { recursive: true });
+  writeFileSync(path.join(live, "User Data", "Local State"), JSON.stringify({ profile: { info_cache: { Default: { name: "Main" }, "Profile 1": { name: "Second" } } } }));
+  writeFileSync(path.join(live, "User Data", "Profile 1", "Preferences"), JSON.stringify({ profile: { name: "Second" }, extensions: { pinned_extensions: ["someotherextensionidxxxxxxxxxxxx"] } }));
+  spawn(liveStub, ["--remote-debugging-port=9453", `${base}/tab-a`], { env: { ...process.env, ENKI_BROWSER_UPDATE_FEED: genuine, ENKI_BROWSER_UPDATE_NOW: "1", ENKI_BROWSER_SHORTCUT_DIRS: shortcuts }, stdio: "ignore" });
   let liveBrowser = await connect(9453);
+  const repaired = execFileSync("powershell.exe", ["-NoProfile", "-Command",
+    `$l = (New-Object -ComObject WScript.Shell).CreateShortcut('${pin}'); $l.TargetPath + '|' + $l.Arguments`]).toString().trim();
+  check("a shortcut opening chrome.exe directly is pointed back at EnkiBrowser.exe, profile kept",
+    repaired.toLowerCase() === `${liveStub}|--profile-directory="Profile 1"`.toLowerCase(), repaired);
+  const profile2 = JSON.parse(readFileSync(path.join(live, "User Data", "Profile 1", "Preferences"), "utf8"));
+  const liveIds = JSON.parse(readFileSync(path.join(live, "app", "0.0.1", "version.json"), "utf8"));
+  check("a profile added later gets Enki and Shields pinned and the grey theme, keeping its own pins",
+    [liveIds.enkiExtensionId, liveIds.shieldExtensionId, "someotherextensionidxxxxxxxxxxxx"].every((id) => profile2.extensions.pinned_extensions.includes(id)) && profile2.browser?.theme?.is_grayscale2 === true,
+    JSON.stringify(profile2.extensions.pinned_extensions));
   const second = await liveBrowser.contexts()[0].newPage();
   await second.goto(`${base}/tab-b`).catch(() => undefined);
   for (let i = 0; i < 240 && !/0\.0\.2 is ready/.test(liveLog()); i++) await sleep(500);
   check("an update found while the browser is open is installed and offered", /0\.0\.2 is ready; offering to restart/.test(liveLog()) && readFileSync(path.join(live, "current"), "utf8").trim() === "0.0.2", liveLast());
+  // ---- the user's data before the update: an update changes the program, never this
+  const userCtx = liveBrowser.contexts()[0];
+  const visited = await userCtx.newPage();
+  await visited.goto(`${base}/page.html?visited-before-update`);
+  await visited.evaluate(() => { document.cookie = "enki_keep=1; max-age=86400; path=/"; localStorage.setItem("enki-keep", "kept"); });
+  const enkiPanel = await userCtx.newPage();
+  await enkiPanel.goto(`chrome-extension://${liveIds.enkiExtensionId}/src/sidepanel/index.html`);
+  await enkiPanel.evaluate(() => chrome.storage.local.set({
+    "enki:settings": { preset: "custom", apiKey: "sk-keep-00000000000000001234", baseUrl: "http://127.0.0.1:9/v1", model: "kept-model", saveConversations: true, acceptedTerms: "1" },
+    "enki:chats": [{ id: "kept", title: "a chat from before the update", updatedAt: Date.now() }],
+  }));
+  await enkiPanel.reload(); await enkiPanel.waitForTimeout(1500); // the panel encrypts the key as it loads
+  const shieldPage = await userCtx.newPage();
+  await shieldPage.goto(`chrome-extension://${liveIds.shieldExtensionId}/options.html`);
+  await shieldPage.evaluate(() => chrome.storage.local.set({ "shields:sites": { "127.0.0.1": { scripts: "block" } } }));
+  await visited.close(); await enkiPanel.close(); await shieldPage.close();
   await liveBrowser.close().catch(() => undefined); // drop the CDP connection only; the browser stays
   spawn(liveStub, ["--enki-restart-to-update"], { stdio: "ignore" });
   for (let i = 0; i < 120 && !inNew(); i++) await sleep(500);
@@ -163,7 +204,43 @@ try {
   liveBrowser = await connect(9453);
   await sleep(2000);
   const tabs = (await (await liveBrowser.newBrowserCDPSession()).send("Target.getTargets")).targetInfos.filter((t) => t.type === "page").map((t) => t.url);
+  if (!tabs.some((u) => u.endsWith("/tab-a"))) {
+    const all = (await (await liveBrowser.newBrowserCDPSession()).send("Target.getTargets")).targetInfos.map((t) => t.type + " " + t.url);
+    const state = existsSync(path.join(live, "User Data", "Local State")) ? JSON.parse(readFileSync(path.join(live, "User Data", "Local State"), "utf8")).profile : null;
+    console.log("DEBUG targets:", JSON.stringify(all));
+    console.log("DEBUG profile state:", JSON.stringify({ last_used: state?.last_used, last_active_profiles: state?.last_active_profiles }));
+    console.log("DEBUG log tail:", liveLog().trim().split(/\r?\n/).slice(-6).join(" || "));
+    console.log("DEBUG chrome cmd:", execFileSync("powershell.exe", ["-NoProfile", "-Command", `Get-CimInstance Win32_Process -Filter "name='chrome.exe'" | ? { $_.ExecutablePath -like '${live}\\*' -and $_.CommandLine -notlike '*--type=*' } | % { $_.CommandLine }`]).toString().trim().slice(0, 600));
+  }
   check("every tab comes back after the restart", tabs.some((u) => u.endsWith("/tab-a")) && tabs.some((u) => u.endsWith("/tab-b")), tabs.join(", "));
+
+  // ---- the same data after the update, in the same profile
+  const kept = liveBrowser.contexts()[0];
+  const siteAfter = await kept.newPage();
+  await siteAfter.goto(`${base}/page.html?after-update`);
+  const siteData = await siteAfter.evaluate(() => ({ cookie: document.cookie, storage: localStorage.getItem("enki-keep") }));
+  check("cookies and site storage survive the update", /enki_keep=1/.test(siteData.cookie) && siteData.storage === "kept", JSON.stringify(siteData));
+  await siteAfter.goto("chrome://history/"); await siteAfter.waitForTimeout(1500);
+  const historyText = await siteAfter.evaluate(() => { const walk = (n) => (n.shadowRoot ? walk(n.shadowRoot) : "") + [...n.childNodes].map((c) => (c.nodeType === 3 ? c.textContent : c.nodeType === 1 ? walk(c) : "")).join(" "); return walk(document.body); });
+  check("browsing history survives the update", /Enki test page/.test(historyText));
+  const newIds = JSON.parse(readFileSync(path.join(live, "app", "0.0.2", "version.json"), "utf8"));
+  await siteAfter.goto(`chrome-extension://${newIds.enkiExtensionId}/src/sidepanel/index.html`);
+  await siteAfter.waitForSelector("textarea", { timeout: 10000 }).catch(() => undefined);
+  const enkiAfter = await siteAfter.evaluate(async () => {
+    const all = await chrome.storage.local.get(["enki:settings", "enki:chats"]);
+    return { model: all["enki:settings"]?.model, encrypted: /^enc:v1:/.test(all["enki:settings"]?.apiKeys?.custom ?? ""), listSealed: typeof all["enki:chats"]?.sealed === "string" };
+  });
+  // The chat list is stored encrypted: read it the way the user does, in the ⋯ menu.
+  await siteAfter.click("button[title='More']").catch(() => undefined);
+  const menuText = await siteAfter.evaluate(() => document.body.innerText);
+  await siteAfter.keyboard.press("Escape");
+  await siteAfter.click("button[title='Settings']").catch(() => undefined);
+  const maskedKey = await siteAfter.textContent("[aria-label='Saved API key']").catch(() => "");
+  check("Enki's settings, encrypted key and chats survive the update", newIds.enkiExtensionId === liveIds.enkiExtensionId && enkiAfter.model === "kept-model" && enkiAfter.encrypted && maskedKey === "sk-keep-••••••1234" && enkiAfter.listSealed && menuText.includes("a chat from before the update"), JSON.stringify({ ...enkiAfter, maskedKey }));
+  await siteAfter.goto(`chrome-extension://${newIds.shieldExtensionId}/options.html`);
+  const shieldAfter = await siteAfter.evaluate(async () => (await chrome.storage.local.get("shields:sites"))["shields:sites"]);
+  check("Shields' per-site settings survive the update", shieldAfter?.["127.0.0.1"]?.scripts === "block", JSON.stringify(shieldAfter));
+  await siteAfter.close();
   // A version older than the way back, appearing while the browser runs (the stub's own cleanup
   // has already happened): the launcher removes it once the browser closes.
   mkdirSync(path.join(live, "app", "0.0.0"), { recursive: true });
@@ -181,6 +258,12 @@ try {
   results.push({ name: "no unexpected error", ok: false });
 } finally {
   if (browser) await closeBrowser(browser).catch(() => undefined);
+  // Whatever this run started from its temp folder goes, even after a failure: a browser left on
+  // the test's debugging port answered the next run's connect and made it test the wrong browser.
+  try {
+    execFileSync("powershell.exe", ["-NoProfile", "-Command",
+      `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${tmp}\\*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`]);
+  } catch { /* nothing left */ }
   server.close();
   await sleep(1000);
   try { rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }); } catch { console.log(`(left ${tmp})`); }

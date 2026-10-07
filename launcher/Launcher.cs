@@ -44,17 +44,20 @@ static class Launcher
         var flags = new List<string>();
 
         // A file named "portable" next to EnkiBrowser.exe keeps the profile beside the program (a
-        // USB stick, a synced folder). Chromium otherwise ties profile encryption to this machine,
-        // so a portable profile has to opt out of that.
+        // USB stick, a synced folder). Chromium ties the profile to this machine with a machine id,
+        // which portable mode turns off; its encryption of passwords and cookies stays on.
         bool portable = File.Exists(Path.Combine(root, "portable"));
         string userData = Environment.GetEnvironmentVariable("ENKI_BROWSER_USER_DATA");
         if (string.IsNullOrEmpty(userData))
             userData = portable ? Path.Combine(root, "User Data") : Path.Combine(Install.DataDir, "User Data");
         flags.Add("--user-data-dir=" + userData);
-        Migration.Run(userData, root);
+        Migration.Run(userData, root, appDir);
+        ShellIdentity.RepairShortcuts(root);
         if (portable)
         {
-            flags.Add("--disable-encryption");
+            // Saved passwords and cookies stay encrypted (Chromium's key, protected by Windows for
+            // this user) even here: security first. The price is that logins do not travel with a
+            // portable profile to another computer; the rest of the profile does.
             flags.Add("--disable-machine-id");
         }
 
@@ -76,11 +79,11 @@ static class Launcher
             WorkingDirectory = Path.Combine(appDir, "chromium"),
         });
 
-        // With the browser already up, stay behind (no window) to keep it up to date while it is
-        // open, so a slow download never delays anything the user sees. See Watcher.cs.
-        if (!Updater.Disabled(root))
-            Watcher.Run(root, appDir, args.Where(a => a.StartsWith("--") && !a.StartsWith("--enki-")),
-                Environment.GetEnvironmentVariable("ENKI_BROWSER_UPDATE_NOW") == "1");
+        // With the browser already up, stay behind (no window) while it is open: to tidy up when it
+        // closes (shortcuts, old versions) and, unless updates are off, to keep it up to date, so a
+        // slow download never delays anything the user sees. See Watcher.cs.
+        Watcher.Run(root, appDir, userData, args.Where(a => a.StartsWith("--") && !a.StartsWith("--enki-")),
+            Environment.GetEnvironmentVariable("ENKI_BROWSER_UPDATE_NOW") == "1");
         return 0;
     }
 }
