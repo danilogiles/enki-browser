@@ -135,6 +135,9 @@ const version = versionInfo({
 writeFileSync(path.join(enkiRes, "version.json"), JSON.stringify(version, null, 2));
 
 step("Signing (ad hoc)");
+// Extended attributes picked up on the way (Finder info, provenance) make codesign refuse the
+// bundle ("resource fork, Finder information, or similar detritus not allowed").
+run("xattr", ["-cr", app]);
 // Inside out, each piece once: the framework (its resources changed), Chromium's executable, then
 // the app, whose signature seals the rest. Chromium's own entitlements are kept; the helper apps
 // inside the framework are unchanged and keep upstream's signatures.
