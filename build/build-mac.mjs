@@ -138,12 +138,13 @@ step("Signing (ad hoc)");
 // Extended attributes picked up on the way (Finder info, provenance) make codesign refuse the
 // bundle ("resource fork, Finder information, or similar detritus not allowed").
 run("xattr", ["-cr", app]);
-// Inside out, each piece once: the framework (its resources changed), Chromium's executable, then
-// the app, whose signature seals the rest. Chromium's own entitlements are kept; the helper apps
-// inside the framework are unchanged and keep upstream's signatures.
-run("codesign", ["--force", "--sign", "-", "--preserve-metadata=entitlements,flags", frameworkDir]);
-run("codesign", ["--force", "--sign", "-", "--preserve-metadata=entitlements,flags", path.join(contents, "MacOS", "Chromium")]);
-run("codesign", ["--force", "--sign", "-", app]);
+// Everything again, ad hoc and alike. Keeping upstream's flags kept the hardened runtime on
+// Chromium's executable, whose library validation then refused to load the re-signed framework
+// ("mapping process and mapped file have different Team IDs"). Without a Developer ID there is no
+// team to validate against, so nothing is preserved: Chromium's executable first (an extra Mach-O
+// in Contents/MacOS, which --deep does not reach), then the bundle with everything nested in it.
+run("codesign", ["--force", "--sign", "-", path.join(contents, "MacOS", "Chromium")]);
+run("codesign", ["--force", "--deep", "--sign", "-", app]);
 run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", app]);
 
 step("Packaging the .dmg");
