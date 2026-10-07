@@ -143,6 +143,20 @@ try {
   await page.waitForTimeout(1500);
   const up = await loadTrackers();
   check("Shields up blocks them again", up.every((o) => /BLOCKED_BY_CLIENT|neutered/.test(o)), up.join(", "));
+  // Shields' per-site choices name sites the user visits: stored sealed, never as host names.
+  const sealedSites = await shieldsPage.evaluate(async () => {
+    const sites = await import(chrome.runtime.getURL("sites.js"));
+    await sites.setSite("example.com", { scripts: "block" });
+    await sites.setForget("example.com", true);
+    const raw = await chrome.storage.local.get(["shields:sites", "shields:forget"]);
+    const readBack = (await sites.sites())["example.com"]?.scripts;
+    await sites.setSite("example.com", { scripts: undefined });
+    await sites.setForget("example.com", false);
+    return { sites: raw["shields:sites"], forget: raw["shields:forget"], readBack };
+  });
+  check("Shields' per-site settings are stored encrypted",
+    /^enc:v1:/.test(sealedSites.sites) && /^enc:v1:/.test(sealedSites.forget) && !JSON.stringify(sealedSites).replace(/"readBack":"block"/, "").includes("example.com") && sealedSites.readBack === "block",
+    JSON.stringify({ sites: String(sealedSites.sites).slice(0, 20), readBack: sealedSites.readBack }));
   await shieldsPage.close();
   await page.goto(local);
 

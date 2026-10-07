@@ -37,7 +37,7 @@ needs only a free key.
 |---|---|
 | **Installer** | Run `EnkiBrowserSetup-<version>.exe`. No administrator rights: it installs for your user into `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start menu and desktop shortcuts, appears in *Settings → Apps*, and upgrades older installs keeping your profile. Silent: `/S`; another folder: `/D=<folder>`. |
 | **Scoop** | `scoop install https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser.json` — no installer runs; Scoop keeps it updated (`scoop update enki-browser`). |
-| **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too. |
+| **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too; saved passwords and logins stay encrypted for this Windows user, so they do not carry over to another computer. |
 
 > **Antivirus warnings.** Releases are not yet code-signed (see [Code signing policy](#code-signing-policy)).
 > Windows SmartScreen will say the app is unrecognised — check the SHA-256, then *More info →

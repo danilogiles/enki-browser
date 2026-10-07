@@ -1,3 +1,5 @@
+import { forgetList } from "./sites.js";
+
 // Enki Shields, the background half: what was blocked on each tab, and "forget me when I close
 // this site". The panel (popup.js) reads what is recorded here and owns the per-site switches.
 //
@@ -79,7 +81,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   delete tabs[tabId];
   save();
   if (!host) return;
-  const forget = (await chrome.storage.local.get(FORGET))[FORGET] ?? [];
+  const forget = await forgetList();
   if (!forget.includes(host)) return;
   // Other tabs on the same site keep it alive, as in Brave.
   if (Object.values(tabs).some((t) => t.host === host)) return;

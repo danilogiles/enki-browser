@@ -31,15 +31,20 @@ does with your data. Every claim here can be checked in the source code at
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:
 third-party cookies, known trackers and ads, and the local network address WebRTC would reveal.
 
-## What stays on your device
+## What stays on your device, and how it is protected
 
-- Enki's settings, including your API keys, and your saved chats (if "Save conversations" is
-  on), in the browser's local extension storage.
-- Access tokens for connected apps, in the same local storage.
-- Enki Shields' per-site choices and the count of what was blocked on each tab (the count is
-  kept only until the browser closes).
-- Your browsing history, cookies, passwords and everything else a browser keeps, in your profile
-  folder, managed by Chromium as in any browser.
+| Data | Where | Protection |
+|---|---|---|
+| Enki's API keys and connected apps' tokens | the browser's local extension storage | Encrypted (AES-256-GCM) with a key the browser keeps non-exportable; shown only masked |
+| Enki's conversations, the list of chats and saved tasks | the same | Encrypted the same way |
+| Shields' per-site choices and "forget this site" list | Enki Shield's local storage | Encrypted the same way |
+| Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by Windows for your user account, in the portable version too |
+| What was blocked on each tab | memory, until the browser closes | Never written to disk |
+| History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker) to protect them if someone gets your disk |
+
+Updates change only the program: your profile — history, bookmarks, logins, Enki's settings and
+chats, Shields' choices — is kept exactly as it was, and an update restart reopens your windows
+and tabs.
 
 Nothing of this is synced or backed up by the project. Removing the browser and its profile
 folder (`%LOCALAPPDATA%\EnkiBrowser` on Windows, `~/.config/enki-browser` on Linux) deletes it.

@@ -27,7 +27,7 @@ static class Install
         get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EnkiBrowser"); }
     }
 
-    static string ShortcutPath(Environment.SpecialFolder folder)
+    public static string ShortcutPath(Environment.SpecialFolder folder)
     {
         return Path.Combine(Environment.GetFolderPath(folder), "Enki Browser.lnk");
     }

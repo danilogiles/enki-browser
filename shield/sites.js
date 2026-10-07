@@ -5,6 +5,8 @@
 // back whole after each change. Ads and trackers are uBlock Origin Lite's filtering mode for
 // the site, reached through the small patch Enki Browser applies to it.
 
+import { isSealed, seal, unseal } from "./secrets.js";
+
 export const SITES = "shields:sites";   // { [host]: { scripts?: "block", cookies?: "block" } }
 export const FORGET = "shields:forget"; // [host]
 export const BADGE = "shields:badge";
@@ -31,8 +33,17 @@ export async function blocker(what, extra = {}) {
 
 export const pattern = (host) => `*://${host}/*`;
 
+// Both lists name sites the user visits: stored sealed (secrets.js), and sealed on first read if
+// an earlier version left them readable.
+async function readSealed(key, fallback) {
+  const raw = (await chrome.storage.local.get(key))[key];
+  const value = await unseal(raw, fallback);
+  if (raw !== undefined && !isSealed(raw)) await chrome.storage.local.set({ [key]: await seal(value) });
+  return value;
+}
+
 export async function sites() {
-  return (await chrome.storage.local.get(SITES))[SITES] ?? {};
+  return readSealed(SITES, {});
 }
 
 export async function setSite(host, change) {
@@ -40,7 +51,7 @@ export async function setSite(host, change) {
   const next = { ...(all[host] ?? {}), ...change };
   for (const k of Object.keys(next)) if (!next[k]) delete next[k];
   if (Object.keys(next).length) all[host] = next; else delete all[host];
-  await chrome.storage.local.set({ [SITES]: all });
+  await chrome.storage.local.set({ [SITES]: await seal(all) });
   await applySites(all);
 }
 
@@ -58,11 +69,11 @@ export async function applySites(all) {
 }
 
 export async function forgetList() {
-  return (await chrome.storage.local.get(FORGET))[FORGET] ?? [];
+  return readSealed(FORGET, []);
 }
 
 export async function setForget(host, on) {
   const list = (await forgetList()).filter((h) => h !== host);
   if (on) list.push(host);
-  await chrome.storage.local.set({ [FORGET]: list });
+  await chrome.storage.local.set({ [FORGET]: await seal(list) });
 }
