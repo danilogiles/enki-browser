@@ -81,8 +81,8 @@ Not Authenticode, and unchanged by it:
 - Linux packages (`.deb`, tarball) are not Authenticode-signed.
 - macOS builds are signed ad hoc and not notarized (README, "macOS").
 - Update manifests (`update.json` / `update.json.sig`) are signed with a
-  separate RSA-3072 release key, `UPDATE_SIGNING_KEY`, held only as a CI secret
-  in the `release` environment. That is what installed browsers trust for updates.
+  separate RSA-3072 release key, `UPDATE_SIGNING_KEY`, held only as a GitHub
+  Actions secret. That is what installed browsers trust for updates.
 
 ## How signing works
 
