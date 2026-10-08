@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      sign:
+        description: "Also build an Authenticode-signed Windows edition (main only; needs the code-signing environment's approval)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,14 +25,14 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       # The pinned downloads are ~200 MB; keyed on upstream.json so a version bump refetches.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: cache/*.zip
           key: upstream-${{ hashFiles('upstream.json') }}
@@ -39,7 +44,7 @@ jobs:
       - run: npm run verify
       - run: node test/session.mjs
       - run: node test/setup.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: enki-browser-windows-x64
           path: |
@@ -54,13 +59,13 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: cache/*.zip
           key: upstream-${{ hashFiles('upstream.json') }}
@@ -74,13 +79,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: cache/*.tar.xz
           key: upstream-linux-${{ hashFiles('upstream.json') }}
@@ -97,7 +102,7 @@ jobs:
       # The .deb on clean systems: dependencies resolve, the browser renders, removal is clean.
       - run: docker run --rm -v "$PWD/out:/out:ro" -v "$PWD/test:/t:ro" ubuntu:24.04 bash /t/linux-deb.sh
       - run: docker run --rm -v "$PWD/out:/out:ro" -v "$PWD/test:/t:ro" debian:12 bash /t/linux-deb.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: enki-browser-linux-x64
           path: |
@@ -120,13 +125,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: cache/*.dmg
           key: upstream-mac-${{ matrix.arch }}-${{ hashFiles('upstream.json') }}
@@ -143,7 +148,7 @@ jobs:
           hdiutil detach "$mnt"
           ENKI_MAC_APP="$HOME/Applications/Enki Browser.app" ENKI_MOCK_KEYCHAIN=1 node test/verify.mjs
           ENKI_MAC_APP="$HOME/Applications/Enki Browser.app" ENKI_MOCK_KEYCHAIN=1 node test/session.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: enki-browser-macos-${{ matrix.arch }}
           path: |
@@ -151,35 +156,259 @@ jobs:
             out/EnkiBrowser-*-macos-${{ matrix.arch }}.dmg.sha256
           retention-days: 14
 
+  # Authenticode signing with Azure Artifact Signing. Off until the repository variable
+  # ARTIFACT_SIGNING_ENDPOINT is set; then only for a v* tag, or a manual run on main with "sign"
+  # ticked. Never for pull requests (forks or not). It runs in the protected `code-signing`
+  # environment (required reviewer; main and v* tags only), whose OIDC subject is the only one the
+  # Azure federated credential trusts, so no other job or ref can get a signing token. It holds no
+  # client secret and not the update-manifest key (that stays in the release job).
+  # Signed: EnkiBrowser.exe (stub), EnkiBrowserLauncher.exe, EnkiBrowserSetup-<ver>.exe — the
+  # programs this project compiles. Never chrome.exe or any other ungoogled-chromium file.
+  windows-signed:
+    name: Build, sign and verify (Windows x64, signed)
+    if: >-
+      vars.ARTIFACT_SIGNING_ENDPOINT != '' &&
+      github.event_name != 'pull_request' &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.sign))
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: code-signing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # One signer at a time: the generic hook stays off here, Azure signs.
+      ENKI_SIGN_COMMAND: ""
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # Read-only: this job may reuse the upstream downloads but never writes a cache. build.mjs
+      # refuses any file whose sha256 differs from upstream.json anyway.
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: cache/*.zip
+          key: upstream-${{ hashFiles('upstream.json') }}
+      - name: Paths
+        id: paths
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $o = Join-Path $env:GITHUB_WORKSPACE 'out'
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "stub=$o\EnkiBrowser\EnkiBrowser.exe" >> $env:GITHUB_OUTPUT
+          "launcher=$o\EnkiBrowser\app\$v\EnkiBrowserLauncher.exe" >> $env:GITHUB_OUTPUT
+          "setup=$o\EnkiBrowserSetup-$v.exe" >> $env:GITHUB_OUTPUT
+      - name: Build up to the stub and the launcher
+        run: node build/build.mjs --phase=programs
+      - name: Azure login (OIDC, no secret)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          # The signer role is granted on the certificate profile only, so this identity may see no
+          # subscription at all; AZURE_SUBSCRIPTION_ID can then stay unset.
+          allow-no-subscriptions: true
+      # Exactly two files, by path: before packaging, so the zip and the installer carry them signed.
+      - name: Sign the stub and the launcher
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files: |
+            ${{ steps.paths.outputs.stub }}
+            ${{ steps.paths.outputs.launcher }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Enki Browser
+          description-url: ${{ github.server_url }}/${{ github.repository }}
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+      - name: Pack the zip and the installer
+        run: node build/build.mjs --phase=package
+      - name: Sign the installer
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ steps.paths.outputs.setup }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Enki Browser Setup
+          description-url: ${{ github.server_url }}/${{ github.repository }}
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+      # Done with Azure: nothing after this point can ask for a signature.
+      - name: Azure logout
+        if: always()
+        shell: pwsh
+        run: |
+          az logout 2>$null
+          az account clear 2>$null
+          exit 0
+      - name: Checksums over the signed bytes
+        run: node build/build.mjs --phase=checksums
+      # Fails the job (so no release) if a file that must be signed is not, or if anything from
+      # Chromium carries this project's certificate — in out/, in the zip and inside the installer's zip.
+      - name: Verify signatures
+        shell: pwsh
+        env:
+          ENKI_VERSION_DIR: ${{ steps.paths.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $v = $env:ENKI_VERSION_DIR
+          $out = Join-Path $env:GITHUB_WORKSPACE 'out'
+          $zip = Join-Path $out "EnkiBrowser-$v-windows-x64.zip"
+          $setup = Join-Path $out "EnkiBrowserSetup-$v.exe"
+          $fail = @()
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+
+          # What ships, unpacked from the zip, so the check covers the packed copies too.
+          $unz = Join-Path $env:RUNNER_TEMP 'enki-zip'
+          Remove-Item $unz -Recurse -Force -ErrorAction SilentlyContinue
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            foreach ($e in $archive.Entries) {
+              if ($e.FullName -match '\.(exe|dll)$') {
+                $dest = Join-Path $unz ($e.FullName -replace '/', '\')
+                New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
+              }
+            }
+          } finally { $archive.Dispose() }
+
+          $mustSign = @(
+            $setup,
+            "$out\EnkiBrowser\EnkiBrowser.exe",
+            "$out\EnkiBrowser\app\$v\EnkiBrowser.exe",
+            "$out\EnkiBrowser\app\$v\EnkiBrowserLauncher.exe",
+            "$unz\EnkiBrowser\EnkiBrowser.exe",
+            "$unz\EnkiBrowser\app\$v\EnkiBrowser.exe",
+            "$unz\EnkiBrowser\app\$v\EnkiBrowserLauncher.exe"
+          )
+          $subject = $null
+          foreach ($f in $mustSign) {
+            if (-not (Test-Path $f)) { $fail += "missing: $f"; continue }
+            $s = Get-AuthenticodeSignature -FilePath $f
+            if ($s.Status -ne 'Valid') { $fail += "not validly signed ($($s.Status)): $f"; continue }
+            if (-not $s.TimeStamperCertificate) { $fail += "signed without a timestamp: $f" }
+            if (-not $subject) { $subject = $s.SignerCertificate.Subject }
+            elseif ($s.SignerCertificate.Subject -ne $subject) { $fail += "different signer ($($s.SignerCertificate.Subject)): $f" }
+            if ($signtool) {
+              $log = & $signtool.FullName verify /pa /v $f 2>&1 | Out-String
+              if ($LASTEXITCODE -ne 0) { $fail += "signtool verify /pa failed: $f" }
+              elseif ($log -notmatch '(?i)sha256') { Write-Warning "signtool did not report a SHA-256 digest for $f" }
+            }
+            Write-Host "signed: $f"
+          }
+          if (-not $signtool) { Write-Warning 'signtool.exe not found; relied on Get-AuthenticodeSignature only.' }
+          Write-Host "publisher: $subject"
+
+          # Nothing from ungoogled-chromium may carry our certificate, chrome.exe above all.
+          $chromium = @("$out\EnkiBrowser\app\$v\chromium", "$unz\EnkiBrowser\app\$v\chromium")
+          foreach ($dir in $chromium) {
+            if (-not (Test-Path "$dir\chrome.exe")) { $fail += "missing: $dir\chrome.exe" }
+            if (-not $subject) { continue }
+            Get-ChildItem $dir -Recurse -File -Include *.exe, *.dll | ForEach-Object {
+              $s = Get-AuthenticodeSignature -FilePath $_.FullName
+              if ($s.SignerCertificate -and $s.SignerCertificate.Subject -eq $subject) {
+                $fail += "upstream file signed with our certificate: $($_.FullName)"
+              }
+            }
+          }
+
+          # The .sha256 files describe the signed bytes.
+          foreach ($f in @($zip, $setup)) {
+            $want = ((Get-Content "$f.sha256" -Raw) -split '\s+')[0]
+            $have = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+            if ($want -ne $have) { $fail += "checksum does not match the file: $f.sha256" }
+          }
+
+          if ($fail.Count) { $fail | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
+          Write-Host 'All Enki programs are signed; no Chromium file is.'
+      - run: npm run verify
+      - run: node test/session.mjs
+      - run: node test/setup.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: enki-browser-windows-x64-signed
+          path: |
+            out/EnkiBrowserSetup-*.exe
+            out/EnkiBrowserSetup-*.exe.sha256
+            out/EnkiBrowser-*-windows-x64.zip
+            out/EnkiBrowser-*-windows-x64.zip.sha256
+          retention-days: 14
+
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, updater, linux, macos]
+    # With signing configured (ARTIFACT_SIGNING_ENDPOINT set), a release needs the signed build
+    # and ships it; without it, the unsigned build as before. Never a silent fallback to unsigned.
+    if: >-
+      !cancelled() && startsWith(github.ref, 'refs/tags/v') &&
+      needs.windows.result == 'success' && needs.updater.result == 'success' && needs.linux.result == 'success' &&
+      needs.macos.result == 'success' &&
+      ((vars.ARTIFACT_SIGNING_ENDPOINT != '' && needs.windows-signed.result == 'success') ||
+       (vars.ARTIFACT_SIGNING_ENDPOINT == '' && needs.windows-signed.result == 'skipped'))
+    needs: [windows, windows-signed, updater, linux, macos]
     runs-on: ubuntu-latest
+    # Protected environment (required reviewer, v* tags only) that alone holds UPDATE_SIGNING_KEY.
+    environment: release
     # The only job allowed to write, and only for a tag pushed by a maintainer.
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: enki-browser-windows-x64
+          name: ${{ needs.windows-signed.result == 'success' && 'enki-browser-windows-x64-signed' || 'enki-browser-windows-x64' }}
           path: dist
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: enki-browser-linux-x64
           path: dist
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: enki-browser-macos-arm64
           path: dist
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: enki-browser-macos-x64
           path: dist
+      # The .sha256 files were written after Authenticode signing; recheck them here, in the job
+      # that holds the update key, before anything is derived from these bytes.
+      - name: Check the downloaded files against their checksums
+        run: cd dist && sha256sum -c -- *.sha256
       # The update manifest is what installed browsers trust; it is signed here, with a key that
       # exists only as this secret, and checked against config/update-signing.pub before upload.
       - name: Sign the update manifest, write the Scoop manifest
@@ -220,7 +449,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       # A sign-off is the contributor stating they may submit the change under the project's
