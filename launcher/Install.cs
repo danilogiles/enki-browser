@@ -108,7 +108,7 @@ static class Install
         {
             key.SetValue("DisplayName", "Enki Browser");
             key.SetValue("DisplayVersion", version);
-            key.SetValue("Publisher", "Enki contributors");
+            key.SetValue("Publisher", "Danilo De Souza");
             key.SetValue("DisplayIcon", stub + ",0");
             key.SetValue("InstallLocation", root);
             key.SetValue("URLInfoAbout", "https://github.com/danilogiles/enki-browser");
@@ -118,6 +118,27 @@ static class Install
             key.SetValue("NoModify", 1, RegistryValueKind.DWord);
             key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
         }
+    }
+
+    /// Keeps the Apps entry's version and publisher in step with what runs. The updater installs a
+    /// release beside the old one without running the installer, so without this Settings → Apps
+    /// (and winget, which reads the same entry) would keep showing the version first installed and
+    /// an older publisher. Only the entry of this install is touched: a portable copy or a test
+    /// install elsewhere (InstallLocation differs, or there is no entry) is left alone.
+    public static void SyncRegistration(string root, string version)
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.OpenSubKey(UninstallKey, true))
+            {
+                if (key == null) return;
+                var location = key.GetValue("InstallLocation") as string;
+                if (string.IsNullOrEmpty(location) || !string.Equals(Win.LongPath(location), Win.LongPath(root), StringComparison.OrdinalIgnoreCase)) return;
+                if ((key.GetValue("DisplayVersion") as string) != version) key.SetValue("DisplayVersion", version);
+                if ((key.GetValue("Publisher") as string) != "Danilo De Souza") key.SetValue("Publisher", "Danilo De Souza");
+            }
+        }
+        catch { /* never stop the browser from starting over the Apps entry */ }
     }
 
     /// Where Chromium finds the manifest of the "Check for updates" host (NativeHost.cs).

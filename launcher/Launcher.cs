@@ -58,6 +58,8 @@ static class Launcher
         // "Check for updates" in Shields' settings reaches this copy, portable ones included (the
         // registry entry names whichever copy started last, and the uninstaller removes it).
         NativeHost.Register(root, appDir);
+        // After an update, Settings → Apps and `winget list` show the version that now runs.
+        Install.SyncRegistration(root, Path.GetFileName(appDir));
         ShellIdentity.RepairShortcuts(root);
         if (portable)
         {
