@@ -17,6 +17,7 @@ try {
 const open = (url) => chrome.tabs.create({ url, index: (tab?.index ?? 0) + 1 });
 $("terms").onclick = (e) => { e.preventDefault(); void open(DOCS + "TERMS.md"); };
 $("privacy").onclick = (e) => { e.preventDefault(); void open(DOCS + "PRIVACY.md"); };
+$("updates").onclick = (e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); };
 
 if (!host) {
   $("app").hidden = true;
@@ -124,3 +125,5 @@ $("burn-go").onclick = async () => {
   window.close();
 };
 void BADGE;
+// Everything above is wired up: tests wait for this before clicking (the site name appears first).
+document.documentElement.dataset.ready = "true";

@@ -55,7 +55,11 @@ function nowLine(): string {
  */
 export type Host = "panel" | "page";
 
-export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {}) {
+/**
+ * `chat` is for Enki Home: the saved chat to open (its conversation list), or null for a new one
+ * (a question typed in its box). Left out, the panel reopens whatever chat was open last.
+ */
+export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string; chat?: string | null } = {}) {
   const isolated = !!PAGE_QUERY;
   const asPage = isolated || host === "page";
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -98,6 +102,9 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
   /** savedAt of the snapshot this document last wrote, so its own echo off storage is not
    *  mistaken for the other document having changed the conversation. */
   const lastSavedAt = useRef(0);
+  // Messages just read from storage (the other document's save, or a chat being opened): saving
+  // them back would change nothing but its date, and move a chat merely looked at to the top.
+  const followedMessages = useRef<unknown>(null);
 
   // ----- settings -----
   useEffect(() => {
@@ -108,13 +115,16 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
       }
       if (s.saveConversations && !isolated) {
         // Reopen the chat that was open, not merely the newest: after New chat there is none.
-        const open = await currentChat();
+        const open = chat !== undefined ? chat : await currentChat();
         const restored = open ? await loadChat(open) : null;
         if (open && restored) {
           historyRef.current = restored.history;
           restoredRef.current = true;
+          followedMessages.current = restored.messages;
           setMessages(restored.messages);
           setChatId(open);
+          // Opened from Home's list: it is now the chat the panel follows too.
+          if (chat !== undefined) void setCurrentChat(open);
         }
       }
       setReady(true);
@@ -138,6 +148,10 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
     if (!ready || !settings) return;
     if (!settings.saveConversations) { void clearChats().then(() => setChats([])); return; }
     if (!messages.length) return;
+    // What we just read from storage is not ours to write back. Echoing the other document's save
+    // raced that document: a mid-answer snapshot we re-saved could land after its final save and
+    // overwrite it, cutting the answer short in both places (CI's flaky home sync test, #37).
+    if (messages === followedMessages.current) return;
     const id = chatId ?? uid();
     if (!chatId) { setChatId(id); if (!isolated) void setCurrentChat(id); }
     const persist = () => {
@@ -181,6 +195,7 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
         // The page under us was read by the OTHER document, not this one: anything it observed
         // is not ours to trust, so the next turn here reads the page again.
         restoredRef.current = true;
+        followedMessages.current = restored.messages;
         setMessages(restored.messages);
       });
     };
@@ -526,6 +541,7 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
     if (!restored) { setBanner("That chat could not be opened."); return; }
     historyRef.current = restored.history;
     restoredRef.current = true;
+    followedMessages.current = restored.messages;
     setMessages(restored.messages);
     setUsage({ input: 0, output: 0 });
     setApproval(null);

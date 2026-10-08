@@ -1,5 +1,6 @@
 // Enki Shields' global settings, opened from the panel's "Global settings".
 import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
+import { DOWNLOAD, check, compare, restart, status } from "./updates.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,4 +49,43 @@ autoBurn.onclick = async () => {
 $("burn-now").onclick = async () => {
   if (!confirm("Close every tab and delete all history, cookies, site data, cache, download history and autofill? Passwords, bookmarks and Enki's settings are kept.")) return;
   await chrome.runtime.sendMessage({ type: "shields:burn" });
+};
+
+// Enki Browser: its version, and "Check for updates" (updates.js).
+const updateState = $("update-state");
+const checkUpdates = $("check-updates");
+const restartUpdate = $("restart-update");
+const downloadUpdate = $("download-update");
+downloadUpdate.href = DOWNLOAD;
+function showUpdates(s, checked) {
+  $("version").textContent = s.running ? `Enki Browser ${s.running}` : "Enki Browser";
+  restartUpdate.hidden = true;
+  downloadUpdate.hidden = true;
+  if (s.updater && s.ready) {
+    updateState.textContent = `Enki Browser ${s.ready} is downloaded and verified. Restart to use it; every window and tab comes back.`;
+    restartUpdate.hidden = false;
+  } else if (s.error) {
+    updateState.textContent = `Could not check for updates: ${s.error}`;
+  } else if (s.updater && s.updatesOff) {
+    updateState.textContent = "Updates are turned off on this computer (a file named no-update next to EnkiBrowser.exe).";
+  } else if (!s.updater && s.latest && s.running && compare(s.latest, s.running) > 0) {
+    updateState.textContent = `Enki Browser ${s.latest} is available. Install it the way you installed this one; your profile is kept.`;
+    downloadUpdate.hidden = false;
+  } else if (checked) {
+    updateState.textContent = s.updater ? "You have the latest version." : s.latest ? "You have the latest version." : "Could not find the latest release.";
+  } else {
+    updateState.textContent = s.updater ? "Updates download by themselves every couple of hours." : "This copy does not update by itself; check here for a new release.";
+  }
+}
+showUpdates(await status(), false);
+document.documentElement.dataset.updates = "ready"; // tests wait for this before reading or clicking
+checkUpdates.onclick = async () => {
+  checkUpdates.disabled = true;
+  updateState.textContent = "Checking… a download can take a minute.";
+  try { showUpdates(await check(), true); } finally { checkUpdates.disabled = false; }
+};
+restartUpdate.onclick = async () => {
+  restartUpdate.disabled = true;
+  updateState.textContent = "Restarting…";
+  await restart();
 };

@@ -77,9 +77,9 @@ const CREDITS = /Chromium Authors|Chromium open source project/;
  */
 const VERSION_LINE = /^Version \$1\$2 +\(\$3\) \$4 \$5$/;
 
-/** Ids to skip and the About version line's id, read from a build's en-US locale. */
-export function localeIds(localesDir) {
-  const pak = readPak(readFileSync(path.join(localesDir, "en-US.pak")));
+/** Ids to skip and the About version line's id, read from a build's English locale pak. */
+export function localeIds(englishPak) {
+  const pak = readPak(readFileSync(englishPak));
   const credits = new Set();
   let version = null;
   for (const r of pak.resources) {
@@ -110,11 +110,18 @@ export function rebrandPak(file, name, { credits = new Set(), version = null, pr
 }
 
 export function rebrandLocales(localesDir, name, productVersion = null) {
-  const ids = localeIds(localesDir);
-  if (productVersion && ids.version === null) throw new Error("the About page's version line was not found in en-US.pak");
+  const files = readdirSync(localesDir).filter((f) => f.endsWith(".pak")).map((f) => path.join(localesDir, f));
+  return rebrandLocaleFiles(files, path.join(localesDir, "en-US.pak"), name, productVersion);
+}
+
+/**
+ * The same for locale paks wherever they sit: macOS keeps one per language as
+ * <lang>.lproj/locale.pak inside Chromium's framework, rather than a locales/ folder.
+ */
+export function rebrandLocaleFiles(files, englishPak, name, productVersion = null) {
+  const ids = localeIds(englishPak);
+  if (productVersion && ids.version === null) throw new Error(`the About page's version line was not found in ${englishPak}`);
   const report = {};
-  for (const f of readdirSync(localesDir).filter((f) => f.endsWith(".pak"))) {
-    report[f] = rebrandPak(path.join(localesDir, f), name, { ...ids, productVersion });
-  }
+  for (const f of files) report[path.relative(path.dirname(path.dirname(f)), f)] = rebrandPak(f, name, { ...ids, productVersion });
   return report;
 }

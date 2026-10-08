@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statS
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { readPak, rebrandLocales, writePak } from "./rebrand.mjs";
+import { readPak, rebrandLocaleFiles, rebrandLocales, writePak } from "./rebrand.mjs";
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const upstream = JSON.parse(readFileSync(path.join(root, "upstream.json"), "utf8"));
@@ -186,7 +186,8 @@ export async function addExtensions(app) {
   const shield = withKey(shieldDir, "shield-extension.pub");
   console.log(`  Enki Shield id: ${shield.id}`);
   patchBlocker(blockerDir, shield.id);
-  writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id }));
+  // Its settings page shows the Enki Browser version it shipped with ("Check for updates").
+  writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id, browser: pkg.version }));
 
   for (const dir of ["enki", "shield", "ublock-lite"]) freshWorker(path.join(app, "extensions", dir));
 
@@ -199,8 +200,11 @@ export async function addExtensions(app) {
  * "Chromium" becomes "Enki Browser" across the UI, in every language, except where a string
  * credits the Chromium project; the About page's version line leads with Enki Browser's version.
  */
-export function rebrand(chromiumDir) {
-  const counts = Object.values(rebrandLocales(path.join(chromiumDir, "locales"), "Enki Browser", pkg.version));
+export function rebrand(chromiumDir, mac = null) {
+  const report = mac
+    ? rebrandLocaleFiles(mac.files, mac.english, "Enki Browser", pkg.version)
+    : rebrandLocales(path.join(chromiumDir, "locales"), "Enki Browser", pkg.version);
+  const counts = Object.values(report);
   console.log(`  renamed Chromium → Enki Browser in ${counts.reduce((a, b) => a + b, 0)} strings across ${counts.length} languages`);
 }
 

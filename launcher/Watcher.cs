@@ -204,7 +204,7 @@ static class Watcher
         Process.Start(new ProcessStartInfo(Path.Combine(root, "EnkiBrowser.exe"), Win.JoinArgs(args)) { UseShellExecute = false, WorkingDirectory = root });
     }
 
-    static string LastUsedProfile(string userData)
+    internal static string LastUsedProfile(string userData)
     {
         try
         {

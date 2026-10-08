@@ -113,6 +113,17 @@ const closeBrowser = async (b) => {
   await sleep(1000);
 };
 
+// The test install registers itself as the "Check for updates" host for this Windows user; put
+// back whatever was registered before (a real Enki Browser on a developer's machine).
+const hostKey = "HKCU\\Software\\Chromium\\NativeMessagingHosts\\io.github.danilogiles.enki_browser";
+const hostBefore = (() => { try { return /REG_SZ\s+(.+)$/m.exec(execFileSync("reg", ["query", hostKey, "/ve"], { stdio: ["ignore", "pipe", "ignore"] }).toString())?.[1].trim() ?? null; } catch { return null; } })();
+const restoreHost = () => {
+  try {
+    if (hostBefore) execFileSync("reg", ["add", hostKey, "/ve", "/d", hostBefore, "/f"], { stdio: "ignore" });
+    else execFileSync("reg", ["delete", hostKey, "/f"], { stdio: "ignore" });
+  } catch { /* nothing registered either way */ }
+};
+
 try {
   check("installed version is 0.0.1", current() === "0.0.1" && has("0.0.1"), current());
 
@@ -125,14 +136,24 @@ try {
   await updateOnce(manifest("old", { version: "0.0.1" }, good.privateKey));
   check("the same or an older version is not installed", !has("0.0.2") && /up to date/.test(lastLog()), lastLog());
 
-  // Start the browser, then update while it runs.
+  // Start the browser, then update while it runs, from "Check for updates" in Shields' settings:
+  // the page asks this browser's launcher (native messaging), which checks the feed now. Its own
+  // background check stays quiet: the checks above were minutes ago, within its interval.
   const genuine = manifest("genuine", {}, good.privateKey);
-  run(["--remote-debugging-port=9451", "about:blank"], { ENKI_BROWSER_NO_UPDATE: "1" });
+  run(["--remote-debugging-port=9451", "about:blank"], { ENKI_BROWSER_UPDATE_FEED: genuine });
   browser = await connect(9451);
   writeFileSync(path.join(install, "User Data", "enki-test-marker"), "keep me"); // exists once the browser has run
   const launcher1 = path.join(install, "app", "0.0.1", "EnkiBrowserLauncher.exe");
   const before = { hash: sha(launcher1), mtime: statSync(launcher1).mtimeMs, stub: sha(stub) };
-  await updateOnce(genuine);
+  const shieldId = JSON.parse(readFileSync(path.join(install, "app", "0.0.1", "version.json"), "utf8")).shieldExtensionId;
+  const settings = await browser.contexts()[0].newPage();
+  await settings.goto(`chrome-extension://${shieldId}/options.html`);
+  await settings.waitForFunction(() => document.documentElement.dataset.updates === "ready", null, { timeout: 15000 });
+  const shownBefore = await settings.textContent("#version");
+  await settings.click("#check-updates");
+  const offered = await settings.waitForFunction(() => !document.getElementById("restart-update").hidden, null, { timeout: 180000 }).then(() => true, () => false);
+  check("Shields' settings show the running version", /Enki Browser 0\.0\.1/.test(shownBefore ?? ""), shownBefore ?? "");
+  check("Check for updates downloads and verifies the release, and offers a restart", offered, (await settings.textContent("#update-state"))?.trim());
   check("a genuine release installs beside the running one", has("0.0.2") && current() === "0.0.2", lastLog());
   check("the running browser keeps its own version's files", chromes().length > 0 && chromes().every((p) => p.includes("\\app\\0.0.1\\")), `${chromes().length} processes in app\\0.0.1`);
   check("nothing existing was renamed, moved or rewritten", sha(launcher1) === before.hash && statSync(launcher1).mtimeMs === before.mtime && sha(stub) === before.stub);
@@ -257,6 +278,7 @@ try {
   console.log("--- update.log\n" + log());
   results.push({ name: "no unexpected error", ok: false });
 } finally {
+  restoreHost();
   if (browser) await closeBrowser(browser).catch(() => undefined);
   // Whatever this run started from its temp folder goes, even after a failure: a browser left on
   // the test's debugging port answered the next run's connect and made it test the wrong browser.
