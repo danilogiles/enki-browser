@@ -27,6 +27,9 @@ static class Launcher
             return 1;
         }
 
+        // Enki Shield's "Check for updates", through native messaging (NativeHost.cs).
+        if (NativeHost.IsCall(args)) return NativeHost.Run(root, appDir);
+
         // Check, verify and stage now, without opening a window (used by tests and scripts).
         if (args.Contains("--enki-update-check"))
         {
@@ -52,6 +55,9 @@ static class Launcher
             userData = portable ? Path.Combine(root, "User Data") : Path.Combine(Install.DataDir, "User Data");
         flags.Add("--user-data-dir=" + userData);
         Migration.Run(userData, root, appDir);
+        // "Check for updates" in Shields' settings reaches this copy, portable ones included (the
+        // registry entry names whichever copy started last, and the uninstaller removes it).
+        NativeHost.Register(root, appDir);
         ShellIdentity.RepairShortcuts(root);
         if (portable)
         {

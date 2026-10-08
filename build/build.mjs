@@ -142,7 +142,7 @@ const csc = (outFile, sources, extra = []) => run(findCsc(), [
 ]);
 // Shortcuts point at the stub, which updates never replace; each version brings its own launcher.
 csc(path.join(installRoot, "EnkiBrowser.exe"), [src("Stub.cs"), src("Common.cs"), src("Install.cs")]);
-csc(path.join(app, "EnkiBrowserLauncher.exe"), [src("Launcher.cs"), src("Updater.cs"), src("Migration.cs"), src("Watcher.cs"), src("ShellIdentity.cs"), src("Common.cs"), src("Install.cs")]);
+csc(path.join(app, "EnkiBrowserLauncher.exe"), [src("Launcher.cs"), src("Updater.cs"), src("NativeHost.cs"), src("Migration.cs"), src("Watcher.cs"), src("ShellIdentity.cs"), src("Common.cs"), src("Install.cs")]);
 // Signed before packaging, so the zip and the installer carry signed programs. chrome.exe is
 // included because rcedit changed it; the rest of Chromium is shipped as ungoogled-chromium built it.
 const signed = [path.join(installRoot, "EnkiBrowser.exe"), path.join(app, "EnkiBrowserLauncher.exe"), path.join(app, "chromium", "chrome.exe")].map(signFile);

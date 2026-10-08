@@ -50,34 +50,54 @@ static class Updater
     /// CheckInterval limit.
     public static void CheckAndStage(string root, string appDir, bool force)
     {
+        string error;
+        Check(root, appDir, force, TimeSpan.Zero, out error);
+    }
+
+    /// "Check for updates", clicked in the browser: checks now, waiting for a check another
+    /// launcher already has under way rather than skipping, and says what it found. Returns the
+    /// newest signed release (null if none could be read); `error` is why, if it failed.
+    public static Version CheckNow(string root, string appDir, out string error)
+    {
+        return Check(root, appDir, true, TimeSpan.FromMinutes(5), out error);
+    }
+
+    static Version Check(string root, string appDir, bool force, TimeSpan wait, out string error)
+    {
+        error = null;
         bool created;
         using (var mutex = new Mutex(true, "EnkiBrowserUpdater", out created))
         {
-            if (!created && !mutex.WaitOne(0)) return; // another launcher is already on it
-            try { CheckAndStageLocked(root, appDir, force); }
-            catch (Exception e) { Log(root, "check failed: " + e.Message); }
+            if (!created)
+            {
+                bool got;
+                try { got = mutex.WaitOne(wait); } catch (AbandonedMutexException) { got = true; }
+                if (!got) { error = "another update check is still running"; return null; } // another launcher is on it
+            }
+            try { return CheckAndStageLocked(root, appDir, force); }
+            catch (Exception e) { Log(root, "check failed: " + e.Message); error = e.Message; return null; }
             finally { try { mutex.ReleaseMutex(); } catch { } }
         }
     }
 
-    static void CheckAndStageLocked(string root, string appDir, bool force)
+    static Version CheckAndStageLocked(string root, string appDir, bool force)
     {
         Directory.CreateDirectory(UpdateDir(root));
         string stamp = Path.Combine(UpdateDir(root), "last-check");
-        if (!force && File.Exists(stamp) && DateTime.UtcNow - File.GetLastWriteTimeUtc(stamp) < CheckInterval) return;
+        if (!force && File.Exists(stamp) && DateTime.UtcNow - File.GetLastWriteTimeUtc(stamp) < CheckInterval) return null;
         File.WriteAllText(stamp, DateTime.UtcNow.ToString("o"));
 
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | (SecurityProtocolType)12288; // TLS 1.2 + 1.3
         Version current = ReadVersion(appDir);
         Manifest m = FindLatest();
-        if (m == null) { Log(root, "no signed release found"); return; }
-        if (m.Version <= current) { Log(root, "up to date (" + current + "; latest signed release " + m.Version + ")"); return; }
+        if (m == null) { Log(root, "no signed release found"); return null; }
+        if (m.Version <= current) { Log(root, "up to date (" + current + "; latest signed release " + m.Version + ")"); return m.Version; }
 
         string target = Path.Combine(root, "app", m.Version.ToString());
         if (File.Exists(Path.Combine(target, "EnkiBrowserLauncher.exe")) && ReadVersion(target) == m.Version)
         {
             SetCurrent(root, m.Version);
-            return; // already installed by an earlier check
+            return m.Version; // already installed by an earlier check
         }
 
         Log(root, "downloading " + m.Version + " from " + m.Url);
@@ -104,6 +124,7 @@ static class Updater
         Directory.Delete(work, true);
         SetCurrent(root, m.Version);
         Log(root, "installed " + m.Version + "; it opens the next time Enki Browser starts");
+        return m.Version;
     }
 
     /// Keeps the version `current` names, the newest other one (the way back) and the one this
