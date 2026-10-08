@@ -160,6 +160,11 @@ function profile(reply) {
   const about = readFileSync(path.join(root, "extension", "src", "sidepanel", "SettingsView.tsx"), "utf8");
   check("Settings › About has Ver o guia de novo (opens Shield welcome)", /Section title="About"/.test(about) && /Ver o guia de novo/.test(about) && /aacambieennepbgemjkpailjdkldbjjf\/welcome\.html/.test(about));
   check("Ver o guia de novo reopens welcome.html without clearing SEEN", /show-guide/.test(optionsJs) && /welcome\.html/.test(optionsJs) && !new RegExp(`remove.*${SEEN}|${SEEN}.*false`).test(optionsJs));
+  check("Settings › About has Check for updates (opens Shield settings at #check-updates)", /Check for updates/.test(about) && /aacambieennepbgemjkpailjdkldbjjf\/options\.html#check-updates/.test(about));
+  check("Shield settings start the check when opened at #check-updates", /location\.hash === "#check-updates"/.test(optionsJs) && /checkUpdates\.click\(\)/.test(optionsJs));
+  check("after a check the page says it checked just now", /Checked just now · \$\{latest\} is the latest\./.test(optionsJs));
+  const popupJs = readFileSync(path.join(root, "shield", "popup.js"), "utf8");
+  check("the Shields popup's Check for updates link starts the check", /options\.html#check-updates/.test(popupJs));
   check("buddy.svg ships with the guide", (() => { try { readFileSync(path.join(root, "shield", "icons", "buddy.svg")); return true; } catch { return false; } })());
 }
 

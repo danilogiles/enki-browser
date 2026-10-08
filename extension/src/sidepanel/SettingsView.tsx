@@ -460,13 +460,24 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                 <a className="underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">Privacy Policy</a> ·{" "}
                 <a className="underline" href="https://github.com/danilogiles/enki-browser" target="_blank" rel="noreferrer">Source code</a>
               </p>
-              <button
-                type="button"
-                className="mt-2 text-xs font-medium text-enki-400 underline"
-                onClick={() => chrome.tabs.create({ url: "chrome-extension://aacambieennepbgemjkpailjdkldbjjf/welcome.html" })}
-              >
-                Ver o guia de novo
-              </button>
+              <div className="mt-2 flex gap-4">
+                {/* Enki Shield owns the updater (only its origin may talk to the launcher), so this
+                    opens its settings at #check-updates, which starts the check at once. */}
+                <button
+                  type="button"
+                  className="text-xs font-medium text-enki-400 underline"
+                  onClick={() => chrome.tabs.create({ url: "chrome-extension://aacambieennepbgemjkpailjdkldbjjf/options.html#check-updates" })}
+                >
+                  Check for updates
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-enki-400 underline"
+                  onClick={() => chrome.tabs.create({ url: "chrome-extension://aacambieennepbgemjkpailjdkldbjjf/welcome.html" })}
+                >
+                  Ver o guia de novo
+                </button>
+              </div>
             </Section>
           </>
         )}

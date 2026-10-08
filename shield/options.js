@@ -93,7 +93,10 @@ function showUpdates(s, checked) {
     updateState.textContent = `Enki Browser ${s.latest} is available. Install it the way you installed this one; your profile is kept.`;
     downloadUpdate.hidden = false;
   } else if (checked) {
-    updateState.textContent = s.updater ? "You have the latest version." : s.latest ? "You have the latest version." : "Could not find the latest release.";
+    // Say that a check just happened: "You have the latest version" alone looked like nothing ran.
+    const latest = s.updater ? s.running : s.latest;
+    updateState.textContent = !s.updater && !s.latest ? "Checked just now · could not find the latest release."
+      : latest ? `Checked just now · ${latest} is the latest.` : "Checked just now · you have the latest version.";
   } else {
     updateState.textContent = s.updater ? "Updates download by themselves every couple of hours." : "This copy does not update by itself; check here for a new release.";
   }
@@ -120,6 +123,14 @@ checkUpdates.onclick = async () => {
   updateState.textContent = "Checking… a download can take a minute.";
   try { showUpdates(await check(), true); } finally { checkUpdates.disabled = false; }
 };
+// Settings › About in the Enki panel and the Shields popup open this page at #check-updates:
+// the check starts at once, as if the button had been clicked.
+if (location.hash === "#check-updates") {
+  history.replaceState(null, "", location.pathname); // a reload does not check again
+  checkUpdates.scrollIntoView({ block: "center" });
+  checkUpdates.focus();
+  checkUpdates.click();
+}
 restartUpdate.onclick = async () => {
   restartUpdate.disabled = true;
   updateState.textContent = "Restarting…";
