@@ -39,18 +39,27 @@ chrome.action.onClicked.addListener((tab) => {
   openPanel(tab.windowId).catch((e) => console.error(e));
 });
 
-chrome.commands.onCommand.addListener(async (command) => {
-  const win = await chrome.windows.getLastFocused();
-  if (command === "open-panel") { await openPanel(win.id); return; }
+// chrome.sidePanel.open only works inside the user gesture that fired the shortcut: any await
+// before it (the old windows.getLastFocused() lookup) drops the gesture, the call is rejected and
+// Ctrl+Shift+E did nothing useful. The command's tab carries the window id synchronously, so the
+// panel is opened first, in the same tick, and only then does anything get awaited.
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  let windowId = tab?.windowId;
+  const opening =
+    windowId !== undefined && (command === "open-panel" || command === "focus-composer")
+      ? openPanel(windowId)
+      : undefined;
+  if (windowId === undefined) windowId = (await chrome.windows.getLastFocused()).id;
+  if (command === "open-panel") { await (opening ?? openPanel(windowId)); return; }
   if (!["focus-composer", "stop-task", "new-chat"].includes(command)) return;
   // Focusing the composer should also open the panel if it is closed; the other two are only
   // meaningful for a task that is already running. A freshly opened panel needs a moment to
   // mount before its listener exists, so retry briefly instead of dropping the keystroke.
   const attempts = command === "focus-composer" ? 5 : 1;
-  if (command === "focus-composer") await openPanel(win.id);
+  if (command === "focus-composer") await (opening ?? openPanel(windowId));
   for (let i = 0; i < attempts; i++) {
     const delivered = await chrome.runtime
-      .sendMessage({ type: "enki:command", command, windowId: win.id })
+      .sendMessage({ type: "enki:command", command, windowId })
       .then(() => true, () => false);
     if (delivered) return;
     await new Promise((r) => setTimeout(r, 150));

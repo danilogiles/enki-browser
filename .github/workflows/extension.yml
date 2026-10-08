@@ -68,6 +68,10 @@ jobs:
       - run: xvfb-run -a npm run test:home
       - run: xvfb-run -a npm run test:resilience
       - run: xvfb-run -a npm run test:quality
+      # Extension shortcuts only fire on real key presses (not Playwright's or CDP's synthetic
+      # ones), so this suite types Ctrl+Shift+E through X with xdotool.
+      - run: sudo apt-get install -y -qq xdotool
+      - run: xvfb-run -a npm run test:shortcut
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
