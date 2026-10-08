@@ -116,11 +116,27 @@ function profile(reply) {
   check("step 1 primary is Tornar padrão (openDefaultApps)", /Tornar padrão/.test(html) && /openDefaultApps\(native\)/.test(js));
   check("step 2 uses Open Enki, Abrir Settings › Model, Get a key, Settings › About", /Open Enki/.test(html) && /Abrir Settings › Model/.test(js) && /Get a key →/.test(html) && /Settings › About/.test(html));
   check("step 2 Nemotron (NVIDIA · free) or Ollama; no OmniRoute", /chave grátis do Nemotron/.test(html) && /NVIDIA \(Nemotron\) · free/.test(html) && /Ollama \(local\)/.test(html) && !/OmniRoute/i.test(html));
-    check("Get a key → points at future docs/AI-SETUP.md on main", /Get a key →/.test(html) && /danilogiles\/enki-browser\/blob\/main\/docs\/AI-SETUP\.md/.test(html));
+  check("Get a key → points at future docs/AI-SETUP.md on main", /Get a key →/.test(html) && /danilogiles\/enki-browser\/blob\/main\/docs\/AI-SETUP\.md/.test(html));
   check("manifest open-panel is Ctrl+Shift+E / Command+Shift+E", /"open-panel"/.test(manifestCmd) && /Ctrl\+Shift\+E/.test(manifestCmd) && /Command\+Shift\+E/.test(manifestCmd));
   check("toolbar button title is Open Enki", /default_title:\s*"Open Enki"/.test(manifestCmd));
   check("welcome.js shows only the shortcut for this OS (Win/Linux vs Mac)", /isMac\(/.test(js) && /panelShortcutParts/.test(js) && /"Cmd"/.test(js) && /"Ctrl"/.test(js));
-  check("other-providers lists only presets that exist in settings.ts", /Claude, GPT, Gemini, OpenRouter/.test(html) && /id: "anthropic"/.test(settings) && /id: "openai"/.test(settings) && /id: "gemini"/.test(settings) && /id: "openrouter"/.test(settings));
+  {
+    // Exact Provider menu names (Ink's 02-ia mock), each one a preset label in settings.ts.
+    const names = ["Anthropic (Claude)", "OpenAI", "Google Gemini", "Groq", "OpenRouter"];
+    const line = html.match(/id="other-providers">[\s\S]*?<strong>([^<]*)<\/strong>/)?.[1] ?? "";
+    const listed = line.replace(/…$/, "").split(", ");
+    const labels = [...settings.matchAll(/^\s*label:\s*"([^"]+)"/gm)].map((m) => m[1]);
+    check("other-providers uses the exact Provider menu names", JSON.stringify(listed) === JSON.stringify(names), line);
+    check("each other-provider name is a preset label in settings.ts", listed.length > 0 && listed.every((n) => labels.includes(n)), `missing: ${listed.filter((n) => !labels.includes(n)).join(", ") || "none"}`);
+  }
+  {
+    // Helm 2026-10-08: Open Enki first, the shortcut second, with the chrome://extensions/shortcuts fallback.
+    const ai = html.match(/<div id="step-ai"[\s\S]*?<\/p>/)?.[0] ?? "";
+    const button = ai.indexOf("Open Enki");
+    const keys = ai.indexOf('id="shortcut-keys"');
+    check("step 2 offers Open Enki before the shortcut", button > 0 && keys > button, `Open Enki @${button}, shortcut @${keys}`);
+    check("step 2 shortcut fallback: Se não abrir … chrome://extensions/shortcuts (as text)", /Se não abrir, use <span class="keys" id="shortcut-keys">/.test(ai) && /ou configure em <code[^>]*>chrome:\/\/extensions\/shortcuts<\/code>/.test(ai) && !/href="chrome:/.test(html));
+  }
   check("Abrir Settings › Model opens ?view=settings on the Enki panel", /other-providers/.test(html) && /openAiSettings/.test(js) && /view=settings/.test(js) && /caelfocbikejgdamghjlkpmbbaobehlp/.test(js));
   const app = readFileSync(path.join(root, "extension", "src", "sidepanel", "App.tsx"), "utf8");
   check("App.tsx honours ?view=settings (Settings tab; Model is default)", /PAGE_OPEN_SETTINGS/.test(app) && /get\("view"\) === "settings"/.test(app));

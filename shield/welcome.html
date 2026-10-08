@@ -46,6 +46,7 @@
     p.lead { font-size: 14px; line-height: 1.55; color: var(--muted); }
     p.lead strong { color: var(--text); font-weight: 600; }
     code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+    code.shortcuts-url { color: var(--muted); }
     kbd {
       font-family: var(--mono); font-size: 12px; color: var(--text); background: var(--panel-2);
       border: 1px solid #33404d; border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; white-space: nowrap;
@@ -66,9 +67,8 @@
     .keys { white-space: nowrap; color: var(--dim); }
     .keys kbd { margin: 0 1px; }
     .byom {
-      margin-top: 12px; font-size: 12.5px; line-height: 1.45; color: var(--dim);
-      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-      background: none; border: 0; font: inherit; padding: 0; cursor: pointer; text-align: left;
+      display: block; margin-top: 12px; background: none; border: 0; font: inherit; padding: 0;
+      font-size: 12.5px; line-height: 1.45; color: var(--dim); cursor: pointer; text-align: left;
     }
     .byom strong { color: var(--muted); font-weight: 600; }
     .byom .where { color: var(--accent); font-weight: 600; }
@@ -126,12 +126,12 @@
 
     <div id="step-ai" class="card-body" hidden>
       <h1>Configure o assistente</h1>
-      <p class="lead">Para começar, pegue uma <strong>chave grátis do Nemotron</strong> (sem cartão) ou use o <strong>Ollama</strong> no seu computador. Abra o painel com <span class="keys" id="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span> ou pelo botão <strong>Open Enki</strong>.</p>
+      <p class="lead">Para começar, pegue uma <strong>chave grátis do Nemotron</strong> (sem cartão) ou use o <strong>Ollama</strong> no seu computador. Abra o painel pelo botão <strong>Open Enki</strong>. Se não abrir, use <span class="keys" id="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span> ou configure em <code class="shortcuts-url">chrome://extensions/shortcuts</code>.</p>
       <div class="options">
         <div class="opt"><b>Nemotron</b><span>Chave grátis, sem cartão · Provider <strong>NVIDIA (Nemotron) · free</strong></span><br><span class="tag">Precisa de chave</span></div>
         <div class="opt"><b>Ollama</b><span>Modelo no seu computador · <strong>Ollama (local)</strong></span><br><span class="tag">Local</span></div>
       </div>
-      <button type="button" class="byom" id="other-providers">Ou use outro provedor: <strong>Claude, GPT, Gemini, OpenRouter…</strong> <span class="where">→</span></button>
+      <button type="button" class="byom" id="other-providers">Ou use outro provedor: <strong>Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter…</strong> <span class="where">→</span></button>
       <a class="link" id="key-help" href="https://github.com/danilogiles/enki-browser/blob/main/docs/AI-SETUP.md" target="_blank" rel="noreferrer">Get a key →</a>
     </div>
 
