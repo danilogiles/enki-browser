@@ -45,6 +45,7 @@
     h1 { font-size: 22px; font-weight: 650; letter-spacing: -.015em; margin-bottom: 8px; }
     p.lead { font-size: 14px; line-height: 1.55; color: var(--muted); }
     p.lead strong { color: var(--text); font-weight: 600; }
+    code { font-family: var(--mono); font-size: 12px; color: var(--text); }
     kbd {
       font-family: var(--mono); font-size: 12px; color: var(--text); background: var(--panel-2);
       border: 1px solid #33404d; border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; white-space: nowrap;
@@ -62,6 +63,16 @@
       color: var(--accent); text-decoration: none; background: none; border: 0; font-family: inherit; cursor: pointer; padding: 0;
     }
     .link:hover { text-decoration: underline; text-underline-offset: 2px; }
+    .keys { white-space: nowrap; color: var(--dim); }
+    .keys kbd { margin: 0 1px; }
+    .byom {
+      margin-top: 12px; font-size: 12.5px; line-height: 1.45; color: var(--dim);
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      background: none; border: 0; font: inherit; padding: 0; cursor: pointer; text-align: left;
+    }
+    .byom strong { color: var(--muted); font-weight: 600; }
+    .byom .where { color: var(--accent); font-weight: 600; }
+    .byom:hover strong { color: var(--text); }
     .others { display: block; margin-top: 10px; }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
     .chip {
@@ -115,13 +126,13 @@
 
     <div id="step-ai" class="card-body" hidden>
       <h1>Configure o assistente</h1>
-      <p class="lead">Para começar, pegue uma <strong>chave grátis do Nemotron</strong> (sem cartão) ou use o <strong>Ollama</strong> no seu computador. Abra o painel com <kbd id="shortcut">Ctrl+Shift+E</kbd> ou pelo ícone do Enki.</p>
+      <p class="lead">Para começar, pegue uma <strong>chave grátis do Nemotron</strong> (sem cartão) ou use o <strong>Ollama</strong> no seu computador. Abra o painel com <span class="keys" id="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span> ou pelo botão <strong>Open Enki</strong>.</p>
       <div class="options">
-        <div class="opt"><b>Nemotron</b><span>Chave grátis, sem cartão</span><br><span class="tag">Precisa de chave</span></div>
-        <div class="opt"><b>Ollama</b><span>Modelo no seu computador</span><br><span class="tag">Local</span></div>
+        <div class="opt"><b>Nemotron</b><span>Chave grátis, sem cartão · Provider <strong>NVIDIA (Nemotron) · free</strong></span><br><span class="tag">Precisa de chave</span></div>
+        <div class="opt"><b>Ollama</b><span>Modelo no seu computador · <strong>Ollama (local)</strong></span><br><span class="tag">Local</span></div>
       </div>
-      <button type="button" class="link others" id="other-providers">Ou use outro provedor: Claude, GPT, Gemini, OpenRouter…</button>
-      <a class="link" id="key-help" href="https://github.com/danilogiles/enki-browser/blob/main/docs/AI-SETUP.md" target="_blank" rel="noreferrer">Como obter a chave →</a>
+      <button type="button" class="byom" id="other-providers">Ou use outro provedor: <strong>Claude, GPT, Gemini, OpenRouter…</strong> <span class="where">→</span></button>
+      <a class="link" id="key-help" href="https://github.com/danilogiles/enki-browser/blob/main/docs/AI-SETUP.md" target="_blank" rel="noreferrer">Get a key →</a>
     </div>
 
     <div id="step-shield" class="card-body" hidden>
@@ -140,7 +151,7 @@
       <button type="button" class="btn btn-secondary" id="default-next" hidden>Agora não</button>
       <button type="button" class="btn btn-primary" id="primary">Tornar padrão</button>
     </div>
-    <div class="note"><img src="icons/buddy.svg" alt="">Você pode reabrir em Configurações → Sobre.</div>
+    <div class="note"><img src="icons/buddy.svg" alt="">Você pode reabrir em Settings › About.</div>
   </section>
   <script type="module" src="welcome.js"></script>
 </body>

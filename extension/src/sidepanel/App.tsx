@@ -35,7 +35,10 @@ const MODE_KEY = "enki:mode";
  * page: it asks the question at once in Ask mode, starts a fresh chat instead of reopening the
  * panel's, and leaves the panel's current chat and mode alone.
  */
-const PAGE_QUERY = new URLSearchParams(location.search).get("q")?.trim() || null;
+const PAGE_PARAMS = new URLSearchParams(location.search);
+const PAGE_QUERY = PAGE_PARAMS.get("q")?.trim() || null;
+/** First-run guide and similar entry points open Settings › Model directly. */
+const PAGE_OPEN_SETTINGS = PAGE_PARAMS.get("view") === "settings";
 
 function nowLine(): string {
   const now = new Date();
@@ -63,7 +66,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   const isolated = !!PAGE_QUERY;
   const asPage = isolated || host === "page";
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [view, setView] = useState<"chat" | "settings" | "logs">("chat");
+  const [view, setView] = useState<"chat" | "settings" | "logs">(PAGE_OPEN_SETTINGS ? "settings" : "chat");
   const [mode, setMode] = useState<Mode>("ask");
   // Connected apps (Settings → Connections) and saved tasks, kept current while the panel is open.
   const [apps, setApps] = useState<Connection[]>([]);

@@ -114,12 +114,16 @@ function profile(reply) {
   check("skip reads Pular guia and finishes the whole flow", /id="skip"/.test(html) && /Pular guia/.test(html) && /\$\("skip"\)\.addEventListener\("click", finish\)/.test(js) && /window\.close\(\)/.test(js));
   check("Agora não only advances to the next step", /id="default-next"/.test(html) && /Agora não/.test(html) && /\$\("default-next"\)\.addEventListener\("click", next\)/.test(js));
   check("step 1 primary is Tornar padrão (openDefaultApps)", /Tornar padrão/.test(html) && /openDefaultApps\(native\)/.test(js));
-  check("step 2 Nemotron key or Ollama cards", /chave grátis do Nemotron/.test(html) && /Nemotron/.test(html) && /Ollama/.test(html) && /Precisa de chave/.test(html));
-  check("step 2 Como obter a chave → future docs/AI-SETUP.md on main", /Como obter a chave/.test(html) && /danilogiles\/enki-browser\/blob\/main\/docs\/AI-SETUP\.md/.test(html));
+  check("step 2 uses Open Enki, Abrir Settings › Model, Get a key, Settings › About", /Open Enki/.test(html) && /Abrir Settings › Model/.test(js) && /Get a key →/.test(html) && /Settings › About/.test(html));
+  check("step 2 Nemotron (NVIDIA · free) or Ollama; no OmniRoute", /chave grátis do Nemotron/.test(html) && /NVIDIA \(Nemotron\) · free/.test(html) && /Ollama \(local\)/.test(html) && !/OmniRoute/i.test(html));
+    check("Get a key → points at future docs/AI-SETUP.md on main", /Get a key →/.test(html) && /danilogiles\/enki-browser\/blob\/main\/docs\/AI-SETUP\.md/.test(html));
   check("manifest open-panel is Ctrl+Shift+E / Command+Shift+E", /"open-panel"/.test(manifestCmd) && /Ctrl\+Shift\+E/.test(manifestCmd) && /Command\+Shift\+E/.test(manifestCmd));
-  check("welcome.js shows only the shortcut for this OS (Win/Linux vs Mac)", /isMac\(/.test(js) && /Cmd\+Shift\+E/.test(js) && /Ctrl\+Shift\+E/.test(js) && /panelShortcut/.test(js));
+  check("toolbar button title is Open Enki", /default_title:\s*"Open Enki"/.test(manifestCmd));
+  check("welcome.js shows only the shortcut for this OS (Win/Linux vs Mac)", /isMac\(/.test(js) && /panelShortcutParts/.test(js) && /"Cmd"/.test(js) && /"Ctrl"/.test(js));
   check("other-providers lists only presets that exist in settings.ts", /Claude, GPT, Gemini, OpenRouter/.test(html) && /id: "anthropic"/.test(settings) && /id: "openai"/.test(settings) && /id: "gemini"/.test(settings) && /id: "openrouter"/.test(settings));
-  check("other-providers and Abrir configurações da IA open the Enki panel", /other-providers/.test(html) && /Abrir configurações da IA/.test(js) && /openAiSettings/.test(js) && /caelfocbikejgdamghjlkpmbbaobehlp/.test(js));
+  check("Abrir Settings › Model opens ?view=settings on the Enki panel", /other-providers/.test(html) && /openAiSettings/.test(js) && /view=settings/.test(js) && /caelfocbikejgdamghjlkpmbbaobehlp/.test(js));
+  const app = readFileSync(path.join(root, "extension", "src", "sidepanel", "App.tsx"), "utf8");
+  check("App.tsx honours ?view=settings (Settings tab; Model is default)", /PAGE_OPEN_SETTINGS/.test(app) && /get\("view"\) === "settings"/.test(app));
   check("step 3 Shield chips match the mock", /Trackers bloqueados/.test(html) && /Anúncios bloqueados/.test(html));
   check("0.8.6 import step is a commented placeholder only", /0\.8\.6/.test(js) && /Importar favoritos/.test(js) && !/id="step-import"/.test(html));
   check("Ink mock tokens: accent #38bdf8, panel #1e1e1e, buddy logo", /#38bdf8/.test(html) && /#1e1e1e/.test(html) && /icons\/buddy\.svg/.test(html));
@@ -137,6 +141,8 @@ function profile(reply) {
   const optionsHtml = readFileSync(path.join(root, "shield", "options.html"), "utf8");
   const optionsJs = readFileSync(path.join(root, "shield", "options.js"), "utf8");
   check("Shield settings has Ver o guia de novo under Enki Browser", /id="show-guide"/.test(optionsHtml) && /Ver o guia de novo/.test(optionsHtml));
+  const about = readFileSync(path.join(root, "extension", "src", "sidepanel", "SettingsView.tsx"), "utf8");
+  check("Settings › About has Ver o guia de novo (opens Shield welcome)", /Section title="About"/.test(about) && /Ver o guia de novo/.test(about) && /aacambieennepbgemjkpailjdkldbjjf\/welcome\.html/.test(about));
   check("Ver o guia de novo reopens welcome.html without clearing SEEN", /show-guide/.test(optionsJs) && /welcome\.html/.test(optionsJs) && !new RegExp(`remove.*${SEEN}|${SEEN}.*false`).test(optionsJs));
   check("buddy.svg ships with the guide", (() => { try { readFileSync(path.join(root, "shield", "icons", "buddy.svg")); return true; } catch { return false; } })());
 }

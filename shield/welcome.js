@@ -27,14 +27,28 @@ function isMac() {
   return /Mac|iPhone|iPad|iPod/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
 }
 
-function panelShortcut() {
+function panelShortcutParts() {
   // extension/manifest.config.ts → commands["open-panel"]: Ctrl+Shift+E / Command+Shift+E
-  return isMac() ? "Cmd+Shift+E" : "Ctrl+Shift+E";
+  return isMac() ? ["Cmd", "Shift", "E"] : ["Ctrl", "Shift", "E"];
+}
+
+function paintShortcut() {
+  const host = $("shortcut-keys");
+  if (!host) return;
+  const parts = panelShortcutParts();
+  host.replaceChildren(...parts.flatMap((part, i) => {
+    const nodes = [];
+    if (i) nodes.push(document.createTextNode("+"));
+    const k = document.createElement("kbd");
+    k.textContent = part;
+    nodes.push(k);
+    return nodes;
+  }));
 }
 
 function openAiSettings() {
-  // Side panel Settings has no deep link; open the panel page so the user can hit Settings → Model.
-  chrome.tabs.create({ url: `chrome-extension://${ENKI_ID}/src/sidepanel/index.html` });
+  // Opens the Enki side-panel document at Settings › Model (?view=settings; Model is the default tab).
+  chrome.tabs.create({ url: `chrome-extension://${ENKI_ID}/src/sidepanel/index.html?view=settings` });
 }
 
 function paintProgress() {
@@ -79,7 +93,7 @@ function paintDefault() {
 }
 
 function paintAi() {
-  $("shortcut").textContent = panelShortcut();
+  paintShortcut();
 }
 
 function paintFoot() {
@@ -94,7 +108,7 @@ function paintFoot() {
   primary.hidden = false;
   if (step === "ai") {
     paintAi();
-    primary.textContent = "Abrir configurações da IA";
+    primary.textContent = "Abrir Settings › Model";
     return;
   }
   // shield
@@ -164,6 +178,6 @@ window.addEventListener("focus", async () => {
 });
 
 status = await defaultStatus(native);
-$("shortcut").textContent = panelShortcut();
+paintShortcut();
 show(0);
 document.documentElement.dataset.ready = "true";
