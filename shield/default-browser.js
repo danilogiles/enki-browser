@@ -1,15 +1,18 @@
-// "Make Enki Browser your default browser", asked once.
+// First-run guide (welcome.html): asked once per profile.
 //
 // Chromium's own "Chromium isn't your default browser" bar stays off (--no-default-browser-check
 // in config/flags.txt): it would come back at every start. Instead, the first time Enki Browser
-// starts as an installed browser on Windows, Shield opens one page (welcome.html) offering to open
-// Windows' Default apps settings, where the user picks Enki Browser. It never opens again in that
-// profile, whatever the answer, and "Make default" stays available in Shield's settings.
+// starts, Shield opens one short guide (welcome.html): make Enki the default (Windows), set up
+// the AI, and a one-line Shield summary. It never opens again in that profile, whatever the
+// answer. "Make default" and "Ver o guia de novo" stay available in Shield's settings.
 //
 // Whether Enki Browser is registered and already the default is asked of the launcher
 // (launcher/NativeHost.cs, "default-status"), which only reads the registry on this computer.
-// Nothing goes over the network. No launcher to ask (Linux, macOS, a portable copy, an older
-// launcher) means no page; Chromium's settings keep their own "Make default" button there.
+// Nothing goes over the network. A Windows install that is not registered yet (first start after
+// a self-update that still has to sync) waits and is asked again next start. Linux, macOS and
+// portable copies still get the guide once; step 1 just skips the Windows Settings button.
+//
+// 0.8.6 will insert an "Importar favoritos" step between default-browser and AI (see welcome.js).
 
 export const SEEN = "defaultBrowserCardShown";
 export const PAGE = "welcome.html";
@@ -31,11 +34,11 @@ export async function openDefaultApps(native) {
 }
 
 /**
- * Decides once per profile whether to show the page. Returns what happened: "seen" (already
- * decided), "unavailable" (no registered install to ask about; asked again next start, since a
- * self-update registers the browser on the start after the update), "default" (nothing to ask),
- * or "shown". The decision is stored before the page opens, so a crash or a second start never
- * shows it twice. Concurrent calls (onInstalled and onStartup on the same start) share one run.
+ * Decides once per profile whether to show the guide. Returns what happened: "seen" (already
+ * decided), "unavailable" (Windows install not registered yet; asked again next start, since a
+ * self-update registers the browser on the start after the update), or "shown". The decision is
+ * stored before the page opens, so a crash or a second start never shows it twice. Concurrent
+ * calls (onInstalled and onStartup on the same start) share one run.
  */
 export function welcomeOnce({ native, storage, openPage }) {
   let running = null;
@@ -43,9 +46,9 @@ export function welcomeOnce({ native, storage, openPage }) {
     const stored = await storage.get(SEEN);
     if (stored?.[SEEN]) return "seen";
     const status = await defaultStatus(native);
-    if (!status || !status.registered || status.portable) return "unavailable";
+    // Launcher present, not portable, not registered: wait for Install.SyncRegistration.
+    if (status && !status.registered && !status.portable) return "unavailable";
     await storage.set({ [SEEN]: Date.now() });
-    if (status.isDefault) return "default";
     await openPage(PAGE);
     return "shown";
   }

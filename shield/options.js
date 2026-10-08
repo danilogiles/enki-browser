@@ -125,3 +125,9 @@ restartUpdate.onclick = async () => {
   updateState.textContent = "Restarting…";
   await restart();
 };
+
+// Re-open the first-run guide (welcome.html). Does not clear the once-only flag;
+// finishing or skipping still sends nothing out.
+$("show-guide").onclick = () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+};

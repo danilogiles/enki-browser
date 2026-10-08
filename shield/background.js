@@ -114,7 +114,7 @@ async function start() {
 chrome.runtime.onInstalled.addListener(start);
 chrome.runtime.onStartup.addListener(start);
 
-// "Make Enki Browser your default browser", once per profile (default-browser.js).
+// First-run guide (welcome.html): once per profile (default-browser.js).
 const welcome = welcomeOnce({
   native,
   storage: chrome.storage.local,
