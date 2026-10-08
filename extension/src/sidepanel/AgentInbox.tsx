@@ -1,0 +1,147 @@
+/**
+ * Receive tabs (0.9) in the side panel, after Ink's mocks 02-aviso-painel and 04-cartao-resumo:
+ * the notice for each waiting packet (Aceitar / Recusar) and the summary card of an accepted one.
+ *
+ * Everything shown here came from an agent and is untrusted plain text, rendered as React text
+ * (textContent), never as HTML or Markdown. None of it is added to the conversation or handed to
+ * the assistant or Act on its own: only "Perguntar ao Enki" on a summary card sends that card to
+ * the assistant, in Ask mode, wrapped as untrusted data (lib/a2a/ask.js). Nothing is shown in
+ * incognito windows.
+ */
+import { useEffect, useState } from "react";
+import { MessageCircleQuestion, ShieldAlert, Square, X } from "lucide-react";
+import { AGENT_COLORS } from "../lib/a2a/policy.js";
+import { bundleForAssistant } from "../lib/a2a/ask.js";
+import { K, request, type AgentRecord, type Notice, type SummaryCard } from "../lib/a2a/store";
+import { AgentChip } from "./AgentsTab";
+
+const shortPath = (url: string) => {
+  try {
+    const u = new URL(url);
+    const rest = u.pathname === "/" ? "" : u.pathname;
+    return rest.length > 28 ? rest.slice(0, 27) + "…" : rest;
+  } catch { return ""; }
+};
+
+type Props = {
+  /** Sends the user's fixed question plus the wrapped card to the assistant (App.send, Ask mode). */
+  onAsk?: (question: string, untrusted: string) => void;
+  /** False while a turn runs or no provider is set up. */
+  canAsk?: boolean;
+};
+
+export function AgentInbox({ onAsk, canAsk = true }: Props = {}) {
+  const [pending, setPending] = useState<Notice[]>([]);
+  const [cards, setCards] = useState<SummaryCard[]>([]);
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [windowId, setWindowId] = useState<number | undefined>(undefined);
+  const [incognito, setIncognito] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const override = Number(new URLSearchParams(location.search).get("window"));
+    (override ? chrome.windows.get(override) : chrome.windows.getCurrent()).then((w) => { setWindowId(w.id); setIncognito(w.incognito); }, () => setIncognito(false));
+    const load = async () => {
+      const v = await chrome.storage.local.get([K.pending, K.cards, K.agents]);
+      setPending((v[K.pending] as Notice[]) ?? []);
+      setCards((v[K.cards] as SummaryCard[]) ?? []);
+      setAgents((v[K.agents] as AgentRecord[]) ?? []);
+    };
+    void load();
+    const onChange = (c: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "local" && (K.pending in c || K.cards in c || K.agents in c)) void load();
+    };
+    chrome.storage.onChanged.addListener(onChange);
+    return () => chrome.storage.onChanged.removeListener(onChange);
+  }, []);
+
+  if (incognito || (!pending.length && !cards.length)) return null;
+  const agentOf = (id: string) => agents.find((a) => a.id === id);
+  const act = async (msg: Parameters<typeof request>[0]) => {
+    setError("");
+    const r = await request(msg);
+    if (!r.ok) setError(r.error);
+  };
+
+  return (
+    <div className="mx-3 mb-2 max-h-[55%] space-y-3 overflow-y-auto" aria-label="Pacotes de agentes">
+      {error && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</div>}
+      {pending.map((n) => {
+        const agent = agentOf(n.agentId);
+        if (!agent) return null;
+        const color = AGENT_COLORS[agent.color] ?? AGENT_COLORS.blue;
+        return (
+          <div key={n.id} data-notice={n.id}>
+            <p className="mb-2 text-center text-xs text-zinc-500">Pacote novo de um agente pareado</p>
+            <article className="rounded-xl border border-ink-700 bg-ink-900 px-4 py-3.5 shadow-sm" style={{ borderLeft: `3px solid ${color}` }}>
+              <div className="flex items-center gap-2">
+                <AgentChip name={agent.name} color={agent.color} />
+                <span className="text-[11px] text-zinc-500">quer abrir um grupo de abas</span>
+              </div>
+              <h2 className="mt-3 break-words text-base font-semibold leading-snug text-zinc-100">{n.title}</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">{n.links.length} {n.links.length === 1 ? "link" : "links"} · só http(s) · texto puro</p>
+              <ol className="mt-3 space-y-2">
+                {n.links.map((l, i) => (
+                  <li key={l.url} className="flex items-center gap-2.5 rounded-lg border border-ink-700 bg-ink-800/60 px-2.5 py-2">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-enki-400/15 text-[10px] font-bold text-enki-400">{i + 1}</span>
+                    <span className="min-w-0 truncate font-mono text-[13px] text-zinc-200" title={l.url}>
+                      {l.host}<span className="text-zinc-500">{shortPath(l.url)}</span>
+                    </span>
+                    {l.idn && <span className="shrink-0 rounded bg-amber-500/15 px-1 text-[10px] text-amber-300" title="Domínio internacional, mostrado em punycode">IDN</span>}
+                  </li>
+                ))}
+              </ol>
+              {!n.shieldChecked && (
+                <div role="note" data-testid="shield-unchecked" className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-300">
+                  <ShieldAlert size={14} className="mt-px shrink-0 text-amber-500" aria-hidden />
+                  <span><b className="font-semibold text-amber-500">Links não verificados pelo Enki Shield.</b> Esta extensão está fora do Enki Browser, sem o Shield. As abas abrem mesmo assim na página de espera e nada carrega antes do Abrir.</span>
+                </div>
+              )}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" className="rounded-lg bg-enki-400 py-2.5 text-sm font-semibold text-ink-950 shadow-sm transition hover:brightness-110" onClick={() => void act({ type: "agents:accept", id: n.id, windowId })}>Aceitar</button>
+                <button type="button" className="rounded-lg border border-ink-700 py-2.5 text-sm font-semibold text-zinc-400 transition hover:bg-ink-800 hover:text-zinc-200" onClick={() => void act({ type: "agents:decline", id: n.id })}>Recusar</button>
+              </div>
+              <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-500">Quem mandou não fica sabendo se você aceitar ou recusar. Nada abre até o Aceitar.</p>
+            </article>
+          </div>
+        );
+      })}
+      {cards.map((c) => {
+        const agent = agentOf(c.agentId);
+        if (!agent) return null;
+        return (
+          <div key={c.id} data-card={c.id}>
+            <p className="mb-2 text-center text-xs text-zinc-500">Grupo aberto · <span className="font-semibold text-emerald-400">{c.tabs} {c.tabs === 1 ? "aba" : "abas"} na página de espera</span></p>
+            <article className="overflow-hidden rounded-xl border border-ink-700 bg-ink-900" aria-label="Cartão de dados">
+              <div className="flex items-center justify-between border-b border-purple-400/20 bg-purple-500/10 px-4 py-2">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-purple-300"><Square size={11} strokeWidth={2.5} aria-hidden />Dado · resumo</span>
+                <span className="flex items-center gap-2 text-[10px] text-zinc-500">não confiável
+                  <button type="button" aria-label="Fechar cartão" className="hover:text-zinc-200" onClick={() => void act({ type: "agents:dismiss-card", id: c.id })}><X size={12} /></button>
+                </span>
+              </div>
+              <div className="px-4 py-3.5">
+                <AgentChip name={agent.name} color={agent.color} />
+                <h2 className="mt-3 break-words text-base font-semibold leading-snug text-zinc-100">{c.title}</h2>
+                {c.summary && <p data-testid="summary" className="mt-1.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-zinc-400">{c.summary}</p>}
+                <ul className="mt-3 space-y-1.5">
+                  {c.hosts.map((h, i) => <li key={i} className="flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-800/60 px-2.5 py-1.5 font-mono text-xs text-zinc-200"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-enki-400" aria-hidden /><span className="min-w-0 truncate">{h}</span></li>)}
+                </ul>
+                {onAsk && (
+                  <button
+                    type="button" disabled={!canAsk}
+                    title="Manda o título, os domínios e o resumo pro assistente, marcados como dado não confiável, no modo Ask"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:bg-ink-800 hover:text-zinc-100 disabled:opacity-50"
+                    onClick={() => { const b = bundleForAssistant({ agentName: agent.name, title: c.title, summary: c.summary, hosts: c.hosts }); onAsk(b.question, b.data); }}
+                  >
+                    <MessageCircleQuestion size={12} aria-hidden />Perguntar ao Enki sobre o resumo
+                  </button>
+                )}
+              </div>
+            </article>
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">O resumo só vai pro assistente se você pedir. Cada aba fica em hold.html até você clicar em Abrir.</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

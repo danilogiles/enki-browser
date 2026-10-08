@@ -1,7 +1,11 @@
 /**
  * Enki background service worker. Deliberately thin: the agent runs inside the side panel page
- * (which stays alive while open); the worker only wires up how the panel gets opened.
+ * (which stays alive while open); the worker wires up how the panel gets opened, and runs
+ * Receive tabs (lib/a2a/receiver.ts), which must work while the panel is closed.
  */
+
+import { followShieldBurn, handleAgentRequest, isAgentRequest, pollNow, POLL_ALARM, syncAlarm, trustedSender } from "../lib/a2a/receiver";
+import { isShield } from "../lib/a2a/shield";
 
 const PANEL_PATH = "src/sidepanel/index.html";
 const hasSidePanel = typeof chrome.sidePanel !== "undefined";
@@ -88,3 +92,25 @@ if (overridesNewTab) {
     for (const delay of [0, 1500, 4000, 8000, 15000]) setTimeout(() => void reopenEarlyNewTabs(), delay);
   });
 }
+
+// ---- Receive tabs (0.9): off by default; the alarm exists only while it is on and paired.
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (!isAgentRequest(msg)) return;
+  if (!trustedSender(sender)) { reply({ ok: false, error: "not allowed" }); return; }
+  handleAgentRequest(msg).then(
+    (result) => reply({ ok: true, ...result }),
+    (e: unknown) => reply({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+  );
+  return true;
+});
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === POLL_ALARM) void pollNow(); });
+void syncAlarm();
+// Enki Shield's Burn also clears what Receive tabs remembers (not the pairings). Chromium has no
+// "browsing data cleared" event, so: the Shield says when it burned, and at each browser start
+// Enki asks it (covers a burn-on-close the Shield ran before Enki's worker was up). Only the
+// Shield's fixed id is listened to, and Enki re-asks the Shield instead of trusting the message.
+chrome.runtime.onMessageExternal.addListener((msg, sender) => {
+  if ((msg as { type?: unknown } | null)?.type !== "enki:burned") return;
+  void isShield(sender.id).then((ok) => (ok ? followShieldBurn() : false)).catch(() => undefined);
+});
+chrome.runtime.onStartup.addListener(() => { void followShieldBurn().catch(() => undefined); });

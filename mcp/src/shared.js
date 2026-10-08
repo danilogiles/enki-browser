@@ -20,4 +20,5 @@ export function toolInputSchema() {
 }
 
 export { formatErrors } from "../../extension/src/lib/a2a/validate-bundle.js";
-export { sealBundle, devPassthroughSealer, DEV_PASSTHROUGH_ALG } from "../../extension/src/lib/a2a/envelope.js";
+export { sealBundle } from "../../extension/src/lib/a2a/envelope.js";
+export { decodeCredential, sealerFromCredential, TABS_ALG } from "../../extension/src/lib/a2a/crypto.js";

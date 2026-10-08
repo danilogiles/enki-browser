@@ -1,0 +1,16 @@
+# Enki relay on Cloudflare Workers. Not deployed by this repository: see README.md.
+name = "enki-relay"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+# No request logs, no traces.
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "MAILBOX"
+class_name = "Mailbox"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Mailbox"]

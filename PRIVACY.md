@@ -28,6 +28,7 @@ included (`extension/`).
 | Nothing from voice input. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
 | Update checks | GitHub (the browser's release page) | About every two hours while the browser is open, and when you click *Check for updates* in Shields' settings (Windows). On macOS and Linux, only when you click it: one request for the latest release's number | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
+| Only if you turn on *Receive tabs from agents*: requests that fetch packets waiting for you, and the messages of a pairing | The relay **you** set in Settings → Agentes (self-hosted or a free-plan relay; the project runs none for you yet) | About once a minute while the switch is on and an agent is paired; during a pairing, every two seconds for at most five minutes | Off by default. Turn it off or unpair an agent at any time. See [Receiving tabs from agents](#receiving-tabs-from-agents-off-by-default) |
 
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:
 third-party cookies, known trackers and ads, and the local network address WebRTC would reveal.
@@ -42,6 +43,7 @@ third-party cookies, known trackers and ads, and the local network address WebRT
 | Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by your account: by Windows (in the portable version too), by the login keychain on macOS, by the system keyring on Linux |
 | Your voice, when you use Enki's microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
+| Keys of the agents you paired, packets waiting for your answer, and a log of the last 50 packets received | Enki's local extension storage and IndexedDB | The keys are created non-exportable and never leave the profile. Unpairing an agent deletes its keys, its waiting packets, its summary cards and its log lines. *Limpar histórico de abas recebidas* and Enki Shield's Burn clear the packets, cards and log but keep the pairings and keys. Clearing browsing data through the browser's settings does not touch this |
 | History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker; macOS: FileVault, in System Settings → Privacy & Security) to protect them if someone gets your disk |
 
 Updates change only the program: your profile — history, bookmarks, logins, Enki's settings and
@@ -51,6 +53,44 @@ and tabs.
 Nothing of this is synced or backed up by the project. Removing the browser and its profile
 folder (`%LOCALAPPDATA%\EnkiBrowser` on Windows, `~/Library/Application Support/Enki Browser` on
 macOS, `~/.config/enki-browser` on Linux) deletes it.
+
+## Receiving tabs from agents (off by default)
+
+From Enki Browser 0.9, an AI agent you set up yourself (for example a workflow in n8n or an
+assistant that uses Enki's open-source MCP server) can send you a packet with a title, a short
+summary and up to 10 links. Enki asks you first and opens nothing until you click *Aceitar*.
+
+- **Off by default.** Nothing below happens until you turn on *Receber abas de agentes* in
+  Settings → Agentes and pair an agent with a one-time code. You compare the same key
+  fingerprint on both sides before the pairing is saved.
+- **Outbound only.** Enki asks the relay for waiting packets; nothing can connect to your browser.
+  It never sends the relay or the agent anything about your tabs, your history or what you do,
+  and the agent is never told whether you accepted, declined or opened a packet.
+- **What the relay sees:** encrypted packets that all have the same size, the mailbox id of each
+  pairing (a random-looking value that is different for every pairing), the time of each request
+  and the IP address it comes from, as any server does. **Nothing else**: not the links, the title,
+  the summary or the agent's name. Packets are deleted as soon as Enki fetches them, or after 10
+  minutes. The reference relay (`relay/`) keeps no logs and can be self-hosted.
+- **What stays on your computer:** the pairing keys, packets waiting for your answer and a log of
+  the last 50 packets. Accepted links open as tabs on a local waiting page (`hold.html`) that loads
+  nothing from the site, not even its icon, until you click *Abrir*.
+- **Clearing that history.** *Limpar histórico de abas recebidas* in Settings → Agentes deletes the
+  waiting packets, the summary cards, the 50-packet log, each agent's "last packet" date, the
+  hourly counters and the seen nonces. The agents you paired and their keys stay (use *Desparear*
+  to drop a key). Enki Shield's *Burn all data* (and burn-when-the-browser-closes, at the next
+  start) clears the same history. Clearing browsing data through the browser's own settings
+  (`chrome://settings` and equivalents) does **not**: Chromium gives extensions no way to notice
+  that, and Enki does not claim it does. Unpairing an agent deletes only that agent's keys,
+  waiting packets, cards and log lines.
+- **Nothing in private windows.** Packets are never shown or opened in an Incognito window.
+- **The summary is data, not a command.** It is shown as plain text and only goes to Enki's AI
+  assistant if you click *Perguntar ao Enki sobre o resumo* on its card. That turn runs in Ask
+  mode and the summary is wrapped as untrusted data (the same "data, not instructions" rule as
+  page text). Nothing is sent to the model when you only accept or decline a packet.
+- **Without Enki Shield.** The Enki extension alone, installed in another browser that does not
+  ship Enki Shield, still receives packets, but the notice says clearly *Links não verificados
+  pelo Enki Shield*, the hold page says it again, and the tabs still wait on `hold.html` with
+  nothing loading from the site until you click *Abrir*.
 
 ## Google services
 

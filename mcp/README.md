@@ -5,9 +5,9 @@ agent hand you a short list of links as a tab group in [Enki Browser](../README.
 first; nothing opens unless you accept, and each tab waits on Enki's hold page until you click
 **Open**.
 
-> **Status: 0.9 preview.** The envelope encryption and pairing format is still being defined.
-> Until it lands, the server only runs in a **DEV-ONLY passthrough** mode that sends packets
-> **unencrypted and unsigned** to a relay on your own machine. Do not point it at a real relay.
+> **Status: 0.9 preview.** Every packet is encrypted to your Enki and signed with this agent's
+> key (format: [`docs/0.9-receber-abas.md`](../docs/0.9-receber-abas.md), appendix "Protocolo").
+> There is no unencrypted mode, not even for development.
 
 No dependencies, Node.js 20 or newer, MIT licensed. It runs from a checkout of this repository
 because it shares the schema (`protocol/`) and the validator (`extension/src/lib/a2a/`) with the
@@ -38,15 +38,28 @@ cd enki-browser/mcp
 npm test        # optional: runs the tests, no install needed
 ```
 
+### Pair with Enki
+
+Each agent gets its own pairing. In Enki: Settings → **Agentes** → turn on *Receber abas de
+agentes*, set the relay, click **Parear agente**. Within 5 minutes, on the agent's machine:
+
+```bash
+node ../scripts/send-tabs.mjs pair ENKI-XXXX-XXXX --name Helm --relay https://your-relay.example --key-file ~/.config/enki/helm.key
+```
+
+Both sides show the same 16-character fingerprint (`XXXX XXXX XXXX XXXX`). Compare it in full;
+confirm on the agent side and click **Confirmar** in Enki only if it matches. The key file
+(written `0600`, never printed) is this agent's secret: it holds its private keys, the relay URL and
+the mailbox id.
+
 Configuration is only through environment variables set in your MCP client's config. Nothing in a
 tool call can change it.
 
 | Variable | Meaning |
 |---|---|
-| `ENKI_RELAY_URL` | Relay base URL. Must be `https://`; plain `http://` only for `127.0.0.1`/`localhost`. Default `http://127.0.0.1:8788`. |
-| `ENKI_MAILBOX_ID` | Mailbox id from pairing with Enki. |
-| `ENKI_AGENT_KEY` or `ENKI_AGENT_KEY_FILE` | This agent's private key from pairing (pending the pairing format). Keep it in the client's secret store or a file only you can read; never in a chat, a prompt or the repository. |
-| `ENKI_DEV_PASSTHROUGH=1` | DEV-ONLY: send unencrypted, unsigned packets. Refused unless the relay is on loopback. |
+| `ENKI_AGENT_KEY_FILE` or `ENKI_AGENT_KEY` | Required. The agent key from pairing (`enki-agent-v1:…`): a path to the key file, or the key itself from the client's secret store. Never in a chat, a prompt or the repository. It carries the relay URL and mailbox id. |
+| `ENKI_RELAY_URL` | Optional; if set it must match the relay in the agent key. `https://`, or plain `http://` only for `127.0.0.1`/`localhost`. |
+| `ENKI_MAILBOX_ID` | Optional; if set it must match the mailbox in the agent key. |
 | `ENKI_MCP_DEBUG=1` | Log events to stderr: counts, sizes, status codes. Never titles, summaries or links. |
 
 Use the absolute path to `mcp/src/index.js` in your checkout below.
@@ -62,8 +75,7 @@ Use the absolute path to `mcp/src/index.js` in your checkout below.
       "command": "node",
       "args": ["/path/to/enki-browser/mcp/src/index.js"],
       "env": {
-        "ENKI_DEV_PASSTHROUGH": "1",
-        "ENKI_RELAY_URL": "http://127.0.0.1:8788"
+        "ENKI_AGENT_KEY_FILE": "/home/you/.config/enki/helm.key"
       }
     }
   }
@@ -80,7 +92,7 @@ Use the absolute path to `mcp/src/index.js` in your checkout below.
     "enki-tabs": {
       "command": "node",
       "args": ["/path/to/enki-browser/mcp/src/index.js"],
-      "env": { "ENKI_DEV_PASSTHROUGH": "1" }
+      "env": { "ENKI_AGENT_KEY_FILE": "/home/you/.config/enki/cursor.key" }
     }
   }
 }
@@ -121,13 +133,15 @@ type, switch the assistant to Act, change a setting, or learn what you did with 
   rejects the whole bundle.
 - **Identity.** There is no sender field. Enki knows who sent a bundle from the paired key that
   sealed it; the key comes only from this server's environment, never from a tool call.
+- **Encryption.** X25519 + HKDF-SHA-256 + AES-256-GCM to the browser key of that pairing, signed
+  with Ed25519 by this agent's key; Enki checks the signature before decrypting and refuses
+  anything unsigned or unencrypted.
 - **Relay.** It sees ciphertext of a fixed size, a random mailbox id and timing; it keeps a packet
   until Enki fetches it or for 10 minutes, then deletes it. Each packet carries a nonce and a
   timestamp inside the signed part, so Enki rejects replays and anything older than 10 minutes.
-  *(Pending the envelope format; the DEV-ONLY passthrough has none of the crypto guarantees.)*
 - **No telemetry.** The only network request is the POST to the relay you configured, with no
   cookies or identifying headers; redirects are refused. Nothing is logged unless
   `ENKI_MCP_DEBUG=1`, and then only metadata, to stderr.
 
-The threat model for this feature is Cloak's 0.9 threat model; report vulnerabilities privately
+The threat model for this feature is [`docs/0.9-threat-model.md`](../docs/0.9-threat-model.md); report vulnerabilities privately
 as described in [SECURITY.md](../SECURITY.md).

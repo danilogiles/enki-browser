@@ -1,0 +1,80 @@
+{
+  "$comment": "Test vectors for Enki 0.9 pairing (docs/0.9-receber-abas.md, Protocolo). Byte fields are hex; code is UTF-8. lp(x) = uint32 big-endian length of x, then x. commitment = SHA-256(utf8(\"enki-commit-v1\") || lp(agentEdPub) || lp(agentXPub) || lp(nA)). fingerprint = first 10 bytes of SHA-256(utf8(\"enki-pair-v1\") || lp(agentEdPub) || lp(agentXPub) || lp(nA) || lp(browserEdPub) || lp(browserXPub) || lp(nB) || lp(utf8(code))), Crockford base32 (0123456789ABCDEFGHJKMNPQRSTVWXYZ), 16 characters, 4 groups of 4 separated by single spaces. The public keys are the RFC 8032 (Ed25519, tests 1 and 2) and RFC 7748 (X25519, Alice and Bob) examples; any 32 bytes work since only their hash is used.",
+  "version": 1,
+  "crockford": [
+    {
+      "bytes": "",
+      "text": ""
+    },
+    {
+      "bytes": "00000000000000000000",
+      "text": "0000000000000000"
+    },
+    {
+      "bytes": "ffffffffffffffffffff",
+      "text": "ZZZZZZZZZZZZZZZZ"
+    },
+    {
+      "bytes": "0123456789abcdef0123",
+      "text": "04HMASW9NF6YY093"
+    }
+  ],
+  "cases": [
+    {
+      "name": "base",
+      "agentEdPub": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "agentXPub": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+      "nA": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "browserEdPub": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "browserXPub": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+      "nB": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "code": "ENKI-7K2M-9QXP",
+      "expected": {
+        "commitment": "ddc256cfc57b6de97446907cc066df57cfc5737b7cf41b5258fd0d9442250319",
+        "fingerprint": "226X 6KSE M73W 60K7"
+      }
+    },
+    {
+      "name": "different nB changes the fingerprint",
+      "agentEdPub": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "agentXPub": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+      "nA": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "browserEdPub": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "browserXPub": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+      "nB": "b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3",
+      "code": "ENKI-7K2M-9QXP",
+      "expected": {
+        "commitment": "ddc256cfc57b6de97446907cc066df57cfc5737b7cf41b5258fd0d9442250319",
+        "fingerprint": "NMN5 QAM1 9118 3WJ3"
+      }
+    },
+    {
+      "name": "different code changes the fingerprint",
+      "agentEdPub": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "agentXPub": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+      "nA": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "browserEdPub": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "browserXPub": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+      "nB": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "code": "ENKI-7K2M-9QXR",
+      "expected": {
+        "commitment": "ddc256cfc57b6de97446907cc066df57cfc5737b7cf41b5258fd0d9442250319",
+        "fingerprint": "24ZB HR41 9ZDG KZMN"
+      }
+    },
+    {
+      "name": "agent and browser keys swapped",
+      "agentEdPub": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "agentXPub": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+      "nA": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "browserEdPub": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "browserXPub": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+      "nB": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "code": "ENKI-7K2M-9QXP",
+      "expected": {
+        "commitment": "7554d54de74bddf5af9f51f73e5b83f16df73dc5afba2b911fff0867cfa91279",
+        "fingerprint": "MV4T MX0A 1EEG 1JC0"
+      }
+    }
+  ]
+}

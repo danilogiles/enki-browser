@@ -11,11 +11,23 @@
 // before anything else runs: Chromium gives extensions no moment at shutdown to do it then.
 
 export const AUTO_BURN = "shields:auto-burn";
+/** When Burn last ran (button or burn-on-close). Enki reads this so Receive tabs can clear its log. */
+export const BURNED_AT = "shields:burned-at";
 
 const EVERYTHING = {
   cache: true, cacheStorage: true, cookies: true, downloads: true, fileSystems: true, formData: true,
   history: true, indexedDB: true, localStorage: true, serviceWorkers: true, webSQL: true,
 };
+
+/** Tell Enki (Receive tabs) that a Burn just finished, so it can clear its local packet history. */
+async function tellEnkiBurned(at) {
+  try {
+    const ids = await fetch(chrome.runtime.getURL("ids.json")).then((r) => r.json()).catch(() => ({}));
+    if (typeof ids.enki === "string" && /^[a-p]{32}$/.test(ids.enki)) {
+      await chrome.runtime.sendMessage(ids.enki, { type: "enki:burned", at }).catch(() => {});
+    }
+  } catch { /* Enki may not be loaded yet; it re-asks on startup. */ }
+}
 
 /** Closes every tab, leaving one new tab, then deletes the browsing data. */
 export async function burnAll() {
@@ -24,6 +36,11 @@ export async function burnAll() {
   const others = (await chrome.tabs.query({})).filter((t) => t.id !== fresh.id).map((t) => t.id);
   if (others.length) await chrome.tabs.remove(others).catch(() => {});
   await chrome.browsingData.remove({ since: 0 }, EVERYTHING);
+  // After browsingData: Enki's storage is not touched by it (extension storage), so Enki clears
+  // its Receive-tabs history itself when it hears about this Burn.
+  const at = Date.now();
+  await chrome.storage.local.set({ [BURNED_AT]: at });
+  await tellEnkiBurned(at);
   return { closed: others.length };
 }
 
@@ -61,6 +78,9 @@ chrome.storage.session.get("shields:session").then(async (v) => {
       await closeRestoredTabs();
     }
     await chrome.browsingData.remove({ since: 0 }, { ...EVERYTHING, cookies: true });
+    const at = Date.now();
+    await chrome.storage.local.set({ [BURNED_AT]: at });
+    await tellEnkiBurned(at);
   }
 });
 

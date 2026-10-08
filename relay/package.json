@@ -1,0 +1,15 @@
+{
+  "name": "enki-relay",
+  "version": "0.9.0-dev",
+  "private": true,
+  "description": "Store-and-forward relay for Enki's Receive tabs: opaque envelopes per mailbox, deleted on fetch or after 10 minutes, no logs.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

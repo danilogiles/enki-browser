@@ -54,6 +54,10 @@ export default defineManifest({
     "storage",
     "debugger",
     "webNavigation",
+    // Receive tabs (0.9): a 1-minute poll while "Receber abas de agentes" is on, and naming and
+    // coloring the tab group an accepted packet opens. Nothing else.
+    "alarms",
+    "tabGroups",
   ],
   host_permissions: ["<all_urls>"],
   // On-device voice runs Whisper in WebAssembly (lib/voice); nothing else changes from the default.

@@ -5,10 +5,15 @@ import assert from "node:assert/strict";
 import { checkRelayUrl, DEFAULT_RELAY_URL, isLoopbackHost, loadConfig } from "../src/config.js";
 import { createServer, SUPPORTED_PROTOCOL_VERSIONS } from "../src/server.js";
 import { limits, schema, validateBundle } from "../src/shared.js";
-import { devPassthroughOpener, openEnvelope } from "../../extension/src/lib/a2a/envelope.js";
+import { openEnvelope } from "../../extension/src/lib/a2a/envelope.js";
+import { pairInProcess } from "../../extension/test/a2a-fixtures.mjs";
 
 const NOW = Date.UTC(2026, 9, 8, 15, 30);
-const devConfig = () => loadConfig({ ENKI_DEV_PASSTHROUGH: "1" });
+// A real pairing (both sides, in process): the server seals with the agent key, the test opens
+// with what Enki keeps for that agent.
+const P = await pairInProcess();
+const pairedConfig = () => loadConfig({ ENKI_AGENT_KEY: P.credential });
+const openAsEnki = (wire, now = NOW) => openEnvelope(wire, { opener: P.opener, validate: validateBundle, limits, seenNonce: () => false, now });
 const ARGS = {
   title: "Pneu de neve",
   summary: "Três opções.",
@@ -24,7 +29,7 @@ function fakeRelay(status = 202) {
   return { calls, fetchImpl };
 }
 
-function setup({ config = devConfig(), status, now = () => NOW } = {}) {
+function setup({ config = pairedConfig(), status, now = () => NOW } = {}) {
   const relay = fakeRelay(status);
   const logs = [];
   const server = createServer({ config, fetchImpl: relay.fetchImpl, now, log: (event, data) => logs.push(JSON.stringify([event, data])) });
@@ -83,7 +88,7 @@ test("a valid call seals the bundle and POSTs one fixed-size envelope to the rel
   assert.match(textOf(res), /will not be told/);
   assert.equal(relay.calls.length, 1);
   const { url, init } = relay.calls[0];
-  assert.equal(url, `${DEFAULT_RELAY_URL}/v1/mailbox/dev-mailbox-0000`);
+  assert.equal(url, `${DEFAULT_RELAY_URL}/v1/mailbox/${P.mailbox}`);
   assert.equal(init.method, "POST");
   assert.equal(init.redirect, "error");
   assert.equal(init.credentials, "omit");
@@ -91,7 +96,8 @@ test("a valid call seals the bundle and POSTs one fixed-size envelope to the rel
   assert.ok(new TextEncoder().encode(init.body).length <= limits.maxEnvelopeBytes);
 
   // What Enki would get out of it, through the shared receiving code.
-  const opened = await openEnvelope(init.body, { opener: devPassthroughOpener, validate: validateBundle, limits, seenNonce: () => false, now: NOW, allowDevPassthrough: true });
+  assert.ok(!init.body.includes("Pneu") && !init.body.includes("canadiantire"), "the relay sees ciphertext only");
+  const opened = await openAsEnki(init.body);
   assert.equal(opened.ok, true, opened.reason);
   assert.equal(opened.ts, NOW);
   assert.deepEqual(opened.bundle, validateBundle(ARGS).bundle);
@@ -129,7 +135,7 @@ test("a prompt-injection summary is delivered as inert text and never echoed int
   const { call, relay, logs } = setup();
   const res = await call({ ...ARGS, summary });
   assert.equal(res.result.isError, undefined);
-  const opened = await openEnvelope(relay.calls[0].init.body, { opener: devPassthroughOpener, validate: validateBundle, limits, seenNonce: () => false, now: NOW, allowDevPassthrough: true });
+  const opened = await openAsEnki(relay.calls[0].init.body);
   assert.equal(opened.bundle.summary, summary);
   assert.ok(logs.length > 0);
   assert.ok(!logs.join("\n").includes("SECRET_CANARY"), "debug log carries metadata only");
@@ -156,7 +162,7 @@ test("failed deliveries do not use up the hourly limit, and relay errors are rep
     assert.match(textOf(res), /HTTP 503/);
   }
   assert.equal(relay.calls.length, 6);
-  const unreachable = createServer({ config: devConfig(), fetchImpl: async () => { throw new TypeError("fetch failed"); }, now: () => NOW });
+  const unreachable = createServer({ config: pairedConfig(), fetchImpl: async () => { throw new TypeError("fetch failed"); }, now: () => NOW });
   const res = await unreachable.handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "deliver_tabs", arguments: ARGS } });
   assert.match(textOf(res), /could not be reached/);
 });
@@ -175,30 +181,45 @@ test("relay URL: https required, plain http only on loopback, no credentials", (
   assert.equal(isLoopbackHost("10.0.0.1"), false);
 });
 
-test("configuration: the DEV-ONLY passthrough needs an explicit flag and a loopback relay", async () => {
-  const dev = loadConfig({ ENKI_DEV_PASSTHROUGH: "1" });
-  assert.equal(dev.ok, true);
-  assert.match(dev.warnings.join(" "), /NOT encrypted or signed/);
-
-  const remote = loadConfig({ ENKI_DEV_PASSTHROUGH: "1", ENKI_RELAY_URL: "https://relay.example.org" });
-  assert.equal(remote.ok, false);
-  assert.match(remote.error, /only works with a relay on 127\.0\.0\.1/);
+test("configuration: only a paired agent key; there is no unencrypted mode", async () => {
+  const paired = pairedConfig();
+  assert.equal(paired.ok, true, paired.error);
+  assert.equal(paired.mailbox, P.mailbox);
+  assert.equal(paired.relayUrl, DEFAULT_RELAY_URL);
+  assert.ok(!JSON.stringify(paired).includes(P.credential.slice(20, 60)), "the key is not kept in the config object");
 
   const unpaired = loadConfig({});
   assert.equal(unpaired.ok, false);
   assert.match(unpaired.error, /Not paired/);
 
-  // With a key, the real (sealed) mode is still pending Blink's format: refuse rather than send in the clear.
-  const paired = loadConfig({ ENKI_AGENT_KEY: "k", ENKI_MAILBOX_ID: "m".repeat(20), ENKI_RELAY_URL: "https://relay.example.org" });
-  assert.equal(paired.ok, false);
-  assert.match(paired.error, /not available yet/);
-
-  const { call, relay } = setup({ config: paired });
+  // The old development switch does nothing any more: still not paired, nothing is sent.
+  const dev = loadConfig({ ENKI_DEV_PASSTHROUGH: "1", ENKI_RELAY_URL: "http://127.0.0.1:8788" });
+  assert.equal(dev.ok, false);
+  assert.match(dev.error, /Not paired/);
+  const { call, relay } = setup({ config: dev });
   const res = await call(ARGS);
   assert.equal(res.result.isError, true);
   assert.match(textOf(res), /not set up for this agent/);
   assert.equal(relay.calls.length, 0);
-  assert.ok(!JSON.stringify(paired).includes('"k"'), "the key is not kept in the config object");
 
-  assert.equal(loadConfig({ ENKI_DEV_PASSTHROUGH: "1", ENKI_MAILBOX_ID: "../../x" }).ok, false);
+  assert.match(loadConfig({ ENKI_AGENT_KEY: "k" }).error, /not an Enki agent key/);
+  assert.match(loadConfig({ ENKI_AGENT_KEY: "enki-agent-v1:AAAA" }).error, /damaged/);
+  assert.match(loadConfig({ ENKI_AGENT_KEY: P.credential, ENKI_RELAY_URL: "https://relay.example.org" }).error, /differs from the relay/);
+  assert.match(loadConfig({ ENKI_AGENT_KEY: P.credential, ENKI_MAILBOX_ID: "m".repeat(22) }).error, /differs from the mailbox/);
+  const remote = await pairInProcess({ relay: "http://relay.example.org" });
+  assert.match(loadConfig({ ENKI_AGENT_KEY: remote.credential }).error, /must use https/);
+});
+
+test("threat model: every packet the server sends is encrypted and signed; Enki refuses anything else", async () => {
+  const { call, relay } = setup();
+  await call(ARGS);
+  const env = JSON.parse(relay.calls[0].init.body);
+  assert.deepEqual(Object.keys(env), ["v", "alg", "to", "from", "eph", "nonce", "ct", "sig"]);
+  assert.equal(env.alg, "enki-tabs-v1");
+  assert.equal("body" in env, false);
+  // Strip the signature, or swap in a plaintext body: Enki's open() refuses both.
+  const { sig: _s, ...unsigned } = env;
+  assert.equal((await openAsEnki(JSON.stringify(unsigned))).ok, false);
+  const plain = { v: 1, alg: "dev-passthrough-INSECURE", body: btoa(JSON.stringify(ARGS)) };
+  assert.equal((await openAsEnki(JSON.stringify(plain))).ok, false);
 });

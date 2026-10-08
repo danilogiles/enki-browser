@@ -5,6 +5,7 @@ import {
   Check,
   Eye,
   EyeOff,
+  Inbox,
   ExternalLink,
   Loader2,
   Palette,
@@ -18,6 +19,7 @@ import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
+import { AgentsTab } from "./AgentsTab";
 import { legalLinks } from "../lib/legal";
 
 type Props = {
@@ -26,7 +28,7 @@ type Props = {
   onClose: () => void;
 };
 
-type TabId = "model" | "appearance" | "behavior" | "connections";
+type TabId = "model" | "appearance" | "behavior" | "connections" | "agents";
 
 export function SettingsView({ settings, onSave, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("model");
@@ -124,7 +126,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0 flex-col overflow-x-hidden">
       <header className="flex items-center gap-2 border-b border-ink-700 px-3 py-2">
         <button type="button" onClick={close} className="rounded-md p-1.5 text-zinc-400 hover:bg-ink-800 hover:text-zinc-100" title="Back">
           <ArrowLeft size={16} />
@@ -133,7 +135,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
       </header>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
+      <div className="flex overflow-x-auto [scrollbar-width:none] border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
         <TabButton
           active={activeTab === "model"}
           onClick={() => setActiveTab("model")}
@@ -158,10 +160,17 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
           icon={<Plug size={14} />}
           label="Connections"
         />
+        <TabButton
+          active={activeTab === "agents"}
+          onClick={() => setActiveTab("agents")}
+          icon={<Inbox size={14} />}
+          label="Agentes"
+        />
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 text-sm">
         {activeTab === "connections" && <ConnectionsTab />}
+        {activeTab === "agents" && <AgentsTab />}
         {/* TAB 1: MODEL & PROVIDER SETUP */}
         {activeTab === "model" && (
           <Section title="Model Provider Setup">
@@ -494,7 +503,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition ${
         active
           ? "border-enki-500 text-enki-400"
           : "border-transparent text-zinc-400 hover:text-zinc-200"
