@@ -21,8 +21,8 @@ or free models through OmniRoute.
 | **Ubuntu / Debian** | [Download enki-browser_amd64.deb](https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser_amd64.deb), then `sudo apt install ./enki-browser_amd64.deb` |
 | **Other ways** | Portable zip, Scoop, any Linux distribution: see [Install](#install) below. |
 
-Windows may say the app is unrecognised, because releases are not code-signed yet: choose
-*More info → Run anyway*. macOS will not open it the first time either: see [macOS](#macos). Then open Enki with the icon in the toolbar (or `Ctrl+Shift+E`) and pick
+On Windows the installer is signed, publisher Danilo De Souza; SmartScreen may still warn for
+the first days, until the signature builds reputation: choose *More info → Run anyway*. macOS will not open it the first time either: see [macOS](#macos). Then open Enki with the icon in the toolbar (or `Ctrl+Shift+E`) and pick
 a model in its Settings; the default, NVIDIA Nemotron, needs only a free key.
 
 ## Install
@@ -40,10 +40,12 @@ needs only a free key.
 | **Scoop** | `scoop install https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser.json` — no installer runs; Scoop keeps it updated (`scoop update enki-browser`). |
 | **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too; saved passwords and logins stay encrypted for this Windows user, so they do not carry over to another computer. |
 
-> **Antivirus warnings.** Releases are not yet code-signed (see [Code signing policy](#code-signing-policy)).
-> Windows SmartScreen will say the app is unrecognised — check the SHA-256, then *More info →
-> Run anyway* — and a behaviour-based antivirus may distrust an unsigned program that starts a
-> browser with extensions and installs updates: Bitdefender quarantined early releases.
+> **Signed, and SmartScreen.** Since 0.8.3 the installer, `EnkiBrowser.exe` and the launcher are
+> signed by **Danilo De Souza** (see [Code signing policy](#code-signing-policy)); right-click →
+> *Properties → Digital Signatures* shows it, with a timestamp. A new signature takes a few days to
+> build reputation, so SmartScreen may still warn meanwhile — check the SHA-256, then *More info →
+> Run anyway*. A behaviour-based antivirus may also distrust a program that starts a browser with
+> extensions and installs updates: Bitdefender quarantined early, unsigned releases.
 
 ### macOS
 
@@ -116,24 +118,36 @@ empty file named `no-update` next to `EnkiBrowser.exe`.
 
 ## Code signing policy
 
-See **[CODE_SIGNING.md](CODE_SIGNING.md)** for the full [Code signing policy](CODE_SIGNING.md)
-(team roles, what is signed, current status, and privacy link).
+Since [0.8.3](https://github.com/danilogiles/enki-browser/releases/tag/v0.8.3), Windows releases
+are signed with **Azure Artifact Signing**, publisher
+`CN=Danilo De Souza, O=Danilo De Souza, L=Mississauga, S=ON, C=CA`, SHA-256 with an RFC 3161
+timestamp. Releases up to 0.8.2 are unsigned.
 
-The build can sign Windows PE files when the `ENKI_SIGN_COMMAND` environment variable (in CI, the
-secret of the same name) holds a signing command with `{file}` where the path goes. Code-signing
-keys are now issued only in hardware or cloud HSMs, so this is a command rather than a certificate
-file. Two routes fit this project:
+**Only Enki's own three programs are signed:** `EnkiBrowser.exe` (the stub),
+`EnkiBrowserLauncher.exe` (the launcher and updater) and `EnkiBrowserSetup-<version>.exe` (the
+installer); the portable zip carries the same signed stub and launcher. The bundled
+ungoogled-chromium files, **`chrome.exe` included, stay unsigned on purpose**: we never sign code
+that isn't ours. The build fails if any of them carries our certificate, or if any of the three
+lacks a valid, timestamped signature.
 
-- **[SignPath Foundation](https://signpath.org)** — free Authenticode for open-source projects,
-  certificate by SignPath Foundation, with a GitHub Actions integration
-  (`signpath/github-action-submit-signing-request`). Our application was **not approved yet**
-  (October 2026); we'll reapply or pick another signer. If it is used, prefer that action for the
-  installer and Enki-built PE files — do not sign upstream `chrome.exe` with the Foundation
-  certificate (include it unsigned; see [CODE_SIGNING.md](CODE_SIGNING.md)).
-- **Azure Trusted Signing** — paid, with identity verification of the publisher; can use
-  `ENKI_SIGN_COMMAND` when configured.
+To check a download: right-click it → *Properties → Digital Signatures* shows **Danilo De Souza**
+with a timestamp; or in PowerShell, `Get-AuthenticodeSignature .\EnkiBrowserSetup-<version>.exe`
+must say `Valid`, with that signer.
 
-Until one is in place, releases are unsigned.
+Signing happens in CI only, for a `v*` tag (admins only) or a manual run on `main`, in the
+`windows-signed` job behind the protected `code-signing` environment: a maintainer approves each
+run, and Azure trusts that environment alone, through GitHub OIDC with no stored secret. Pull
+requests and forks build unsigned. Linux packages are not Authenticode-signed, and macOS builds are
+signed ad hoc only (see [macOS](#macos)). Updates are verified separately, with the release key
+(see [Updates](#updates)).
+
+**[CODE_SIGNING.md](CODE_SIGNING.md)** is the full [Code signing policy](CODE_SIGNING.md): team
+roles, the certificate, what is and is not signed, how the workflow works, and how to check a
+signature.
+
+For a build of your own, `build/build.mjs` can also sign with any signer: set `ENKI_SIGN_COMMAND`
+to a signing command with `{file}` where the path goes. Code-signing keys are now issued only in
+hardware or cloud HSMs, so this is a command rather than a certificate file.
 
 
 ## Enki Shield: phishing protection that stays on your device
@@ -264,8 +278,9 @@ Honest list; each is on the roadmap.
   site can reach you before it is listed. Be careful with links from email and messages.
 - **Updates need a restart**, like every browser: a downloaded fix is offered in a notification
   and waits for your click (or your next start). Incognito windows do not come back after it.
-- **Not code-signed yet**, so SmartScreen warns on install and a behaviour-based antivirus may
-  distrust the updater (see [Code signing policy](#code-signing-policy)).
+- **SmartScreen reputation is new.** Windows releases are signed since 0.8.3, but SmartScreen may
+  still warn for the first days, and a behaviour-based antivirus may distrust the updater (see
+  [Code signing policy](#code-signing-policy)).
 - **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line
   on the About page still names ungoogled-chromium after Enki Browser's version. Changing those needs Enki Browser's own Chromium build.
 - **"Enki started debugging this browser" bar** while Enki acts on a page. That is Chromium's
