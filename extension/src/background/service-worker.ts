@@ -83,7 +83,8 @@ if (overridesNewTab) {
   void chrome.storage.session.get("enki:session-started").then(async (v) => {
     if (v["enki:session-started"]) return;
     await chrome.storage.session.set({ "enki:session-started": Date.now() });
-    // The restored windows may still be opening; look again shortly after.
-    for (const delay of [0, 1500, 4000]) setTimeout(() => void reopenEarlyNewTabs(), delay);
+    // The restored windows may still be opening, and a busy computer loads command-line
+    // extensions late (a real start showed Chromium's page after the 4 s look); look again.
+    for (const delay of [0, 1500, 4000, 8000, 15000]) setTimeout(() => void reopenEarlyNewTabs(), delay);
   });
 }
