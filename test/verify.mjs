@@ -144,7 +144,7 @@ try {
   const siteTab = await shieldsPage.evaluate(async () => (await chrome.tabs.query({ url: "https://example.com/*" }))[0]?.id);
   const openShields = async () => {
     await shieldsPage.goto(`chrome-extension://${version.shieldExtensionId}/popup.html?tab=${siteTab}`);
-    await shieldsPage.waitForTimeout(800);
+    await shieldsPage.waitForFunction(() => document.documentElement.dataset.ready === "true", null, { timeout: 15000 }).catch(() => undefined);
     return shieldsPage.evaluate(() => ({ host: document.getElementById("host").textContent, count: Number(document.getElementById("count").textContent), up: document.getElementById("toggle").getAttribute("aria-checked") === "true", levels: !document.getElementById("level").disabled }));
   };
   const before = await openShields();
@@ -359,8 +359,9 @@ try {
     await p.goto(`chrome-extension://${version.shieldExtensionId}/options.html`);
     const tabId = await p.evaluate(async (u) => (await chrome.tabs.query({ url: u }))[0]?.id, url);
     await p.goto(`chrome-extension://${version.shieldExtensionId}/popup.html?tab=${tabId}`);
-    // The panel names the site once its script has run; clicking before that does nothing.
-    await p.waitForFunction(() => document.getElementById("host")?.textContent.trim().length > 0, null, { timeout: 15000 }).catch(() => undefined);
+    // Clicking before the panel's script has wired its buttons does nothing (the site name shows
+    // earlier than that, and waiting for it still lost the click on a slow macOS runner).
+    await p.waitForFunction(() => document.documentElement.dataset.ready === "true", null, { timeout: 15000 }).catch(() => undefined);
     return p;
   };
   const shred = await panelFor("https://example.com/*");

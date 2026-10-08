@@ -124,3 +124,5 @@ $("burn-go").onclick = async () => {
   window.close();
 };
 void BADGE;
+// Everything above is wired up: tests wait for this before clicking (the site name appears first).
+document.documentElement.dataset.ready = "true";
