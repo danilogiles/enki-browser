@@ -70,6 +70,8 @@ static class Launcher
         if (File.Exists(flagFile))
             flags.AddRange(File.ReadAllLines(flagFile).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("#")));
 
+        if (RestoreByDefault(userData, args)) flags.Add("--restore-last-session");
+
         // Whatever Windows or the user passed (a URL, a file to open) goes last, unchanged.
         flags.AddRange(args.Where(a => !a.StartsWith("--enki-")));
 
@@ -85,5 +87,33 @@ static class Launcher
         Watcher.Run(root, appDir, userData, args.Where(a => a.StartsWith("--") && !a.StartsWith("--enki-")),
             Environment.GetEnvironmentVariable("ENKI_BROWSER_UPDATE_NOW") == "1");
         return 0;
+    }
+
+    /// "Continue where you left off", the way people expect a browser to reopen. Chromium's own
+    /// default opens a new tab page, and the setting behind it (session.restore_on_startup) is one
+    /// Chromium protects with a MAC, so it cannot be written into an existing profile: it would be
+    /// reset as tampered. New profiles get it from initial_preferences; for the rest the launcher
+    /// passes --restore-last-session, but only while the profile has no choice of its own. Once
+    /// the user picks anything in Settings → On startup, Chromium stores it and that choice wins.
+    static bool RestoreByDefault(string userData, string[] args)
+    {
+        // A first run has nothing to restore; a window for one purpose should not bring tabs back.
+        if (!File.Exists(Path.Combine(userData, "Local State"))) return false;
+        if (args.Any(a => a == "--restore-last-session" || a == "--incognito" || a.StartsWith("--app"))) return false;
+        string profile = args.Where(a => a.StartsWith("--profile-directory=")).Select(a => a.Substring("--profile-directory=".Length).Trim('"')).FirstOrDefault()
+            ?? Watcher.LastUsedProfile(userData);
+        if (profile.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return false;
+        var json = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+        foreach (string file in new[] { "Preferences", "Secure Preferences" })
+        {
+            try
+            {
+                var prefs = json.DeserializeObject(File.ReadAllText(Path.Combine(userData, profile, file))) as Dictionary<string, object>;
+                var session = prefs != null && prefs.ContainsKey("session") ? prefs["session"] as Dictionary<string, object> : null;
+                if (session != null && session.ContainsKey("restore_on_startup")) return false;
+            }
+            catch { }
+        }
+        return true;
     }
 }

@@ -57,8 +57,30 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   FLAGS+=("$line")
 done < "$ENKI/config/flags.txt"
 
+# "Continue where you left off", as people expect a browser to reopen, unless the profile has a
+# choice of its own in Settings → On startup (see RestoreByDefault in launcher/Launcher.cs: the
+# setting is MAC-protected, so it is passed as a switch rather than written into the profile).
+RESTORE=()
+if [[ -f "$DATA/Local State" ]]; then
+  PROFILE="$(grep -o '"last_active_profiles":\["[^"]*"' "$DATA/Local State" | sed 's/.*\["//; s/"$//' || true)"
+  [[ -n "$PROFILE" ]] || PROFILE="$(grep -o '"last_used":"[^"]*"' "$DATA/Local State" | sed 's/.*:"//; s/"$//' || true)"
+  [[ -n "$PROFILE" && "$PROFILE" != */* ]] || PROFILE=Default
+  for a in "$@"; do
+    case "$a" in
+      --profile-directory=*) PROFILE="${a#--profile-directory=}" ;;
+      --restore-last-session|--incognito|--app*) PROFILE="" ; break ;;
+    esac
+  done
+  # A choice is a number; the same name also appears with a string value, as a MAC under
+  # protection.macs, in every profile, so the name alone is not a choice.
+  if [[ -n "$PROFILE" ]] && ! grep -qsE '"restore_on_startup": ?[0-9]' "$DATA/$PROFILE/Preferences" "$DATA/$PROFILE/Secure Preferences"; then
+    RESTORE=(--restore-last-session)
+  fi
+fi
+
 exec "$CONTENTS/MacOS/Chromium" \
   --user-data-dir="$DATA" \
   --load-extension="$EXTENSIONS" \
+  ${RESTORE[@]+"${RESTORE[@]}"} \
   ${FLAGS[@]+"${FLAGS[@]}"} \
   "$@"
