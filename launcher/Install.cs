@@ -120,9 +120,13 @@ static class Install
         }
     }
 
+    /// Where Chromium finds the manifest of the "Check for updates" host (NativeHost.cs).
+    public const string NativeHostKey = @"Software\Chromium\NativeMessagingHosts\io.github.danilogiles.enki_browser";
+
     public static void Unregister()
     {
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false); } catch { }
+        try { Registry.CurrentUser.DeleteSubKeyTree(NativeHostKey, false); } catch { }
     }
 
     public static long FolderSizeKb(string dir)

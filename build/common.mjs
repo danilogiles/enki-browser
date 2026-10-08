@@ -186,7 +186,8 @@ export async function addExtensions(app) {
   const shield = withKey(shieldDir, "shield-extension.pub");
   console.log(`  Enki Shield id: ${shield.id}`);
   patchBlocker(blockerDir, shield.id);
-  writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id }));
+  // Its settings page shows the Enki Browser version it shipped with ("Check for updates").
+  writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id, browser: pkg.version }));
 
   for (const dir of ["enki", "shield", "ublock-lite"]) freshWorker(path.join(app, "extensions", dir));
 

@@ -190,6 +190,13 @@ try {
   check("Shields' per-site settings are stored encrypted",
     /^enc:v1:/.test(sealedSites.sites) && /^enc:v1:/.test(sealedSites.forget) && !JSON.stringify(sealedSites).replace(/"readBack":"block"/, "").includes("example.com") && sealedSites.readBack === "block",
     JSON.stringify({ sites: String(sealedSites.sites).slice(0, 20), readBack: sealedSites.readBack }));
+  // "Check for updates" in Shields' settings: the version, and on Windows an answer from this
+  // install's own updater (its native messaging host), which only a registered launcher gives.
+  await shieldsPage.goto(`chrome-extension://${version.shieldExtensionId}/options.html`);
+  await shieldsPage.waitForFunction(() => document.documentElement.dataset.updates === "ready", null, { timeout: 15000 }).catch(() => undefined);
+  const updates = await shieldsPage.evaluate(() => ({ version: document.getElementById("version")?.textContent, state: document.getElementById("update-state")?.textContent }));
+  check("Shields' settings show Enki Browser's version, with Check for updates", updates.version === `Enki Browser ${version.enkiBrowser}`, updates.version ?? "");
+  if (!linux && !mac) check("Check for updates reaches this install's updater", /download by themselves/.test(updates.state ?? ""), updates.state ?? "");
   await shieldsPage.close();
   await page.goto(local);
 
