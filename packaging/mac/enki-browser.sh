@@ -71,7 +71,9 @@ if [[ -f "$DATA/Local State" ]]; then
       --restore-last-session|--incognito|--app*) PROFILE="" ; break ;;
     esac
   done
-  if [[ -n "$PROFILE" ]] && ! grep -qs '"restore_on_startup"' "$DATA/$PROFILE/Preferences" "$DATA/$PROFILE/Secure Preferences"; then
+  # A choice is a number; the same name also appears with a string value, as a MAC under
+  # protection.macs, in every profile, so the name alone is not a choice.
+  if [[ -n "$PROFILE" ]] && ! grep -qsE '"restore_on_startup": ?[0-9]' "$DATA/$PROFILE/Preferences" "$DATA/$PROFILE/Secure Preferences"; then
     RESTORE=(--restore-last-session)
   fi
 fi
