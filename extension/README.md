@@ -64,14 +64,14 @@ Pick a model that supports **images** and **tool calling**. Good options:
 
 | Provider | Suggested model | Notes |
 |---|---|---|
-| NVIDIA | `nvidia/nemotron-3-ultra-550b-a55b` | **The default.** Free key from build.nvidia.com, no credit card; about 40 requests a minute. Text only (no screenshots). |
+| NVIDIA | `nvidia/nemotron-3-ultra-550b-a55b` | **The default.** Free key from build.nvidia.com, no credit card; rate-limited. Text only (no screenshots). |
 | Anthropic | `claude-opus-5` or `claude-sonnet-5` | Best at multi-step browsing. |
 | OpenAI | `gpt-5` | |
 | Google Gemini | `gemini-2.5-flash` | Free tier available through AI Studio. |
 | Groq | a vision + tools model | Very fast, cheap. |
 | OpenRouter | anything with vision and tools | One key, many models. |
 | OmniRoute | `auto` | Free. Local gateway that routes to 150+ free providers automatically. See below. |
-| Ollama | `qwen3-vl` or another vision model with tools | Runs locally, free. Start Ollama with `OLLAMA_ORIGINS=chrome-extension://*` so the extension can reach it. |
+| Ollama | `qwen3-vl` or another vision model with tools | Runs locally, free. Start Ollama with `OLLAMA_ORIGINS=chrome-extension://caelfocbikejgdamghjlkpmbbaobehlp` so Enki can reach it. If you loaded the extension from source, use the ID shown in `chrome://extensions` instead. |
 
 ### Free models with OmniRoute
 
