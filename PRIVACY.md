@@ -43,7 +43,7 @@ third-party cookies, known trackers and ads, and the local network address WebRT
 | Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by your account: by Windows (in the portable version too), by the login keychain on macOS, by the system keyring on Linux |
 | Your voice, when you use Enki's microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
-| Keys of the agents you paired, packets waiting for your answer, and a log of the last 50 packets received | Enki's local extension storage and IndexedDB | The keys are created non-exportable and never leave the profile. Unpairing an agent deletes its keys, its waiting packets, its summary cards and its log lines |
+| Keys of the agents you paired, packets waiting for your answer, and a log of the last 50 packets received | Enki's local extension storage and IndexedDB | The keys are created non-exportable and never leave the profile. Unpairing an agent deletes its keys, its waiting packets, its summary cards and its log lines. *Limpar histórico de abas recebidas* and Enki Shield's Burn clear the packets, cards and log but keep the pairings and keys. Clearing browsing data through the browser's settings does not touch this |
 | History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker; macOS: FileVault, in System Settings → Privacy & Security) to protect them if someone gets your disk |
 
 Updates change only the program: your profile — history, bookmarks, logins, Enki's settings and
@@ -74,9 +74,23 @@ summary and up to 10 links. Enki asks you first and opens nothing until you clic
 - **What stays on your computer:** the pairing keys, packets waiting for your answer and a log of
   the last 50 packets. Accepted links open as tabs on a local waiting page (`hold.html`) that loads
   nothing from the site, not even its icon, until you click *Abrir*.
+- **Clearing that history.** *Limpar histórico de abas recebidas* in Settings → Agentes deletes the
+  waiting packets, the summary cards, the 50-packet log, each agent's "last packet" date, the
+  hourly counters and the seen nonces. The agents you paired and their keys stay (use *Desparear*
+  to drop a key). Enki Shield's *Burn all data* (and burn-when-the-browser-closes, at the next
+  start) clears the same history. Clearing browsing data through the browser's own settings
+  (`chrome://settings` and equivalents) does **not**: Chromium gives extensions no way to notice
+  that, and Enki does not claim it does. Unpairing an agent deletes only that agent's keys,
+  waiting packets, cards and log lines.
 - **Nothing in private windows.** Packets are never shown or opened in an Incognito window.
 - **The summary is data, not a command.** It is shown as plain text and only goes to Enki's AI
-  assistant if you ask for it.
+  assistant if you click *Perguntar ao Enki sobre o resumo* on its card. That turn runs in Ask
+  mode and the summary is wrapped as untrusted data (the same "data, not instructions" rule as
+  page text). Nothing is sent to the model when you only accept or decline a packet.
+- **Without Enki Shield.** The Enki extension alone, installed in another browser that does not
+  ship Enki Shield, still receives packets, but the notice says clearly *Links não verificados
+  pelo Enki Shield*, the hold page says it again, and the tabs still wait on `hold.html` with
+  nothing loading from the site until you click *Abrir*.
 
 ## Google services
 
