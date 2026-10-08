@@ -129,7 +129,41 @@ try {
   );
   check("sync: a message sent in the panel appears on the Home page", followed);
 
-  // ----- 4. Act still belongs to the panel -----
+  // ----- 4. The conversation list on the left, as in Comet -----
+  const listed = async (page) => page.evaluate(() => Array.from(document.querySelectorAll("nav[aria-label] ul li button[aria-current], nav[aria-label] ul li > button:first-child")).map((b) => b.textContent.trim()));
+  const home3 = await context.newPage();
+  home3.on("dialog", (d) => void d.accept());
+  await home3.goto(HOME);
+  const firstListed = await poll(async () => (await listed(home3)).some((t) => t.includes("first question from home")), 10000);
+  check("history: Home lists the saved conversation", firstListed, (await listed(home3)).join(" | "));
+
+  await home3.fill("textarea", "second chat from home");
+  await home3.press("textarea", "Enter");
+  await home3.waitForFunction(() => document.body.innerText.includes("second chat from home") && document.body.innerText.includes("Echo:"), null, { timeout: 30000 });
+  const separate = await poll(async () => (await listed(home3)).length >= 2, 10000);
+  const afterSecond = await listed(home3);
+  // Two entries, not one longer conversation: before the list, Home kept adding to the open chat.
+  check("history: a question typed in Home's box starts a new chat", separate && afterSecond.some((t) => t.includes("first question from home")) && afterSecond.some((t) => t.includes("second chat from home")), afterSecond.join(" | "));
+
+  await home3.locator("nav[aria-label] ul li > button:first-child", { hasText: "first question from home" }).first().click();
+  const reopened = await poll(async () => {
+    const text = await home3.evaluate(() => document.body.innerText);
+    // The list also names both chats; what matters is the transcript, which holds the panel's turn.
+    return text.includes("second question from the panel");
+  }, 15000);
+  check("history: clicking a chat reopens it on Home", reopened);
+  await home3.waitForTimeout(1500);
+  check("history: opening a chat does not move it to the top", (await listed(home3))[0]?.includes("second chat from home") ?? false, (await listed(home3)).join(" | "));
+
+  await home3.locator("nav[aria-label] button", { hasText: /New chat|Nova conversa|Nueva conversación/ }).first().click();
+  check("history: New chat goes back to Home's box", await poll(() => home3.evaluate(() => !!document.querySelector('[role="radiogroup"]')), 5000));
+
+  await home3.hover("nav[aria-label] ul li:has-text('second chat from home')");
+  await home3.locator("nav[aria-label] ul li", { hasText: "second chat from home" }).locator("button[aria-label]").last().click();
+  const deleted = await poll(async () => !(await listed(home3)).some((t) => t.includes("second chat from home")), 10000);
+  check("history: a chat can be deleted from the list", deleted, (await listed(home3)).join(" | "));
+
+  // ----- 5. Act still belongs to the panel -----
   // Act navigates the tab it is given, and Home IS a tab, so Act must hand off rather than answer
   // in place. A fresh Home page in Act mode should open the panel instead of rendering a chat.
   const home2 = await context.newPage();
