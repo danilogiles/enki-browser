@@ -15,6 +15,8 @@ export const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf
 if (process.env.ENKI_VERSION) pkg.version = process.env.ENKI_VERSION;
 export const cache = path.join(root, "cache");
 export const out = path.join(root, "out");
+/** Enki Browser's own icons and logos (brand/README.md): the plated app icon and the unplated mark. */
+export const brand = path.join(root, "brand");
 
 export const step = (msg) => console.log(`\n▸ ${msg}`);
 export const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: "inherit", ...opts });
@@ -220,10 +222,11 @@ const CHROMIUM_LOGOS = [
 
 /**
  * Replaces Chromium's logo inside the resource paks (the About page, the profile menu and other
- * WebUI) with Enki's, at the same pixel size. The logo images are identified by being byte-for-byte
- * the PNGs in Chromium's source at this exact version — never guessed from size or position.
+ * WebUI) with Enki's unplated mark (brand/logo-master.png), at the same pixel size. The logo images
+ * are identified by being byte-for-byte the PNGs in Chromium's source at this exact version — never
+ * guessed from size or position.
  */
-export async function replaceLogos(chromiumDir, chromiumVersion, iconDir) {
+export async function replaceLogos(chromiumDir, chromiumVersion) {
   const tag = chromiumVersion.replace(/-.*$/, "");
   const dir = path.join(cache, `chromium-logos-${tag}`);
   mkdirSync(dir, { recursive: true });
@@ -237,7 +240,7 @@ export async function replaceLogos(chromiumDir, chromiumVersion, iconDir) {
     }
     known.add(hash(file));
   }
-  const source = readFileSync(path.join(iconDir, "icon256.png"));
+  const source = readFileSync(path.join(brand, "logo-master.png"));
   let replaced = 0;
   for (const name of ["chrome_100_percent.pak", "chrome_200_percent.pak", "resources.pak"]) {
     const file = path.join(chromiumDir, name);

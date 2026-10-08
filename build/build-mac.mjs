@@ -74,7 +74,7 @@ const localePaks = lprojs.map((d) => path.join(frameworkRes, d, "locale.pak")).f
 const english = ["en.lproj", "en_US.lproj", "en-US.lproj"].map((d) => path.join(frameworkRes, d, "locale.pak")).find(existsSync);
 if (!english) throw new Error(`no English locale.pak among ${lprojs.join(", ")}`);
 rebrand(null, { files: localePaks, english });
-await replaceLogos(frameworkRes, pin.version, ext.iconDir);
+await replaceLogos(frameworkRes, pin.version);
 
 // The app icon, drawn from Enki's vector logo at every size macOS asks for. Apple's app icons keep
 // their artwork inside about 80% of the canvas; edge to edge, the shield looked bigger than every

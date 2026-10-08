@@ -24,10 +24,12 @@ fi
 mkdir -p "$BIN" "$PREFIX/applications"
 ln -sf "$DEST/enki-browser" "$BIN/enki-browser"
 sed "s#@EXEC@#$DEST/enki-browser#g" "$DEST/enki-browser.desktop" > "$PREFIX/applications/enki-browser.desktop"
-for size in 16 32 48 128 256; do
+for size in 16 24 32 48 64 128 256 512; do
   mkdir -p "$PREFIX/icons/hicolor/${size}x${size}/apps"
   cp "$DEST/icons/enki-browser-$size.png" "$PREFIX/icons/hicolor/${size}x${size}/apps/enki-browser.png"
 done
+mkdir -p "$PREFIX/icons/hicolor/scalable/apps"
+cp "$DEST/icons/enki-browser.svg" "$PREFIX/icons/hicolor/scalable/apps/enki-browser.svg"
 command -v update-desktop-database >/dev/null && update-desktop-database "$PREFIX/applications" 2>/dev/null || true
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$PREFIX/icons/hicolor" 2>/dev/null || true
 
