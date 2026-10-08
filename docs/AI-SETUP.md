@@ -12,10 +12,11 @@ A few minutes, once. Tick each box as you go.
   - Prefer no key at all? Choose **Ollama (local)** at `http://localhost:11434/v1`.
   - **Ollama (local):**
     1. Install Ollama from [ollama.com](https://ollama.com).
-    2. **Windows:** in Command Prompt run `setx OLLAMA_ORIGINS "chrome-extension://*"`, then quit Ollama from the tray and open it again.
-    3. **Mac/Linux:** start Ollama with `OLLAMA_ORIGINS=chrome-extension://*` (for example `OLLAMA_ORIGINS=chrome-extension://* ollama serve`).
+    2. **Windows:** in Command Prompt run `setx OLLAMA_ORIGINS "chrome-extension://caelfocbikejgdamghjlkpmbbaobehlp"`, then quit Ollama from the tray and open it again.
+    3. **Mac/Linux:** start Ollama with `OLLAMA_ORIGINS=chrome-extension://caelfocbikejgdamghjlkpmbbaobehlp` (for example `OLLAMA_ORIGINS=chrome-extension://caelfocbikejgdamghjlkpmbbaobehlp ollama serve`).
     4. `ollama pull qwen3-vl` (vision + tools; better fit than a plain chat-only model).
     5. In Enki: **Settings › Model** → **Provider** → **Ollama (local)**.
+  - Loaded the extension from source? Use the ID shown in `chrome://extensions` instead.
 - [ ] **5. Try Ask on a page.** Open any web page, click the **Ask** icon and type a question, e.g. “Summarize this page.” Tooltip: “Ask: Enki reads the page and answers”.
 - [ ] **6. Optional: Act, with care.** Click the **Act** icon — “Act: Enki can navigate, click and type”. It asks you to confirm sensitive actions first. **Never paste passwords into the chat.**
 
@@ -25,7 +26,7 @@ Enki is **Bring Your Own Model**. In **Settings › Model**, under **Provider**,
 
 - **Anthropic (Claude)**, **OpenAI**, **Google Gemini**, **Groq** — each needs its own API key
 - **OpenRouter**, including `openrouter/free` — needs an OpenRouter key
-- **Ollama (local)** — runs on your computer, no key: `http://localhost:11434/v1` (requires `OLLAMA_ORIGINS=chrome-extension://*` and a restart of Ollama; see step 4)
+- **Ollama (local)** — runs on your computer, no key: `http://localhost:11434/v1` (requires `OLLAMA_ORIGINS=chrome-extension://caelfocbikejgdamghjlkpmbbaobehlp` and a restart of Ollama; see step 4)
 - **Custom (OpenAI-compatible)** — any OpenAI-compatible endpoint
 
 After any change, click **Run connection diagnostics**.
