@@ -26,6 +26,18 @@ const app = linux ? installRoot : mac ? path.join(macApp, "Contents", "Resources
 const version = JSON.parse(readFileSync(path.join(app, "version.json"), "utf8"));
 const port = 9333;
 const results = [];
+/** Retries fn until it returns something truthy or the time runs out; returns its last result.
+ *  For outcomes that take longer on a slow runner (macOS CI), where a fixed pause was a coin toss. */
+async function until(fn, ms) {
+  const end = Date.now() + ms;
+  let last;
+  do {
+    last = await fn().catch(() => undefined);
+    if (last?.ok ?? last) return last;
+    await new Promise((r) => setTimeout(r, 500));
+  } while (Date.now() < end);
+  return last;
+}
 const check = (name, ok, detail = "") => {
   results.push({ name, ok });
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -151,11 +163,18 @@ try {
   };
   await shieldsPage.click("#toggle"); // Shields down, and the panel reloads the tab
   await page.waitForTimeout(1500);
-  const down = await loadTrackers();
+  // uBlock applies the site's new mode asynchronously; try again until it has.
+  const down = (await until(async () => {
+    const o = await loadTrackers();
+    return { ok: o.some((x) => !/BLOCKED_BY_CLIENT|neutered/.test(x)), o };
+  }, 15000))?.o ?? [];
   check("Shields down lets a site's trackers through", (await openShields()).up === false && down.some((o) => !/BLOCKED_BY_CLIENT|neutered/.test(o)), down.join(", "));
   await shieldsPage.click("#toggle"); // and back up
   await page.waitForTimeout(1500);
-  const up = await loadTrackers();
+  const up = (await until(async () => {
+    const o = await loadTrackers();
+    return { ok: o.every((x) => /BLOCKED_BY_CLIENT|neutered/.test(x)), o };
+  }, 15000))?.o ?? [];
   check("Shields up blocks them again", up.every((o) => /BLOCKED_BY_CLIENT|neutered/.test(o)), up.join(", "));
   // Shields' per-site choices name sites the user visits: stored sealed, never as host names.
   const sealedSites = await shieldsPage.evaluate(async () => {
@@ -340,7 +359,8 @@ try {
     await p.goto(`chrome-extension://${version.shieldExtensionId}/options.html`);
     const tabId = await p.evaluate(async (u) => (await chrome.tabs.query({ url: u }))[0]?.id, url);
     await p.goto(`chrome-extension://${version.shieldExtensionId}/popup.html?tab=${tabId}`);
-    await p.waitForTimeout(500);
+    // The panel names the site once its script has run; clicking before that does nothing.
+    await p.waitForFunction(() => document.getElementById("host")?.textContent.trim().length > 0, null, { timeout: 15000 }).catch(() => undefined);
     return p;
   };
   const shred = await panelFor("https://example.com/*");
@@ -353,7 +373,9 @@ try {
   check("Shred this site deletes that site's data and keeps others'", !shredded.storage && !/enki_verify/.test(shredded.cookie) && otherKept === "1", JSON.stringify({ shredded, otherKept }));
   const burn = await panelFor("https://example.org/*");
   await burn.click("#burn"); await burn.click("#burn-go").catch(() => undefined);
-  await new Promise((r) => setTimeout(r, 3000));
+  // Burning closes every tab and then clears the data; wait for it to finish rather than guess.
+  await until(async () => ctx.pages().filter((p) => !p.isClosed()).length <= 1, 20000);
+  await new Promise((r) => setTimeout(r, 1500));
   const left = ctx.pages().filter((p) => !p.isClosed());
   const after = left[0] ?? await ctx.newPage();
   await after.goto("https://example.org/");
