@@ -22,8 +22,27 @@ export type ToolPlan = {
 };
 
 // The navigation rule lives in ../urls so Receive tabs uses the very same one.
-import { isRestrictedUrl, isValidWebNavigationUrl, tabForModel } from "../urls";
+import { isHoldPage, isRestrictedUrl, isValidWebNavigationUrl, tabForModel } from "../urls";
 export { isRestrictedUrl, isValidWebNavigationUrl };
+
+/**
+ * Browser-internal pages, and Enki's hold page (Receive tabs), whose title, address and pixels
+ * carry an agent's text: never read, captured or controlled, and never named to the model by
+ * their real title or URL (tabForModel). Throws the error the page tools have always used.
+ */
+export function refuseInternal(tab: { url?: string; pendingUrl?: string; title?: string }): void {
+  if (isRestrictedUrl(tab.url) || isHoldPage(tab.url) || isHoldPage(tab.pendingUrl)) {
+    throw new Error(
+      `This tab (${tab.url || tab.pendingUrl ? tabForModel(tab).url : "internal page"}) is a browser-internal page and cannot be read or controlled. Navigate to a website first.`,
+    );
+  }
+}
+
+/** "Title" — url, as the model may see it. */
+const tabLine = (tab: { title?: string; url?: string; pendingUrl?: string }, fallbackUrl = "") => {
+  const v = tabForModel(tab);
+  return `"${v.title}" — ${v.url || fallbackUrl}`;
+};
 
 const text = (t: string): TextPart => ({ type: "text", text: t });
 const ok = (t: string): ToolOutput => ({ content: [text(t)] });
@@ -116,7 +135,8 @@ export class BrowserExecutor {
     return this.inBackgroundTab(url, async (tabId) => {
       const fresh = await chrome.tabs.get(tabId);
       const body = await this.send<string>(tabId, { type: "enki:text", maxChars: max });
-      return cut(`${fresh.title ?? ""} — ${fresh.url ?? url}\n\n${body}`);
+      const v = tabForModel(fresh);
+      return cut(`${v.title} — ${v.url || url}\n\n${body}`);
     });
   }
 
@@ -135,12 +155,7 @@ export class BrowserExecutor {
   }
 
   private async send<T>(tabId: number, req: ContentRequest): Promise<T> {
-    const tab = await chrome.tabs.get(tabId);
-    if (isRestrictedUrl(tab.url)) {
-      throw new Error(
-        `This tab (${tab.url ? tabForModel(tab).url : "internal page"}) is a browser-internal page and cannot be read or controlled. Navigate to a website first.`,
-      );
-    }
+    refuseInternal(await chrome.tabs.get(tabId));
     const attempt = async (): Promise<T> => {
       const res = (await chrome.tabs.sendMessage(tabId, req)) as ContentResponse<T> | undefined;
       if (!res) throw new Error("No response from page.");
@@ -297,9 +312,9 @@ export class BrowserExecutor {
   async screenshot(): Promise<ImagePart & { width: number; height: number }> {
     const tab = await this.currentTab();
     if (!tab.active) throw new Error("Select the controlled tab before taking a screenshot. Enki will not capture a different tab.");
-    const info = isRestrictedUrl(tab.url)
-      ? null
-      : await this.send<PageInfo>(tab.id!, { type: "enki:page_info" }).catch(() => null);
+    // A capture of an internal page or a hold page would show what reading it may not.
+    refuseInternal(tab);
+    const info = await this.send<PageInfo>(tab.id!, { type: "enki:page_info" }).catch(() => null);
     const dataUrl = await chrome.tabs.captureVisibleTab(this.windowId, { format: "jpeg", quality: 82 });
     const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
 
@@ -427,7 +442,7 @@ export class BrowserExecutor {
             else await chrome.tabs.update(tabId, { url });
             await this.waitForLoad(tabId);
             const tab = await chrome.tabs.get(tabId);
-            return ok(`Now on "${tab.title ?? ""}" — ${tab.url ?? ""}. Call read_page to see its content.`);
+            return ok(`Now on ${tabLine(tab)}. Call read_page to see its content.`);
           },
         };
       }
@@ -436,6 +451,8 @@ export class BrowserExecutor {
         const x = num("x");
         const y = num("y");
         const tabId = await this.currentTabId();
+        // Coordinates go straight to CDP; without this a click could press a hold page's Abrir.
+        refuseInternal(await chrome.tabs.get(tabId));
         let target: LocatedElement | null = null;
         if (ref) target = await this.send<LocatedElement>(tabId, { type: "enki:locate", ref });
         else if (x !== undefined && y !== undefined) {
@@ -454,7 +471,7 @@ export class BrowserExecutor {
             await this.clickAt(tabId, t.x, t.y, ref);
             await sleep(500);
             const tab = await chrome.tabs.get(tabId);
-            return ok(`Clicked ${t.role}${t.name ? ` "${t.name}"` : ""}. Page is now "${tab.title ?? ""}" — ${tab.url ?? ""}. Call read_page or screenshot to see the result.`);
+            return ok(`Clicked ${t.role}${t.name ? ` "${t.name}"` : ""}. Page is now ${tabLine(tab)}. Call read_page or screenshot to see the result.`);
           },
         };
       }
@@ -464,6 +481,8 @@ export class BrowserExecutor {
         const append = bool("append");
         const submit = bool("submit");
         const tabId = await this.currentTabId();
+        // Without a ref, the focused-element lookup below fails quietly on internal pages.
+        refuseInternal(await chrome.tabs.get(tabId));
         let target: LocatedElement | null = null;
         if (ref) target = await this.send<LocatedElement>(tabId, { type: "enki:locate", ref });
         // Without a ref the text lands in whatever holds focus, so inspect that instead —
@@ -505,6 +524,8 @@ export class BrowserExecutor {
           sensitive: false,
           run: async () => {
             const tabId = await this.currentTabId();
+            // Keys go straight to CDP: Tab + Enter could otherwise press a hold page's Abrir.
+            refuseInternal(await chrome.tabs.get(tabId));
             await this.pressKey(tabId, key);
             await sleep(300);
             return ok(`Pressed ${key}.`);
@@ -552,8 +573,7 @@ export class BrowserExecutor {
             const tab = await chrome.tabs.update(tabId, { active: true });
             this.retarget(tabId);
             await this.applyOverlay();
-            const v = tabForModel(tab ?? {});
-            return ok(`Switched to "${v.title}" — ${v.url}.`);
+            return ok(`Switched to ${tabLine(tab ?? {})}.`);
           },
         };
       }
@@ -574,7 +594,7 @@ export class BrowserExecutor {
             if (tab.id) this.retarget(tab.id);
             if (tab.id) await this.waitForLoad(tab.id);
             const fresh = tab.id ? await chrome.tabs.get(tab.id) : tab;
-            return ok(`Opened "${fresh.title ?? ""}" — ${fresh.url ?? ""} in a new tab (id ${fresh.id}).`);
+            return ok(`Opened ${tabLine(fresh)} in a new tab (id ${fresh.id}).`);
           },
         };
       }
