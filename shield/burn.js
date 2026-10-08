@@ -53,6 +53,22 @@ chrome.storage.session.get("shields:session").then(async (v) => {
   if (v["shields:session"]) return;
   await chrome.storage.session.set({ "shields:session": Date.now() });
   if ((await chrome.storage.local.get(AUTO_BURN))[AUTO_BURN] === true) {
+    // The launcher reopens the last session's tabs ("continue where you left off"); with burning
+    // on, nothing of that session may come back. Close them first, then wipe, so a restored page
+    // cannot write anything after the wipe. Windows may still be opening: look again shortly.
+    for (const delay of [0, 1500, 4000]) {
+      await new Promise((r) => setTimeout(r, delay));
+      await closeRestoredTabs();
+    }
     await chrome.browsingData.remove({ since: 0 }, { ...EVERYTHING, cookies: true });
   }
 });
+
+/** Every tab but one new tab page, in every window; the same as Burn's first step. */
+async function closeRestoredTabs() {
+  const tabs = await chrome.tabs.query({});
+  const blank = (t) => /^chrome:\/\/(newtab|new-tab-page)\/?$/.test(t.pendingUrl || t.url || "") || (t.url || "").includes("/src/home/index.html");
+  const keep = tabs.find(blank) ?? (tabs.length ? await chrome.tabs.create({ url: "chrome://newtab/", active: true }).catch(() => null) : null);
+  const others = tabs.filter((t) => t.id !== keep?.id).map((t) => t.id);
+  if (others.length) await chrome.tabs.remove(others).catch(() => {});
+}

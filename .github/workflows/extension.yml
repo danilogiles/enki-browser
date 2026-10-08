@@ -1,0 +1,78 @@
+name: Extension
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# `pull_request` (not `pull_request_target`) on purpose: a fork's code runs without access to
+# secrets or a write token, so a malicious PR cannot reach anything but its own sandbox.
+permissions:
+  contents: read
+
+concurrency:
+  group: extension-${{ github.ref }}
+  cancel-in-progress: true
+
+# Enki, the extension, lives in extension/ and is tested on its own here: the suites load it in
+# Playwright's Chromium, no browser build needed. No path filter, because these checks are required
+# and a required check that never runs blocks the pull request.
+defaults:
+  run:
+    working-directory: extension
+
+jobs:
+  check:
+    name: Typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enki-extension-dist
+          path: extension/dist/
+          retention-days: 14
+
+  browser:
+    name: Extension in Chromium (e2e, resilience, quality)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      # Stable Chrome refuses --load-extension, so the suites need Playwright's Chromium.
+      - run: npx playwright install --with-deps chromium
+      - name: Start the mock model
+        run: |
+          node test/mock-llm.mjs > mock.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8787/page >/dev/null && exit 0; sleep 1; done
+          cat mock.log; exit 1
+      # Extensions only load in headed Chromium; xvfb gives it a display on the runner.
+      - run: xvfb-run -a npm run test:e2e
+      - run: xvfb-run -a npm run test:home
+      - run: xvfb-run -a npm run test:resilience
+      - run: xvfb-run -a npm run test:quality
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-output
+          path: |
+            extension/test/.out/
+            extension/mock.log
+          retention-days: 7

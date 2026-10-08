@@ -27,7 +27,7 @@ static class Install
         get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EnkiBrowser"); }
     }
 
-    static string ShortcutPath(Environment.SpecialFolder folder)
+    public static string ShortcutPath(Environment.SpecialFolder folder)
     {
         return Path.Combine(Environment.GetFolderPath(folder), "Enki Browser.lnk");
     }
@@ -120,9 +120,13 @@ static class Install
         }
     }
 
+    /// Where Chromium finds the manifest of the "Check for updates" host (NativeHost.cs).
+    public const string NativeHostKey = @"Software\Chromium\NativeMessagingHosts\io.github.danilogiles.enki_browser";
+
     public static void Unregister()
     {
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false); } catch { }
+        try { Registry.CurrentUser.DeleteSubKeyTree(NativeHostKey, false); } catch { }
     }
 
     public static long FolderSizeKb(string dir)

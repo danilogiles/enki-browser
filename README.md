@@ -3,13 +3,13 @@
 **A private, open-source Chromium browser with an AI assistant built in. Bring your own model.**
 
 Enki Browser is [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium)
-— Chromium without Google's services or telemetry — with the [Enki](https://github.com/danilogiles/enkibrowser)
+— Chromium without Google's services or telemetry — with the [Enki](extension/)
 assistant in the side panel, a tracker blocker on by default, and privacy defaults in the spirit
 of Brave and DuckDuckGo. The assistant reads the page you are on and, when you let it, navigates,
 clicks and types for you — with the model *you* choose: Claude, GPT, Gemini, a local Ollama model,
 or free models through OmniRoute.
 
-> **Status: early alpha, Windows x64 and Linux x64.** It works and is verified end to end (below),
+> **Status: early alpha, Windows x64, macOS (Apple silicon and Intel) and Linux x64.** It works and is verified end to end (below),
 > but it is young: read [Known gaps](#known-gaps) before making it your main browser.
 
 ## Download
@@ -17,11 +17,12 @@ or free models through OmniRoute.
 | | |
 |---|---|
 | **Windows 10 / 11** | [**Download EnkiBrowserSetup.exe**](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowserSetup.exe) and run it. It installs for your user (no administrator rights), adds Start menu and desktop shortcuts, and keeps itself up to date. |
+| **macOS 12 or later** | [**Download for Apple silicon**](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowser-macos-arm64.dmg) (M1 and later) or [for Intel](https://github.com/danilogiles/enki-browser/releases/latest/download/EnkiBrowser-macos-x64.dmg). Open the `.dmg` and drag Enki Browser to Applications. The first launch needs one extra step: see [macOS](#macos). |
 | **Ubuntu / Debian** | [Download enki-browser_amd64.deb](https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser_amd64.deb), then `sudo apt install ./enki-browser_amd64.deb` |
 | **Other ways** | Portable zip, Scoop, any Linux distribution: see [Install](#install) below. |
 
 Windows may say the app is unrecognised, because releases are not code-signed yet: choose
-*More info → Run anyway*. Then open Enki with the icon in the toolbar (or `Ctrl+Shift+E`) and pick
+*More info → Run anyway*. macOS will not open it the first time either: see [macOS](#macos). Then open Enki with the icon in the toolbar (or `Ctrl+Shift+E`) and pick
 a model in its Settings; the default, NVIDIA Nemotron, needs only a free key.
 
 ## Install
@@ -37,12 +38,31 @@ needs only a free key.
 |---|---|
 | **Installer** | Run `EnkiBrowserSetup-<version>.exe`. No administrator rights: it installs for your user into `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start menu and desktop shortcuts, appears in *Settings → Apps*, and upgrades older installs keeping your profile. Silent: `/S`; another folder: `/D=<folder>`. |
 | **Scoop** | `scoop install https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser.json` — no installer runs; Scoop keeps it updated (`scoop update enki-browser`). |
-| **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too. |
+| **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too; saved passwords and logins stay encrypted for this Windows user, so they do not carry over to another computer. |
 
-> **Antivirus warnings.** Releases are not yet code-signed (see [Code signing](#code-signing)).
+> **Antivirus warnings.** Releases are not yet code-signed (see [Code signing policy](#code-signing-policy)).
 > Windows SmartScreen will say the app is unrecognised — check the SHA-256, then *More info →
 > Run anyway* — and a behaviour-based antivirus may distrust an unsigned program that starts a
 > browser with extensions and installs updates: Bitdefender quarantined early releases.
+
+### macOS
+
+Open `EnkiBrowser-<version>-macos-arm64.dmg` (Apple silicon: M1 and later) or `-macos-x64.dmg`
+(Intel), and drag **Enki Browser** to **Applications**. macOS 12 or later. Your profile lives in
+`~/Library/Application Support/Enki Browser`.
+
+> **The first launch.** Releases are not notarized by Apple yet (that needs an Apple Developer
+> account), so the first time macOS says it could not verify Enki Browser and does not open it.
+> Check the download's SHA-256, then open **System Settings → Privacy & Security**, scroll to
+> *Security*, click **Open Anyway** next to Enki Browser and confirm. You do this once per
+> download. Or, in Terminal: `xattr -dr com.apple.quarantine "/Applications/Enki Browser.app"`.
+>
+> After the first launch and after each update, macOS may ask whether Enki Browser may use
+> "Chromium Safe Storage" in your keychain: that is the key that encrypts your saved passwords and
+> logins. Choose **Always Allow**.
+
+To update, download the new `.dmg` and drag Enki Browser to Applications again, replacing the old
+one; your profile is kept. To remove it, move the app to the Bin and delete the profile folder.
 
 ### Linux (x86_64)
 
@@ -56,12 +76,17 @@ Tested on Ubuntu 24.04 and Debian 12.
 
 ## Updates
 
-On Windows, Enki Browser updates itself (on Linux, install the new release the same way you
-installed it; Scoop installs are updated by Scoop). While the browser is open it looks for a newer
+On Windows, Enki Browser updates itself (on macOS and Linux, install the new release the same way
+you installed it; Scoop installs are updated by Scoop). While the browser is open it looks for a newer
 release every couple of hours, downloads it and installs it **beside the one you are using**. A
 notification then offers to restart now: every window and tab comes back, on the new version. If
 you ignore it, the next time you start Enki Browser you are on the new version anyway. Nothing
 restarts without your click. Your profile, history and Enki settings are untouched.
+
+Don't want to wait? **Check for updates** is in Shields' settings (the Shields button → *Global
+settings*, or its *Check for updates* link): on Windows it checks now, downloads and verifies the
+release and offers the restart; on macOS and Linux it tells you whether a newer release is out and
+links to it.
 
 How it is laid out, and why:
 
@@ -89,16 +114,24 @@ An update is installed only if:
 `.update\update.log` in the install folder records every check. To turn updates off, create an
 empty file named `no-update` next to `EnkiBrowser.exe`.
 
-## Code signing
+## Code signing policy
 
-The build signs `EnkiBrowser.exe`, the launcher, `chrome.exe` and the installer whenever the
-`ENKI_SIGN_COMMAND` environment variable (in CI, the secret of the same name) holds a signing
-command with `{file}` where the path goes. Code-signing keys are now issued only in hardware or
-cloud HSMs, so this is a command rather than a certificate file. Two routes fit this project:
+See **[CODE_SIGNING.md](CODE_SIGNING.md)** for the full [Code signing policy](CODE_SIGNING.md)
+(team roles, what is signed, SignPath attribution, and privacy link).
 
-- **[SignPath Foundation](https://signpath.org)** — free code signing for open-source projects,
-  with a GitHub Actions integration. Needs the project to apply.
-- **Azure Trusted Signing** — paid, with identity verification of the publisher.
+The build can sign Windows PE files when the `ENKI_SIGN_COMMAND` environment variable (in CI, the
+secret of the same name) holds a signing command with `{file}` where the path goes. Code-signing
+keys are now issued only in hardware or cloud HSMs, so this is a command rather than a certificate
+file. Two routes fit this project:
+
+- **[SignPath Foundation](https://signpath.org)** — free Authenticode for open-source projects,
+  certificate by SignPath Foundation, with a GitHub Actions integration
+  (`signpath/github-action-submit-signing-request`). **Not approved yet**; until it is, releases
+  stay unsigned. Prefer that action for the installer and Enki-built PE files once live — do not
+  sign upstream `chrome.exe` with the Foundation certificate (include it unsigned; see
+  [CODE_SIGNING.md](CODE_SIGNING.md)).
+- **Azure Trusted Signing** — paid, with identity verification of the publisher; can use
+  `ENKI_SIGN_COMMAND` when configured.
 
 Until one is in place, releases are unsigned.
 
@@ -141,7 +174,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 
 | | Default | Where it comes from |
 |---|---|---|
-| AI assistant | Enki in the side panel, pinned to the toolbar | [danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser), MIT |
+| AI assistant | Enki in the side panel, pinned to the toolbar | [`extension/`](extension/), MIT |
 | AI model | NVIDIA Nemotron 3 Ultra by default — free key from [build.nvidia.com](https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b), no credit card; or Claude, GPT, Gemini, Groq, OpenRouter, Ollama, OmniRoute | chosen in Enki's Settings |
 | Ads and trackers | Blocked (EasyList, EasyPrivacy, Peter Lowe's list, uBlock filters) | [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home), with the small Shields patch described in [THIRD_PARTY.md](THIRD_PARTY.md) |
 | Shields button | Right of the address bar: how many trackers and ads were blocked on the site and which, Shields down for one site, blocking level, scripts, cookies and "forget me when I close this site" | Enki Shield (`shield/`) |
@@ -150,6 +183,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 | Address bar search | Enki: a search opens Enki's answer page, which searches the web and cites its sources. DuckDuckGo, Google, Bing and others are one click away in Settings → Search engine (suggestions while typing come from DuckDuckGo) | `config/initial_preferences.json` |
 | Connections | `http://` upgraded to `https://`, with a warning where a site has no HTTPS | same |
 | Third-party cookies | Blocked | same |
+| Startup | Your tabs come back, as you left them; a new tab is Enki Home. Off when *burn every time the browser closes* is on | `config/initial_preferences.json`; the launcher, for profiles made before 0.8.1 |
 | Fingerprinting | Tiny per-page noise in canvas and layout readings | ungoogled-chromium switches in `config/flags.txt` |
 | WebRTC | Public interface only (no local IP leak) | same |
 | Google services, telemetry, crash reports | None — removed by ungoogled-chromium | [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium) |
@@ -187,7 +221,12 @@ node test/update.mjs  # builds two versions and checks the updater: forged, tamp
 Requirements: Windows 10/11 x64, Node.js 22+, Git. The C# compiler that ships with Windows' .NET
 Framework builds the launcher; nothing else to install.
 
-To build against a local Enki checkout: `ENKI_DIST=../enkibrowser/dist npm run build`.
+The Linux edition is built on Linux with `node build/build-linux.mjs`. The macOS edition is built on
+a Mac with `node build/build-mac.mjs [--arch=arm64|x64]` (Xcode's command line tools for `clang`).
+It takes ungoogled-chromium's macOS app, renames it Enki Browser with its own icon and bundle id,
+adds the extensions, defaults and a small launcher, signs it ad hoc and packs the `.dmg`.
+
+The build compiles Enki from `extension/`; to reuse one already built: `ENKI_DIST=extension/dist npm run build`.
 
 ## Verified
 
@@ -226,16 +265,19 @@ Honest list; each is on the roadmap.
 - **Updates need a restart**, like every browser: a downloaded fix is offered in a notification
   and waits for your click (or your next start). Incognito windows do not come back after it.
 - **Not code-signed yet**, so SmartScreen warns on install and a behaviour-based antivirus may
-  distrust the updater (see [Code signing](#code-signing)).
+  distrust the updater (see [Code signing policy](#code-signing-policy)).
 - **A few Chromium traces remain:** the process is still called `chrome.exe`, and the version line
   on the About page still names ungoogled-chromium after Enki Browser's version. Changing those needs Enki Browser's own Chromium build.
 - **"Enki started debugging this browser" bar** while Enki acts on a page. That is Chromium's
   warning for the debugger API extensions use; a built-in assistant will not need it.
 - **No Chrome Web Store.** As in ungoogled-chromium, extensions install from `.crx` files with a
   confirmation prompt. See [chromium-web-store](https://github.com/NeverDecaf/chromium-web-store).
-- **No automatic updates on Linux yet**: install each new release with the `.deb`, `install.sh` or
-  the one-line installer. No macOS build (it needs an Apple Developer account to notarise).
-- **x86_64 only.**
+- **No automatic updates on macOS and Linux yet**: install each new release with the `.dmg`, the
+  `.deb`, `install.sh` or the one-line installer.
+- **macOS: not notarized.** The first launch needs *Open Anyway* (see [macOS](#macos)), and after
+  an update macOS may ask again for the keychain item that encrypts your logins. A Developer ID
+  signature would end both; it needs an Apple Developer account.
+- **x86_64 only on Windows and Linux**; macOS has Apple silicon and Intel builds.
 
 ## Roadmap
 
@@ -249,13 +291,14 @@ Honest list; each is on the roadmap.
 4. **An assistant built to resist prompt injection:** the model that reads pages gets no tools, the
    agent needs per-site permission on sites you are logged in to, and every release must pass a
    public corpus of injection attacks.
-5. **macOS**, Linux auto-updates and ARM builds, with the community.
+5. ✅ **macOS** (0.8.0). Next: notarization, macOS and Linux auto-updates, and ARM builds for
+   Windows and Linux, with the community.
 
 ## Contributing
 
-Most work on the assistant happens in [enkibrowser](https://github.com/danilogiles/enkibrowser)
-and needs only Node.js — see its [CONTRIBUTING.md](https://github.com/danilogiles/enkibrowser/blob/main/CONTRIBUTING.md).
-This repository is the browser around it: build, launcher, Shields, defaults, installer — see
+One repository, two parts. Most work on the assistant happens in [`extension/`](extension/) and
+needs only Node.js — see [extension/CONTRIBUTING.md](extension/CONTRIBUTING.md). The rest is the
+browser around it: build, launcher, Shields, defaults, installer — see
 [CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas go in
 [Discussions](https://github.com/danilogiles/enki-browser/discussions); issues labelled
 **good first issue** are a good place to start. Every change, maintainers' included, goes through

@@ -1,0 +1,618 @@
+/**
+ * Executes browser tools from the side panel. Uses the content script for DOM reads and
+ * element location, and the Chrome DevTools Protocol (chrome.debugger) for trusted mouse and
+ * keyboard input, falling back to DOM-level actions when the debugger cannot attach.
+ */
+import type { ImagePart, TextPart, ToolCallPart } from "../types";
+import type { ContentRequest, ContentResponse, LocatedElement, PageInfo } from "../protocol";
+import { SENSITIVE_ACTION } from "../protocol";
+import { formatResults, readDuckDuckGoPage, textOfHtml, webSearch } from "./web";
+import { findTool, runTool, type Connection } from "../connectors";
+
+export type ToolOutput = { content: Array<TextPart | ImagePart>; isError?: boolean };
+
+export type ToolPlan = {
+  /** Human-readable description shown in the UI, e.g. `Click "Sign in"`. */
+  label: string;
+  /** True when the action deserves a confirmation card before running. */
+  sensitive: boolean;
+  /** Ask even with auto-approve on: a write to another service the user did not allow by name. */
+  alwaysAsk?: boolean;
+  run: () => Promise<ToolOutput>;
+};
+
+const RESTRICTED_URL = /^(chrome|edge|brave|opera|vivaldi|arc|about|chrome-extension|devtools|view-source|file|javascript|data):/i;
+
+export function isRestrictedUrl(url: string | undefined): boolean {
+  if (!url) return true;
+  const trimmed = url.trim();
+  return RESTRICTED_URL.test(trimmed) || trimmed.startsWith("https://chromewebstore.google.com");
+}
+
+export function isValidWebNavigationUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") && !isRestrictedUrl(url);
+  } catch {
+    return false;
+  }
+}
+
+const text = (t: string): TextPart => ({ type: "text", text: t });
+const ok = (t: string): ToolOutput => ({ content: [text(t)] });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const KEY_CODES: Record<string, { code: string; vk: number; text?: string }> = {
+  enter: { code: "Enter", vk: 13, text: "\r" },
+  tab: { code: "Tab", vk: 9 },
+  escape: { code: "Escape", vk: 27 },
+  esc: { code: "Escape", vk: 27 },
+  backspace: { code: "Backspace", vk: 8 },
+  delete: { code: "Delete", vk: 46 },
+  space: { code: "Space", vk: 32, text: " " },
+  arrowup: { code: "ArrowUp", vk: 38 },
+  arrowdown: { code: "ArrowDown", vk: 40 },
+  arrowleft: { code: "ArrowLeft", vk: 37 },
+  arrowright: { code: "ArrowRight", vk: 39 },
+  up: { code: "ArrowUp", vk: 38 },
+  down: { code: "ArrowDown", vk: 40 },
+  left: { code: "ArrowLeft", vk: 37 },
+  right: { code: "ArrowRight", vk: 39 },
+  home: { code: "Home", vk: 36 },
+  end: { code: "End", vk: 35 },
+  pageup: { code: "PageUp", vk: 33 },
+  pagedown: { code: "PageDown", vk: 34 },
+  f5: { code: "F5", vk: 116 },
+};
+
+export class BrowserExecutor {
+  /** Connected apps whose tools this executor may run (see lib/connectors). */
+  private connections: Connection[] = [];
+  setConnections(list: Connection[]): void { this.connections = list; }
+  private lockedTabId: number | null = null;
+  /**
+   * Set only when an agent tool deliberately retargets the task (switch_tab / open_tab).
+   * The panel uses this to decide whether a tab choice should outlive the task: following
+   * the user's active tab is the default, and only the agent's own switch is sticky.
+   */
+  private agentTabId: number | null = null;
+  lockTab(tabId: number | null): void { this.lockedTabId = tabId; this.agentTabId = null; }
+  /** The tab the agent itself selected during this task, or null if it never switched. */
+  agentSelectedTab(): number | null { return this.agentTabId; }
+  private retarget(tabId: number): void { this.lockedTabId = tabId; this.agentTabId = tabId; }
+  private attached = new Set<number>();
+  private screenshotScale = 1;
+  /** Tabs currently showing the "Enki is controlling this tab" overlay. */
+  private overlayTabs = new Set<number>();
+  private overlayActive = false;
+  private overlayLabel = "Enki is controlling this tab…";
+
+  constructor(private readonly windowId: number) {
+    chrome.debugger.onDetach.addListener((source) => {
+      if (source.tabId) this.attached.delete(source.tabId);
+    });
+  }
+
+  // ---------- tab helpers ----------
+
+  async currentTab(): Promise<chrome.tabs.Tab> {
+    if (this.lockedTabId !== null) {
+      const tab = await chrome.tabs.get(this.lockedTabId).catch(() => null);
+      if (!tab || tab.windowId !== this.windowId) throw new Error("The controlled tab was closed or moved. Choose a tab before continuing.");
+      return tab;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, windowId: this.windowId });
+    if (!tab?.id) throw new Error("No active tab in this window.");
+    return tab;
+  }
+
+  private async currentTabId(): Promise<number> {
+    return (await this.currentTab()).id!;
+  }
+
+  /**
+   * A page's text without touching the user's tab. A plain fetch is enough for most pages; a page
+   * that builds itself with JavaScript (the TSE's live results, dashboards) says almost nothing in
+   * its HTML, so it is opened in a background tab, read once it has rendered, and closed.
+   */
+  private async readUrl(url: string, max: number): Promise<string> {
+    const cut = (t: string) => (t.length > max ? `${t.slice(0, max)}\n[…truncated at ${max} characters]` : t);
+    try {
+      const res = await fetch(url, { credentials: "omit" });
+      const type = res.headers.get("content-type") ?? "";
+      if (res.ok && /json|text\/plain|csv/.test(type)) return cut(`${url}\n\n${await res.text()}`);
+      if (res.ok && /html/.test(type)) {
+        const page = textOfHtml(await res.text());
+        if (page.text.length > 800) return cut(`${page.title} — ${res.url}\n\n${page.text}`);
+      }
+    } catch { /* blocked by CORS or the network: try rendering it */ }
+    return this.inBackgroundTab(url, async (tabId) => {
+      const fresh = await chrome.tabs.get(tabId);
+      const body = await this.send<string>(tabId, { type: "enki:text", maxChars: max });
+      return cut(`${fresh.title ?? ""} — ${fresh.url ?? url}\n\n${body}`);
+    });
+  }
+
+  /**
+   * Opens `url` in a tab the user does not switch to, lets it render, reads it and closes it.
+   */
+  private async inBackgroundTab<T>(url: string, read: (tabId: number) => Promise<T>): Promise<T> {
+    const tab = await chrome.tabs.create({ url, windowId: this.windowId, active: false });
+    try {
+      await this.waitForLoad(tab.id!, 20000);
+      await sleep(2500); // let live content arrive after load
+      return await read(tab.id!);
+    } finally {
+      await chrome.tabs.remove(tab.id!).catch(() => undefined);
+    }
+  }
+
+  private async send<T>(tabId: number, req: ContentRequest): Promise<T> {
+    const tab = await chrome.tabs.get(tabId);
+    if (isRestrictedUrl(tab.url)) {
+      throw new Error(
+        `This tab (${tab.url ?? "internal page"}) is a browser-internal page and cannot be read or controlled. Navigate to a website first.`,
+      );
+    }
+    const attempt = async (): Promise<T> => {
+      const res = (await chrome.tabs.sendMessage(tabId, req)) as ContentResponse<T> | undefined;
+      if (!res) throw new Error("No response from page.");
+      if (!res.ok) throw new Error(res.error);
+      return res.data;
+    };
+    try {
+      return await attempt();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/Receiving end does not exist|Could not establish connection|No response/.test(msg)) throw e;
+      // Content script not present (tab opened before install, or page still loading). Inject it.
+      const files = chrome.runtime.getManifest().content_scripts?.flatMap((cs) => cs.js ?? []) ?? [];
+      await chrome.scripting.executeScript({ target: { tabId }, files });
+      await sleep(150);
+      return attempt();
+    }
+  }
+
+  private async waitForLoad(tabId: number, timeoutMs = 20000): Promise<void> {
+    const start = Date.now();
+    await sleep(400);
+    while (Date.now() - start < timeoutMs) {
+      const tab = await chrome.tabs.get(tabId).catch(() => null);
+      if (!tab) return;
+      if (tab.status === "complete" && Date.now() - start > 700) break;
+      await sleep(250);
+    }
+    await sleep(400);
+    // A load replaces the document, taking the overlay with it. Put it back.
+    this.overlayTabs.delete(tabId);
+    await this.applyOverlay();
+  }
+
+  // ---------- CDP helpers ----------
+
+  private async attach(tabId: number): Promise<boolean> {
+    if (this.attached.has(tabId)) return true;
+    try {
+      await chrome.debugger.attach({ tabId }, "1.3");
+      this.attached.add(tabId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private cdp<T = unknown>(tabId: number, method: string, params?: Record<string, unknown>): Promise<T> {
+    return chrome.debugger.sendCommand({ tabId }, method, params) as unknown as Promise<T>;
+  }
+
+  /**
+   * Shows or hides the glowing Comet-style border and badge over the controlled page.
+   * The overlay is remembered for the whole turn: it is re-applied after navigation (which
+   * destroys it along with the old document) and after tab switches, and clearing it visits
+   * every tab that ever received it so no window is left glowing.
+   */
+  async setActiveOverlay(active: boolean, label?: string): Promise<void> {
+    if (active) {
+      this.overlayLabel = label ?? this.overlayLabel;
+      this.overlayActive = true;
+      await this.applyOverlay();
+      return;
+    }
+    this.overlayActive = false;
+    for (const tabId of [...this.overlayTabs]) {
+      await this.send(tabId, { type: "enki:set_active", active: false }).catch(() => undefined);
+      this.overlayTabs.delete(tabId);
+    }
+  }
+
+  /** (Re)draws the overlay on the current tab when a turn is active. Safe to call often. */
+  private async applyOverlay(): Promise<void> {
+    if (!this.overlayActive) return;
+    try {
+      const tab = await this.currentTab();
+      if (tab?.id && !isRestrictedUrl(tab.url)) {
+        await this.send(tab.id, { type: "enki:set_active", active: true, label: this.overlayLabel });
+        this.overlayTabs.add(tab.id);
+      }
+    } catch {
+      /* no active tab, or the page cannot host the overlay */
+    }
+  }
+
+  /** Detach the debugger from every tab and remove the active visual overlay. */
+  async release(): Promise<void> {
+    await this.setActiveOverlay(false).catch(() => undefined);
+    for (const tabId of [...this.attached]) {
+      await chrome.debugger.detach({ tabId }).catch(() => undefined);
+      this.attached.delete(tabId);
+    }
+  }
+
+  private async clickAt(tabId: number, x: number, y: number, fallbackRef?: string): Promise<void> {
+    this.send(tabId, { type: "enki:flash", x, y }).catch(() => undefined);
+    if (await this.attach(tabId)) {
+      const base = { x, y, button: "left", clickCount: 1 };
+      await this.cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      await this.cdp(tabId, "Input.dispatchMouseEvent", { ...base, type: "mousePressed" });
+      await this.cdp(tabId, "Input.dispatchMouseEvent", { ...base, type: "mouseReleased" });
+      return;
+    }
+    if (fallbackRef) {
+      await this.send(tabId, { type: "enki:dom_click", ref: fallbackRef });
+      return;
+    }
+    throw new Error("Cannot click by coordinates on this page (debugger unavailable). Use a ref instead.");
+  }
+
+  private async pressKey(tabId: number, combo: string): Promise<void> {
+    if (!(await this.attach(tabId))) {
+      throw new Error("Keyboard input is unavailable on this page (debugger could not attach).");
+    }
+    const parts = combo.split("+").map((p) => p.trim());
+    const keyName = parts.pop() ?? "";
+    let modifiers = 0;
+    for (const m of parts.map((p) => p.toLowerCase())) {
+      if (m === "alt") modifiers |= 1;
+      else if (m === "ctrl" || m === "control") modifiers |= 2;
+      else if (m === "meta" || m === "cmd" || m === "command") modifiers |= 4;
+      else if (m === "shift") modifiers |= 8;
+    }
+    const special = KEY_CODES[keyName.toLowerCase()];
+    let key: string;
+    let code: string;
+    let vk: number;
+    let txt: string | undefined;
+    if (special) {
+      key = special.code === "Space" ? " " : special.code;
+      code = special.code;
+      vk = special.vk;
+      txt = special.text;
+    } else if (keyName.length === 1) {
+      key = keyName;
+      code = /[a-z]/i.test(keyName) ? `Key${keyName.toUpperCase()}` : /[0-9]/.test(keyName) ? `Digit${keyName}` : "";
+      vk = keyName.toUpperCase().charCodeAt(0);
+      txt = modifiers & 6 ? undefined : keyName;
+    } else {
+      throw new Error(`Unknown key "${keyName}".`);
+    }
+    const common = { key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers };
+    await this.cdp(tabId, "Input.dispatchKeyEvent", {
+      ...common,
+      type: txt ? "keyDown" : "rawKeyDown",
+      text: txt,
+      unmodifiedText: txt,
+    });
+    await this.cdp(tabId, "Input.dispatchKeyEvent", { ...common, type: "keyUp" });
+  }
+
+  // ---------- screenshot ----------
+
+  async screenshot(): Promise<ImagePart & { width: number; height: number }> {
+    const tab = await this.currentTab();
+    if (!tab.active) throw new Error("Select the controlled tab before taking a screenshot. Enki will not capture a different tab.");
+    const info = isRestrictedUrl(tab.url)
+      ? null
+      : await this.send<PageInfo>(tab.id!, { type: "enki:page_info" }).catch(() => null);
+    const dataUrl = await chrome.tabs.captureVisibleTab(this.windowId, { format: "jpeg", quality: 82 });
+    const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+
+    let width = info?.viewport.width ?? Math.round(bitmap.width / (info?.dpr ?? 1));
+    let height = info?.viewport.height ?? Math.round(bitmap.height / (info?.dpr ?? 1));
+    let scale = 1;
+    const MAX_W = 1400;
+    if (width > MAX_W) {
+      scale = MAX_W / width;
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+    this.screenshotScale = scale;
+
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.8 });
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i += 0x8000) {
+      bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    }
+    return { type: "image", mediaType: "image/jpeg", data: btoa(bin), width, height };
+  }
+
+  // ---------- planning ----------
+
+  async prepare(call: ToolCallPart): Promise<ToolPlan> {
+    const input = call.input ?? {};
+    const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : undefined);
+    const num = (k: string) => (typeof input[k] === "number" ? (input[k] as number) : undefined);
+    const bool = (k: string) => input[k] === true;
+
+    switch (call.name) {
+      case "read_page": {
+        const filter = str("filter") === "all" ? "all" : "interactive";
+        return {
+          label: `Read page (${filter})`,
+          sensitive: false,
+          run: async () => ok(await this.send<string>(await this.currentTabId(), { type: "enki:snapshot", filter })),
+        };
+      }
+      case "find": {
+        const query = str("query") ?? "";
+        return {
+          label: `Find "${query}"`,
+          sensitive: false,
+          run: async () => ok(await this.send<string>(await this.currentTabId(), { type: "enki:find", query })),
+        };
+      }
+      case "get_page_text":
+        return {
+          label: "Read page text",
+          sensitive: false,
+          run: async () =>
+            ok(
+              await this.send<string>(await this.currentTabId(), {
+                type: "enki:text",
+                maxChars: num("max_chars"),
+              }),
+            ),
+        };
+      case "screenshot":
+        return {
+          label: "Take screenshot",
+          sensitive: false,
+          run: async () => {
+            const shot = await this.screenshot();
+            const { width, height, ...img } = shot;
+            return { content: [text(`Screenshot ${width}x${height}. Coordinates map 1:1 to click(x, y).`), img] };
+          },
+        };
+      case "list_tabs":
+        return {
+          label: "List tabs",
+          sensitive: false,
+          run: async () => {
+            const tabs = await chrome.tabs.query({ windowId: this.windowId });
+            return ok(
+              tabs
+                .map((t) => `${t.active ? "* " : "  "}[${t.id}] ${t.title ?? ""} — ${t.url ?? ""}`)
+                .join("\n"),
+            );
+          },
+        };
+      case "web_search": {
+        const query = (str("query") ?? "").trim();
+        return {
+          label: `Search the web: "${query}"`,
+          sensitive: false,
+          run: async () => ok(formatResults(query, await webSearch(query, (url) => this.inBackgroundTab(url, async (tabId) =>
+            (await chrome.scripting.executeScript({ target: { tabId }, func: readDuckDuckGoPage }))[0]?.result ?? [])))),
+        };
+      }
+      case "read_url": {
+        let url = (str("url") ?? "").trim();
+        if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+        if (!isValidWebNavigationUrl(url)) throw new Error(`read_url only reads http/https web pages, not "${url}".`);
+        const max = Math.max(500, Math.min(num("max_chars") ?? 15000, 60000));
+        return {
+          label: `Read ${new URL(url).host}`,
+          sensitive: false,
+          run: async () => ok(await this.readUrl(url, max)),
+        };
+      }
+      case "navigate": {
+        let url = (str("url") ?? "").trim();
+        const isHistory = url === "back" || url === "forward";
+        if (!isHistory) {
+          if (!url) throw new Error("url is required.");
+          if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+          if (!isValidWebNavigationUrl(url)) {
+            throw new Error(`Security restriction: Cannot navigate to "${url}". Only standard http/https web URLs are allowed.`);
+          }
+        }
+        return {
+          label: isHistory ? `Go ${url}` : `Go to ${url}`,
+          sensitive: false,
+          run: async () => {
+            const tabId = await this.currentTabId();
+            if (url === "back") await chrome.tabs.goBack(tabId);
+            else if (url === "forward") await chrome.tabs.goForward(tabId);
+            else await chrome.tabs.update(tabId, { url });
+            await this.waitForLoad(tabId);
+            const tab = await chrome.tabs.get(tabId);
+            return ok(`Now on "${tab.title ?? ""}" — ${tab.url ?? ""}. Call read_page to see its content.`);
+          },
+        };
+      }
+      case "click": {
+        const ref = str("ref");
+        const x = num("x");
+        const y = num("y");
+        const tabId = await this.currentTabId();
+        let target: LocatedElement | null = null;
+        if (ref) target = await this.send<LocatedElement>(tabId, { type: "enki:locate", ref });
+        else if (x !== undefined && y !== undefined) {
+          const px = Math.round(x / this.screenshotScale);
+          const py = Math.round(y / this.screenshotScale);
+          target = await this.send<LocatedElement>(tabId, { type: "enki:describe_point", x: px, y: py }).catch(
+            () => ({ x: px, y: py, tag: "?", role: "?", name: "", sensitive: false }),
+          );
+        } else throw new Error("click needs a ref or x,y.");
+        const t = target!;
+        const label = t.name ? `Click "${t.name}"` : `Click ${t.role} at (${t.x}, ${t.y})`;
+        return {
+          label,
+          sensitive: t.sensitive,
+          run: async () => {
+            await this.clickAt(tabId, t.x, t.y, ref);
+            await sleep(500);
+            const tab = await chrome.tabs.get(tabId);
+            return ok(`Clicked ${t.role}${t.name ? ` "${t.name}"` : ""}. Page is now "${tab.title ?? ""}" — ${tab.url ?? ""}. Call read_page or screenshot to see the result.`);
+          },
+        };
+      }
+      case "type": {
+        const ref = str("ref");
+        const value = str("text") ?? "";
+        const append = bool("append");
+        const submit = bool("submit");
+        const tabId = await this.currentTabId();
+        let target: LocatedElement | null = null;
+        if (ref) target = await this.send<LocatedElement>(tabId, { type: "enki:locate", ref });
+        // Without a ref the text lands in whatever holds focus, so inspect that instead —
+        // otherwise the password guard below would be trivially bypassed.
+        else target = await this.send<LocatedElement | null>(tabId, { type: "enki:focused" }).catch(() => null);
+        if (target?.isPassword) {
+          throw new Error(
+            "Security restriction: Enki is prevented from typing into password or credential fields for safety. Please enter credentials manually.",
+          );
+        }
+        const preview = value.length > 40 ? value.slice(0, 40) + "…" : value;
+        const label = `Type "${preview}"${target?.name ? ` into "${target.name}"` : ""}${submit ? " and press Enter" : ""}`;
+        return {
+          label,
+          sensitive: submit && !!target && !/search|buscar|pesquisar|procurar/i.test(`${target.name} ${target.role}`) && SENSITIVE_ACTION.test(target.name),
+          run: async () => {
+            if (ref) await this.send(tabId, { type: "enki:focus", ref, clear: !append });
+            if (await this.attach(tabId)) {
+              if (!ref && !append) await this.pressKey(tabId, "ctrl+a");
+              await this.cdp(tabId, "Input.insertText", { text: value });
+            } else if (ref) {
+              await this.send(tabId, { type: "enki:set_value", ref, text: value });
+            } else {
+              throw new Error("Cannot type without a ref on this page (debugger unavailable).");
+            }
+            if (submit) {
+              await sleep(120);
+              await this.pressKey(tabId, "Enter");
+              await this.waitForLoad(tabId, 8000);
+            }
+            return ok(`Typed into ${target?.name ? `"${target.name}"` : "the focused element"}${submit ? " and pressed Enter" : ""}.`);
+          },
+        };
+      }
+      case "press_key": {
+        const key = str("key") ?? "";
+        return {
+          label: `Press ${key}`,
+          sensitive: false,
+          run: async () => {
+            const tabId = await this.currentTabId();
+            await this.pressKey(tabId, key);
+            await sleep(300);
+            return ok(`Pressed ${key}.`);
+          },
+        };
+      }
+      case "scroll": {
+        const direction = (str("direction") ?? "down") as "up" | "down" | "left" | "right";
+        const amount = num("amount") ?? 1;
+        const ref = str("ref");
+        return {
+          label: `Scroll ${direction}${amount !== 1 ? ` ×${amount}` : ""}`,
+          sensitive: false,
+          run: async () => {
+            const info = await this.send<PageInfo>(await this.currentTabId(), {
+              type: "enki:scroll",
+              direction,
+              amount,
+              ref,
+            });
+            return ok(`Scrolled ${direction}. Now at ${info.scroll.y}/${info.scroll.maxY}px.`);
+          },
+        };
+      }
+      case "wait": {
+        const seconds = Math.min(Math.max(num("seconds") ?? 2, 0.2), 10);
+        return {
+          label: `Wait ${seconds}s`,
+          sensitive: false,
+          run: async () => {
+            await sleep(seconds * 1000);
+            return ok(`Waited ${seconds}s.`);
+          },
+        };
+      }
+      case "switch_tab": {
+        const tabId = num("tab_id");
+        return {
+          label: `Switch to tab ${tabId}`,
+          sensitive: false,
+          run: async () => {
+            if (tabId === undefined) throw new Error("tab_id is required.");
+            const target = await chrome.tabs.get(tabId);
+            if (target.windowId !== this.windowId) throw new Error("Choose a tab in this window.");
+            const tab = await chrome.tabs.update(tabId, { active: true });
+            this.retarget(tabId);
+            await this.applyOverlay();
+            return ok(`Switched to "${tab?.title ?? ""}" — ${tab?.url ?? ""}.`);
+          },
+        };
+      }
+      case "new_tab": {
+        let url = (str("url") ?? "").trim();
+        if (url) {
+          if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+          if (!isValidWebNavigationUrl(url)) {
+            throw new Error(`Security restriction: Cannot open new tab with "${url}". Only standard http/https web URLs are allowed.`);
+          }
+        }
+        const targetUrl = url || "https://google.com";
+        return {
+          label: `Open new tab: ${targetUrl}`,
+          sensitive: false,
+          run: async () => {
+            const tab = await chrome.tabs.create({ url: targetUrl, windowId: this.windowId, active: true });
+            if (tab.id) this.retarget(tab.id);
+            if (tab.id) await this.waitForLoad(tab.id);
+            const fresh = tab.id ? await chrome.tabs.get(tab.id) : tab;
+            return ok(`Opened "${fresh.title ?? ""}" — ${fresh.url ?? ""} in a new tab (id ${fresh.id}).`);
+          },
+        };
+      }
+      default: {
+        const found = findTool(this.connections, call.name);
+        if (found) {
+          const { conn, tool } = found;
+          return {
+            label: `${conn.name}: ${tool.title}`,
+            sensitive: !tool.readOnly && !tool.allowed,
+            alwaysAsk: !tool.readOnly && !tool.allowed,
+            run: async () => {
+              const r = await runTool(conn, tool, input as Record<string, unknown>);
+              return {
+                content: [text(r.text), ...r.images.map((i) => ({ type: "image" as const, mediaType: i.mediaType as ImagePart["mediaType"], data: i.data }))],
+                isError: r.isError,
+              };
+            },
+          };
+        }
+        return {
+          label: call.name,
+          sensitive: false,
+          run: async () => ({ content: [text(`Unknown tool "${call.name}".`)], isError: true }),
+        };
+      }
+    }
+  }
+}

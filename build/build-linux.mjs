@@ -5,7 +5,7 @@
 //   node build/build-linux.mjs   → out/linux/enki-browser/, enki-browser-<ver>-linux-x64.tar.gz
 //                                  and, where dpkg-deb exists, enki-browser_<ver>_amd64.deb
 //
-// Needs: node 22, git and npm (or ENKI_DIST), unzip, tar with xz. Icons come from brand/.
+// Needs: node 22 and npm (or ENKI_DIST), unzip, tar with xz. Icons come from brand/.
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";

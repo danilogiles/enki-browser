@@ -6,9 +6,15 @@
 // restart now — tabs and windows come back — and otherwise the next start opens it anyway.
 // Nothing restarts on its own: a half-written form is the user's to lose, not ours.
 //
-// Restarting. Closing windows one by one would leave only the last one in the saved session, and
-// chrome://quit is not accepted from the command line. WM_ENDSESSION, the message Windows sends
-// at log-off, makes Chromium save every window and exit; --restore-last-session brings them back.
+// Restarting. The launcher sends a browser window the menu's Exit command (WM_COMMAND IDC_EXIT),
+// which Chromium runs like a click on Exit: every window is saved for the next session, pending
+// cookies and storage are written, and a page with unsaved changes can still ask first. Then
+// --restore-last-session brings every window back on the new version.
+// Rejected on the way: closing windows one by one keeps only the last one in the session;
+// chrome://quit is refused from the command line and from extensions; WM_ENDSESSION (the log-off
+// message) restored the windows but skipped writing cookies changed in the last half minute, so a
+// login made just before "Restart and update" was gone; and a private DevTools pipe works, but
+// Chromium closes itself when the pipe drops, so ending the launcher would take the browser down.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -46,7 +52,7 @@ static class Watcher
 
     /// Runs until the browser started from `appDir` has closed. `switches` are the command-line
     /// switches it was started with, passed again when it restarts.
-    public static void Run(string root, string appDir, IEnumerable<string> switches, bool forceFirst)
+    public static void Run(string root, string appDir, string userData, IEnumerable<string> switches, bool forceFirst)
     {
         bool owner;
         using (var mutex = new Mutex(true, "EnkiBrowserWatcher-" + Id(root), out owner))
@@ -54,7 +60,7 @@ static class Watcher
             if (!owner)
             {
                 // Another window's launcher is already watching; just make sure this start checked.
-                Updater.CheckAndStage(root, appDir, forceFirst);
+                if (!Updater.Disabled(root)) Updater.CheckAndStage(root, appDir, forceFirst);
                 return;
             }
             bool restart;
@@ -66,9 +72,9 @@ static class Watcher
             }
             mutex.ReleaseMutex();
             // Started after the mutex is released, so the new version's launcher can watch in turn.
-            if (restart) Relaunch(root, switches);
+            if (restart) Relaunch(root, userData, switches);
             // The browser has closed (or restarted into another version): nothing old is in use.
-            else { Updater.RemoveOldVersions(root, appDir); Updater.RefreshStub(root, appDir); }
+            else { Updater.RemoveOldVersions(root, appDir); Updater.RefreshStub(root, appDir); ShellIdentity.RepairShortcuts(root); }
         }
     }
 
@@ -86,8 +92,11 @@ static class Watcher
         NotifyIcon tray;
         public bool Restart;
 
+        readonly bool updatesOff;
+
         public Watch(string root, string appDir, EventWaitHandle signal, bool forceFirst)
         {
+            updatesOff = Updater.Disabled(root);
             this.root = root; this.appDir = appDir; this.signal = signal; forceNext = forceFirst;
             running = Updater.ReadVersion(appDir);
             timer.Tick += delegate { Tick(); };
@@ -101,7 +110,7 @@ static class Watcher
             if (Win.BrowserProcesses(appDir).Count == 0 && DateTime.UtcNow - started > TimeSpan.FromSeconds(30)) { ExitThread(); return; }
 
             if (ready != null && tray == null) Offer(ready);
-            if (ready == null && DateTime.UtcNow >= nextCheck && Interlocked.CompareExchange(ref checking, 1, 0) == 0)
+            if (ready == null && !updatesOff && DateTime.UtcNow >= nextCheck && Interlocked.CompareExchange(ref checking, 1, 0) == 0)
             {
                 nextCheck = DateTime.UtcNow + CheckEvery;
                 bool force = forceNext; forceNext = false;
@@ -180,14 +189,41 @@ static class Watcher
         }
     }
 
-    static void Relaunch(string root, IEnumerable<string> switches)
+    static void Relaunch(string root, string userData, IEnumerable<string> switches)
     {
         var args = switches.Where(a => a != "--restore-last-session").ToList();
         args.Add("--restore-last-session");
+        // With more than one profile Chromium opens on its profile picker, and the tabs only came
+        // back after the user picked one. Reopen the profile last used, which is the one whose
+        // windows were just closed for the update.
+        if (!args.Any(a => a.StartsWith("--profile-directory=")))
+        {
+            string last = LastUsedProfile(userData);
+            if (last != null) args.Add("--profile-directory=" + last);
+        }
         Process.Start(new ProcessStartInfo(Path.Combine(root, "EnkiBrowser.exe"), Win.JoinArgs(args)) { UseShellExecute = false, WorkingDirectory = root });
     }
 
-    // ---- WM_ENDSESSION to one of the browser's windows
+    internal static string LastUsedProfile(string userData)
+    {
+        try
+        {
+            var state = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = int.MaxValue }
+                .DeserializeObject(File.ReadAllText(Path.Combine(userData, "Local State"))) as Dictionary<string, object>;
+            var profile = state != null && state.ContainsKey("profile") ? state["profile"] as Dictionary<string, object> : null;
+            // The profiles open when the browser closed come first; Chromium writes last_used only
+            // for a profile other than Default, so neither may be there, and then it is Default.
+            string last = null;
+            var active = profile != null && profile.ContainsKey("last_active_profiles") ? profile["last_active_profiles"] as object[] : null;
+            if (active != null && active.Length > 0) last = active[0] as string;
+            if (string.IsNullOrEmpty(last) && profile != null && profile.ContainsKey("last_used")) last = profile["last_used"] as string;
+            if (string.IsNullOrEmpty(last)) last = "Default";
+            return last.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 ? last : "Default";
+        }
+        catch { return "Default"; }
+    }
+
+    // ---- the menu's Exit command to one of the browser's windows
 
     delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr lParam);
@@ -195,7 +231,8 @@ static class Watcher
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
-    const uint WM_ENDSESSION = 0x16;
+    const uint WM_COMMAND = 0x0111;
+    const int IDC_EXIT = 34031; // chrome/app/chrome_command_ids.h
 
     static void EndSession(string appDir)
     {
@@ -210,6 +247,6 @@ static class Watcher
             if (pids.Contains(pid) && IsWindowVisible(hwnd) && name.ToString() == "Chrome_WidgetWin_1") { target = hwnd; return false; }
             return true;
         }, IntPtr.Zero);
-        if (target != IntPtr.Zero) PostMessage(target, WM_ENDSESSION, new IntPtr(1), IntPtr.Zero);
+        if (target != IntPtr.Zero) PostMessage(target, WM_COMMAND, new IntPtr(IDC_EXIT), IntPtr.Zero);
     }
 }

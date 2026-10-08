@@ -15,9 +15,8 @@ You are credited in the advisory unless you prefer otherwise.
 - Anything that makes the updater install a release not signed by the release key, an older
   release, or a file whose hash differs from the signed manifest.
 - A way for a web page to make Enki act without being asked (prompt injection), to read or type
-  credentials, or to skip the confirmation before sensitive actions. These also concern the
-  assistant's repository, [danilogiles/enkibrowser](https://github.com/danilogiles/enkibrowser);
-  report them in either place.
+  credentials, or to skip the confirmation before sensitive actions. The assistant's code is in
+  [`extension/`](extension/).
 - Data leaving the browser that `PRIVACY.md` does not list.
 - A bypass of Enki Shield (phishing warnings, Shields settings) or of the privacy defaults.
 - Installer, launcher or uninstaller behavior that touches files outside the install and profile
@@ -31,5 +30,5 @@ Enki Browser yet, tell us through the same channel.
 
 ## Supported versions
 
-Only the latest release. The browser updates itself on Windows; on Linux, install the newest
-release.
+Only the latest release. The browser updates itself on Windows; on macOS and Linux, install the
+newest release.

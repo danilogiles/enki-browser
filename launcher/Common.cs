@@ -61,6 +61,23 @@ static class Win
         for (int i = 0; i < 20 && BrowserProcesses(dir).Count > 0; i++) Thread.Sleep(250);
         foreach (var p in BrowserProcesses(dir)) { try { p.Kill(); } catch { } }
         for (int i = 0; i < 20 && BrowserProcesses(dir).Count > 0; i++) Thread.Sleep(250);
+        // The launcher stays beside a running browser and leaves a few seconds after it; the
+        // uninstaller and the installer remove its folder, so it goes now. (Only called from
+        // outside the launcher: the uninstaller's temp copy of the stub, and the installer.)
+        foreach (var p in Processes("EnkiBrowserLauncher", dir)) { try { p.Kill(); p.WaitForExit(5000); } catch { } }
+    }
+
+    /// Processes with this executable name running from inside `dir`.
+    static List<Process> Processes(string name, string dir)
+    {
+        string prefix = LongPath(dir) + "\\";
+        var found = new List<Process>();
+        foreach (var p in Process.GetProcessesByName(name))
+        {
+            try { if (LongPath(p.MainModule.FileName).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) found.Add(p); }
+            catch { }
+        }
+        return found;
     }
 
     /// Deletes a folder, retrying while an antivirus scan or a closing process holds a file.

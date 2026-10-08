@@ -1,0 +1,352 @@
+@import "tailwindcss";
+
+/* Text areas sit inside cards that light up on focus-within; an inner ring would double it. */
+:is(button, summary, input, select):focus-visible {
+  outline: 2px solid var(--color-enki-400);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@theme {
+  --color-enki-400: var(--enki-400, #38bdf8);
+  --color-enki-500: var(--enki-500, #0ea5e9);
+  --color-enki-600: var(--enki-600, #0284c7);
+  --color-ink-950: var(--ink-950, #0c4a6e);
+  --color-ink-900: var(--ink-900, #075985);
+  --color-ink-800: var(--ink-800, #0369a1);
+  --color-ink-700: var(--ink-700, #0284c7);
+
+  --color-zinc-100: var(--zinc-100, #f4f4f5);
+  --color-zinc-200: var(--zinc-200, #e4e4e7);
+  --color-zinc-300: var(--zinc-300, #d4d4d8);
+  --color-zinc-400: var(--zinc-400, #a1a1aa);
+  --color-zinc-500: var(--zinc-500, #71717a);
+  --color-zinc-600: var(--zinc-600, #52525b);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
+}
+
+/*
+ * Dark and Light are sober neutrals — near-black and off-white, as in Comet — with Enki's sky as the only
+ * accent. The default is System, which picks between them from the OS — so does a fresh panel
+ * before settings load (no data-theme yet). Enki's navy lives on as an optional theme.
+ */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --enki-400: #38bdf8;
+  --enki-500: #0ea5e9;
+  --enki-600: #0284c7;
+  --ink-950: #191a1a;
+  --ink-900: #202222;
+  --ink-800: #2a2c2c;
+  --ink-700: #3a3c3c;
+
+  --zinc-100: #e8e8e6;
+  --zinc-200: #d6d6d3;
+  --zinc-300: #b7b8b5;
+  --zinc-400: #8f918e;
+  --zinc-500: #82837f;
+  --zinc-600: #565856;
+
+  --app-bg: #191a1a;
+  --app-text: #e8e8e6;
+}
+
+[data-theme="light"],
+[data-theme="white"] {
+  color-scheme: light;
+  --enki-400: #0284c7;
+  --enki-500: #0369a1;
+  --enki-600: #075985;
+  --ink-950: #fcfcf9;
+  --ink-900: #f3f3ee;
+  --ink-800: #e9e9e3;
+  --ink-700: #d8d8d1;
+
+  --zinc-100: #1b1c1b;
+  --zinc-200: #2c2d2b;
+  --zinc-300: #3d3e3c;
+  --zinc-400: #61625f;
+  --zinc-500: #82837f;
+  --zinc-600: #a3a49f;
+
+  --app-bg: #fcfcf9;
+  --app-text: #1b1c1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]),
+  [data-theme="system"] {
+    color-scheme: dark;
+    --enki-400: #38bdf8;
+    --enki-500: #0ea5e9;
+    --enki-600: #0284c7;
+    --ink-950: #191a1a;
+    --ink-900: #202222;
+    --ink-800: #2a2c2c;
+    --ink-700: #3a3c3c;
+
+    --zinc-100: #e8e8e6;
+    --zinc-200: #d6d6d3;
+    --zinc-300: #b7b8b5;
+    --zinc-400: #8f918e;
+    --zinc-500: #82837f;
+    --zinc-600: #565856;
+
+    --app-bg: #191a1a;
+    --app-text: #e8e8e6;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]),
+  [data-theme="system"] {
+    color-scheme: light;
+    --enki-400: #0284c7;
+    --enki-500: #0369a1;
+    --enki-600: #075985;
+    --ink-950: #fcfcf9;
+    --ink-900: #f3f3ee;
+    --ink-800: #e9e9e3;
+    --ink-700: #d8d8d1;
+
+    --zinc-100: #1b1c1b;
+    --zinc-200: #2c2d2b;
+    --zinc-300: #3d3e3c;
+    --zinc-400: #61625f;
+    --zinc-500: #82837f;
+    --zinc-600: #a3a49f;
+
+    --app-bg: #fcfcf9;
+    --app-text: #1b1c1b;
+  }
+}
+
+/* Optional Theme: Enki Navy — the original sky-on-navy look */
+[data-theme="navy"] {
+  color-scheme: dark;
+  --enki-400: #38bdf8;
+  --enki-500: #0ea5e9;
+  --enki-600: #0284c7;
+  --ink-950: #0c4a6e;
+  --ink-900: #075985;
+  --ink-800: #0369a1;
+  --ink-700: #0284c7;
+
+  --zinc-100: #f0f9ff;
+  --zinc-200: #e0f2fe;
+  --zinc-300: #bae6fd;
+  --zinc-400: #7dd3fc;
+  --zinc-500: #38bdf8;
+  --zinc-600: #0ea5e9;
+
+  --app-bg: #0c4a6e;
+  --app-text: #e0f2fe;
+}
+
+/* Custom Theme: Midnight (OLED Black + Indigo) */
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --enki-400: #818cf8;
+  --enki-500: #6366f1;
+  --enki-600: #4f46e5;
+  --ink-950: #000000;
+  --ink-900: #09090b;
+  --ink-800: #18181b;
+  --ink-700: #27272a;
+
+  --zinc-100: #fafafa;
+  --zinc-200: #f4f4f5;
+  --zinc-300: #e4e4e7;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+
+  --app-bg: #000000;
+  --app-text: #fafafa;
+}
+
+/* Custom Theme: Nord (Arctic Frost) */
+[data-theme="nord"] {
+  color-scheme: dark;
+  --enki-400: #88c0d0;
+  --enki-500: #81a1c1;
+  --enki-600: #5e81ac;
+  --ink-950: #242933;
+  --ink-900: #2e3440;
+  --ink-800: #3b4252;
+  --ink-700: #434c5e;
+
+  --zinc-100: #eceff4;
+  --zinc-200: #e5e9f0;
+  --zinc-300: #d8dee9;
+  --zinc-400: #9aa5b8;
+  --zinc-500: #7b889b;
+  --zinc-600: #4c566a;
+
+  --app-bg: #242933;
+  --app-text: #eceff4;
+}
+
+/* Custom Theme: Cyberpunk (Obsidian & Amber Gold) */
+[data-theme="cyberpunk"] {
+  color-scheme: dark;
+  --enki-400: #fbbf24;
+  --enki-500: #f59e0b;
+  --enki-600: #d97706;
+  --ink-950: #0c0a09;
+  --ink-900: #1c1917;
+  --ink-800: #292524;
+  --ink-700: #44403c;
+
+  --zinc-100: #fef3c7;
+  --zinc-200: #fde68a;
+  --zinc-300: #fcd34d;
+  --zinc-400: #a8a29e;
+  --zinc-500: #78716c;
+  --zinc-600: #57534e;
+
+  --app-bg: #0c0a09;
+  --app-text: #fef3c7;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg, var(--color-ink-950));
+  color: var(--app-text, #e5e7eb);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+/* Markdown rendering inside assistant messages */
+.md > *:first-child {
+  margin-top: 0;
+}
+.md > *:last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.4em 0;
+}
+.md ul,
+.md ol {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.15em 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-weight: 600;
+  margin: 0.8em 0 0.3em;
+  line-height: 1.3;
+}
+.md h1 {
+  font-size: 1.15em;
+}
+.md h2 {
+  font-size: 1.08em;
+}
+.md h3,
+.md h4 {
+  font-size: 1em;
+}
+.md a {
+  color: var(--color-enki-400);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.md pre {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.6em 0.8em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md blockquote {
+  border-left: 3px solid var(--color-ink-700);
+  margin: 0.5em 0;
+  padding-left: 0.8em;
+  color: #9ca3af;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.92em;
+}
+.md th,
+.md td {
+  border: 1px solid var(--color-ink-700);
+  padding: 0.25em 0.5em;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--color-ink-700);
+  margin: 0.8em 0;
+}
+.md strong {
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+@keyframes enki-blink {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.cursor-blink::after {
+  /* ▍ as an escape: the literal was once saved in the wrong encoding, and the panel showed two
+     garbled characters above the composer while Enki worked. */
+  content: "\258D";
+  color: var(--color-enki-400);
+  animation: enki-blink 1s infinite;
+  margin-left: 1px;
+}
+
+/* The answer page (Enki as the address bar's search engine): a reading column, not a sidebar. */
+.page-mode .md {
+  font-size: 15px;
+  line-height: 1.65;
+}
