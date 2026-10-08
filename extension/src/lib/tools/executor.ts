@@ -21,22 +21,9 @@ export type ToolPlan = {
   run: () => Promise<ToolOutput>;
 };
 
-const RESTRICTED_URL = /^(chrome|edge|brave|opera|vivaldi|arc|about|chrome-extension|devtools|view-source|file|javascript|data):/i;
-
-export function isRestrictedUrl(url: string | undefined): boolean {
-  if (!url) return true;
-  const trimmed = url.trim();
-  return RESTRICTED_URL.test(trimmed) || trimmed.startsWith("https://chromewebstore.google.com");
-}
-
-export function isValidWebNavigationUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return (parsed.protocol === "http:" || parsed.protocol === "https:") && !isRestrictedUrl(url);
-  } catch {
-    return false;
-  }
-}
+// The navigation rule lives in ../urls so Receive tabs uses the very same one.
+import { isRestrictedUrl, isValidWebNavigationUrl } from "../urls";
+export { isRestrictedUrl, isValidWebNavigationUrl };
 
 const text = (t: string): TextPart => ({ type: "text", text: t });
 const ok = (t: string): ToolOutput => ({ content: [text(t)] });

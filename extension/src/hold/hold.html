@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Receive tabs (0.9). No request of any kind before the user clicks Abrir: nothing from the
+         site (no favicon, thumbnail, preview, prefetch or preconnect), no referrer after it. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+    <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="x-dns-prefetch-control" content="off" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Enki — Página de espera</title>
+  </head>
+  <body>
+    <main class="stage">
+      <div class="card">
+        <div class="badge"><img id="logo" alt="" width="22" height="22" /> Enki · página de espera</div>
+        <h1 id="title"></h1>
+        <div class="domain" id="domain"></div>
+        <button class="btn-abrir" id="open" type="button" disabled>Abrir</button>
+        <p class="hint" id="hint">Abre só quando você clicar. Sem favicon, miniatura ou prévia do site.</p>
+        <div class="from-row">
+          Grupo <strong id="group"></strong> · de
+          <span class="chip"><span class="dot" id="dot"></span><span id="sender"></span></span>
+        </div>
+      </div>
+    </main>
+    <script type="module" src="./hold.ts"></script>
+  </body>
+</html>

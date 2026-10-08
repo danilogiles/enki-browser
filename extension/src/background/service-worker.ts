@@ -1,7 +1,10 @@
 /**
  * Enki background service worker. Deliberately thin: the agent runs inside the side panel page
- * (which stays alive while open); the worker only wires up how the panel gets opened.
+ * (which stays alive while open); the worker wires up how the panel gets opened, and runs
+ * Receive tabs (lib/a2a/receiver.ts), which must work while the panel is closed.
  */
+
+import { handleAgentRequest, isAgentRequest, pollNow, POLL_ALARM, syncAlarm, trustedSender } from "../lib/a2a/receiver";
 
 const PANEL_PATH = "src/sidepanel/index.html";
 const hasSidePanel = typeof chrome.sidePanel !== "undefined";
@@ -88,3 +91,16 @@ if (overridesNewTab) {
     for (const delay of [0, 1500, 4000, 8000, 15000]) setTimeout(() => void reopenEarlyNewTabs(), delay);
   });
 }
+
+// ---- Receive tabs (0.9): off by default; the alarm exists only while it is on and paired.
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (!isAgentRequest(msg)) return;
+  if (!trustedSender(sender)) { reply({ ok: false, error: "not allowed" }); return; }
+  handleAgentRequest(msg).then(
+    (result) => reply({ ok: true, ...result }),
+    (e: unknown) => reply({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+  );
+  return true;
+});
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === POLL_ALARM) void pollNow(); });
+void syncAlarm();

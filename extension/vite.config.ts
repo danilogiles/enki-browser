@@ -20,6 +20,8 @@ export default defineConfig({
         home: "src/home/index.html",
         // Asks for the microphone once (the side panel cannot show the prompt).
         mic: "src/mic/index.html",
+        // Receive tabs (0.9): the page each received link waits on until the user clicks Abrir.
+        hold: "src/hold/hold.html",
       },
     },
   },

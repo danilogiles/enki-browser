@@ -14,7 +14,8 @@
     "test:e2e": "node test/e2e.mjs",
     "test:home": "node test/home.mjs",
     "test:resilience": "node test/resilience.mjs",
-    "test:unit": "node test/unit.cjs && node --test test/a2a-bundle.test.mjs test/a2a-envelope.test.mjs ../mcp/test/server.test.mjs ../mcp/test/stdio.test.mjs",
+    "test:unit": "node test/unit.cjs && node --test test/a2a-bundle.test.mjs test/a2a-envelope.test.mjs test/a2a-pairing.test.mjs ../mcp/test/server.test.mjs ../mcp/test/stdio.test.mjs ../relay/test/relay.test.mjs",
+    "test:receive": "node test/receive-tabs.mjs",
     "test:quality": "node test/quality.mjs",
     "test:voice": "node test/voice.mjs"
   },

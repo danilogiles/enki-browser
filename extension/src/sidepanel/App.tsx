@@ -10,6 +10,7 @@ import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
 import { Chat, type Progress } from "./Chat";
 import { Composer } from "./Composer";
 import { SettingsView } from "./SettingsView";
+import { AgentInbox } from "./AgentInbox";
 import { LogsView } from "./LogsView";
 import { log, setDevMode } from "../lib/debug";
 import { uid, type Segment, type TabInfo, type UiMessage } from "./types";
@@ -640,6 +641,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         showRunDetails={settings.showRunDetails !== false}
         progress={running ? { ...progress, maxSteps: settings.maxSteps, elapsed, message: progress.message === "Waiting for provider" ? `Waiting for ${presetOf(settings.preset).label.split(" (")[0]}` : progress.message } as Progress : null}
       />
+
+      {!asPage && <AgentInbox />}
 
       {settings.acceptedTerms !== TERMS_VERSION && (
         <div role="note" className="mx-3 mb-1 rounded-xl border border-ink-700 bg-ink-900 px-3 py-2.5 text-xs text-zinc-300">

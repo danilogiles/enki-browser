@@ -200,3 +200,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   })().then(reply);
   return true;
 });
+
+// Enki (the assistant extension) asks before showing a packet an agent sent (Receive tabs, 0.9):
+// one blocked link rejects the whole packet. Only Enki, identified by the fixed id the build
+// writes into ids.json, and only this read-only check; the URL never leaves the device.
+let enkiId = null;
+async function trustedEnkiId() {
+  enkiId ??= fetch(chrome.runtime.getURL("ids.json")).then((r) => r.json()).then((ids) => (typeof ids.enki === "string" ? ids.enki : "")).catch(() => "");
+  return enkiId;
+}
+chrome.runtime.onMessageExternal.addListener((msg, sender, reply) => {
+  (async () => {
+    if (!sender.id || sender.id !== (await trustedEnkiId())) return null;
+    if (msg?.type !== "shield:check" || typeof msg.url !== "string" || msg.url.length > 4096) return null;
+    const list = await load();
+    const host = hostOf(msg.url);
+    return { domain: !!host && domainHit(list, host), page: pathHit(list, msg.url) };
+  })().then(reply, () => reply(null));
+  return true;
+});

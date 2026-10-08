@@ -1,7 +1,8 @@
 // Types for envelope.js (plain ES module shared with mcp/, so it carries no TypeScript).
 import type { Bundle, BundleIssue, BundleLimits, BundleValidation } from "./validate-bundle.js";
 
-export type Envelope = { v: 1; alg: string; body: string };
+/** On the wire: { v: 1, alg: "enki-tabs-v1", to, from, eph, nonce, ct, sig } (see crypto.js). */
+export type Envelope = { v: 1; alg: string; [field: string]: unknown };
 export type Sealer = { alg: string; seal(paddedFrame: Uint8Array): Promise<Envelope> };
 export type Opener = { alg: string; open(envelope: Envelope): Promise<Uint8Array> };
 /** What travels inside a frame: the deliver_tabs schema's shape (no host/idn). */
@@ -10,10 +11,6 @@ export type Frame = { v: 1; nonce: string; ts: number; bundle: WireBundle };
 
 export const ENVELOPE_VERSION: 1;
 export const FRAME_VERSION: 1;
-/** DEV-ONLY: no encryption, no signature. */
-export const DEV_PASSTHROUGH_ALG: "dev-passthrough-INSECURE";
-export const devPassthroughSealer: Sealer;
-export const devPassthroughOpener: Opener;
 
 export function newNonce(random?: (n: number) => Uint8Array): string;
 export function toWireBundle(bundle: Bundle): WireBundle;
@@ -36,7 +33,6 @@ export function openEnvelope(
     limits: BundleLimits;
     seenNonce: (nonce: string) => boolean;
     now?: number;
-    allowDevPassthrough?: boolean;
   },
 ): Promise<OpenResult>;
 

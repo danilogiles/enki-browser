@@ -7,7 +7,8 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { limits, validateBundle } from "../src/shared.js";
-import { devPassthroughOpener, openEnvelope } from "../../extension/src/lib/a2a/envelope.js";
+import { openEnvelope } from "../../extension/src/lib/a2a/envelope.js";
+import { pairInProcess } from "../../extension/test/a2a-fixtures.mjs";
 
 const ENTRY = fileURLToPath(new URL("../src/index.js", import.meta.url));
 
@@ -59,7 +60,8 @@ function startMcp(env) {
 
 test("a real MCP session over stdio delivers one envelope to the relay", async () => {
   const relay = await startRelay();
-  const mcp = startMcp({ ENKI_DEV_PASSTHROUGH: "1", ENKI_RELAY_URL: relay.url, ENKI_MCP_DEBUG: "1" });
+  const P = await pairInProcess({ relay: relay.url });
+  const mcp = startMcp({ ENKI_AGENT_KEY: P.credential, ENKI_MCP_DEBUG: "1" });
   try {
     const init = await mcp.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
     assert.equal(init.result.protocolVersion, "2025-06-18");
@@ -77,10 +79,11 @@ test("a real MCP session over stdio delivers one envelope to the relay", async (
     assert.equal(relay.received.length, 1);
     const [post] = relay.received;
     assert.equal(post.method, "POST");
-    assert.equal(post.url, "/v1/mailbox/dev-mailbox-0000");
+    assert.equal(post.url, `/v1/mailbox/${P.mailbox}`);
+    assert.ok(!post.body.includes("CANARY"), "ciphertext only on the wire");
     assert.equal(post.headers.cookie, undefined);
     assert.equal(post.headers.authorization, undefined);
-    const opened = await openEnvelope(post.body, { opener: devPassthroughOpener, validate: validateBundle, limits, seenNonce: () => false, now: Date.now(), allowDevPassthrough: true });
+    const opened = await openEnvelope(post.body, { opener: P.opener, validate: validateBundle, limits, seenNonce: () => false, now: Date.now() });
     assert.equal(opened.ok, true, opened.reason);
     assert.equal(opened.bundle.summary, summary);
   } finally {
@@ -88,7 +91,7 @@ test("a real MCP session over stdio delivers one envelope to the relay", async (
     relay.close();
   }
   const stderr = mcp.stderr();
-  assert.match(stderr, /DEV-ONLY passthrough/);
+  assert.ok(!/passthrough|INSECURE/i.test(stderr));
   assert.match(stderr, /enki-deliver-tabs: sent \{"links":1/);
   assert.ok(!stderr.includes("CANARY"), "stderr debug output never carries bundle content");
 });

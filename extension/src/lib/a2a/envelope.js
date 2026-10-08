@@ -5,22 +5,21 @@
  *   bundle ─► frame {v, nonce, ts, bundle} ─► padded to a fixed size ─► seal() ─► envelope
  *   envelope ─► size cap ─► open() ─► unpad ─► frame checks (age, replay) ─► validate bundle again
  *
- * The cryptography is NOT here. `seal`/`open` are a small interface; Blink defines the real
- * envelope and pairing format (per-agent key pair for signature + encryption, threat model §1–2):
+ * The cryptography is in crypto.js (createSealer / createOpener; format in
+ * docs/0.9-receber-abas.md, "Protocolo"). This layer only talks to a small interface:
  *
  *   Sealer: { alg: string, seal(paddedFrame: Uint8Array): Promise<Envelope> }
- *           signs the whole padded frame (so nonce and timestamp are inside the signed part), then
- *           encrypts it to Enki's key for that pairing.
+ *           encrypts the padded frame to Enki's key for that pairing and signs the result, so the
+ *           frame's nonce and timestamp are inside the signed part.
  *   Opener: { alg: string, open(envelope: Envelope): Promise<Uint8Array> }
- *           verifies the signature against the paired agent's key and decrypts; throws on any
- *           failure (bad or unknown signature, wrong key, tampering).
- *   Envelope: { v: 1, alg: string, body: string }  (body: base64; JSON on the wire)
+ *           verifies the signature against the paired agent's key, then decrypts; throws (with a
+ *           `code`) on any failure: unknown sender, bad signature, wrong key, tampering.
+ *   Envelope: { v: 1, alg: "enki-tabs-v1", to, from, eph, nonce, ct, sig }  (JSON on the wire)
  *
- * TODO(Blink): replace the DEV-ONLY passthrough below with the real sealer/opener once the
- * envelope/pairing section of docs/0.9-receber-abas.md is published. Until then the passthrough
- * gives Blink's poll, the relay prototype and the MCP server a working end-to-end path.
+ * There is no plaintext or unsigned mode, not even for development (threat model, Cloak): an
+ * envelope whose alg is not the opener's is refused before anything else is looked at.
  *
- * What this layer already guarantees, whatever the crypto ends up being:
+ * What this layer guarantees, on top of the crypto:
  * - fixed-size padding, so the relay cannot tell link count or summary length from the size;
  * - the wire size cap (16 KB) is checked before anything is parsed or decrypted;
  * - every frame has a random 128-bit nonce and a timestamp; the receiver rejects frames older than
@@ -30,28 +29,6 @@
 
 export const ENVELOPE_VERSION = 1;
 export const FRAME_VERSION = 1;
-
-/**
- * DEV-ONLY. Not encryption, not a signature: the frame travels in the clear (base64) and anyone
- * can forge it. Exists so the pieces can be built and tested before Blink's format lands.
- * The MCP server refuses to use it unless explicitly enabled and the relay is on loopback; the
- * receiving side must refuse it unless `allowDevPassthrough` is set.
- */
-export const DEV_PASSTHROUGH_ALG = "dev-passthrough-INSECURE";
-
-export const devPassthroughSealer = Object.freeze({
-  alg: DEV_PASSTHROUGH_ALG,
-  async seal(paddedFrame) {
-    return { v: ENVELOPE_VERSION, alg: DEV_PASSTHROUGH_ALG, body: toBase64(paddedFrame) };
-  },
-});
-
-export const devPassthroughOpener = Object.freeze({
-  alg: DEV_PASSTHROUGH_ALG,
-  async open(envelope) {
-    return fromBase64(envelope.body);
-  },
-});
 
 /** 128 random bits, base64url without padding. */
 export function newNonce(random = (n) => crypto.getRandomValues(new Uint8Array(n))) {
@@ -116,10 +93,9 @@ export async function sealBundle(bundle, { sealer, limits, now = Date.now(), non
  * @param opts.limits            limitsFromSchema(schema)
  * @param opts.seenNonce         (nonce) => boolean, true if this nonce was already accepted
  * @param opts.now               current time in ms
- * @param opts.allowDevPassthrough  accept DEV_PASSTHROUGH_ALG envelopes (development only)
  * The caller records the nonce (for at least maxPacketAgeSeconds) only after ok: true.
  */
-export async function openEnvelope(wire, { opener, validate, limits, seenNonce, now = Date.now(), allowDevPassthrough = false }) {
+export async function openEnvelope(wire, { opener, validate, limits, seenNonce, now = Date.now() }) {
   const size = typeof wire === "string" ? new TextEncoder().encode(wire).length : wire?.byteLength;
   if (typeof size !== "number") return reject("not_bytes");
   // Before parsing or decrypting anything (threat model §2).
@@ -130,17 +106,24 @@ export async function openEnvelope(wire, { opener, validate, limits, seenNonce, 
   } catch {
     return reject("malformed");
   }
-  if (!envelope || typeof envelope !== "object" || envelope.v !== ENVELOPE_VERSION || typeof envelope.alg !== "string" || typeof envelope.body !== "string") {
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope) || envelope.v !== ENVELOPE_VERSION || typeof envelope.alg !== "string") {
     return reject("malformed");
   }
-  if (envelope.alg === DEV_PASSTHROUGH_ALG && !allowDevPassthrough) return reject("dev_passthrough_refused");
+  // Plaintext, unsigned or unknown formats stop here, before the opener sees them.
   if (envelope.alg !== opener.alg) return reject("wrong_alg");
 
+  let bytes;
+  try {
+    bytes = await opener.open(envelope);
+  } catch (e) {
+    // The opener names what failed (unknown_sender, bad_signature, decrypt_failed…).
+    return reject(typeof e?.code === "string" ? e.code : "bad_signature_or_frame");
+  }
   let frame;
   try {
-    frame = unpadFrame(await opener.open(envelope), limits);
+    frame = unpadFrame(bytes, limits);
   } catch {
-    return reject("bad_signature_or_frame");
+    return reject("bad_frame");
   }
   if (!frame || frame.v !== FRAME_VERSION || typeof frame.nonce !== "string" || !/^[A-Za-z0-9_-]{22}$/.test(frame.nonce) || !Number.isSafeInteger(frame.ts)) {
     return reject("malformed_frame");

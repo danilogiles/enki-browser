@@ -68,6 +68,8 @@ jobs:
       - run: xvfb-run -a npm run test:home
       - run: xvfb-run -a npm run test:resilience
       - run: xvfb-run -a npm run test:quality
+      # Receive tabs (0.9): its own relay on 127.0.0.1:8788 and a local site; no mock model needed.
+      - run: xvfb-run -a npm run test:receive
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

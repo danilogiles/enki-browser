@@ -187,7 +187,10 @@ export async function addExtensions(app) {
   console.log(`  Enki Shield id: ${shield.id}`);
   patchBlocker(blockerDir, shield.id);
   // Its settings page shows the Enki Browser version it shipped with ("Check for updates").
-  writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id, browser: pkg.version }));
+  // Enki is the only extension the Shield answers "shield:check" for (Receive tabs, 0.9).
+  writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id, browser: pkg.version, enki: enki.id }));
+  // …and Enki finds the Shield the same way; without this file Enki runs without Shield checks.
+  writeFileSync(path.join(enkiDir, "ids.json"), JSON.stringify({ shield: shield.id }));
 
   for (const dir of ["enki", "shield", "ublock-lite"]) freshWorker(path.join(app, "extensions", dir));
 
