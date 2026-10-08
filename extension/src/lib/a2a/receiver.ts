@@ -5,16 +5,19 @@
  * Nothing is ever sent back to an agent: no read receipt, no "accepted"/"declined". The only
  * requests are to the relay the user configured: a signed GET per paired agent once a minute while
  * "Receber abas de agentes" is on (off by default), the pairing messages, and a signed DELETE when
- * the user unpairs. Packets are untrusted data: they never reach the assistant, Act, or settings.
+ * the user unpairs. Packets are untrusted data: they never reach Act or settings, and reach the
+ * assistant only when the user clicks "Perguntar ao Enki" on a summary card (lib/a2a/ask.js: Ask
+ * mode, wrapped as untrusted data). "Limpar histórico de abas recebidas" and Enki Shield's Burn
+ * clear what is remembered about packets; the pairings and their keys stay (clearHistory).
  */
 import schema from "../../../../protocol/deliver_tabs.schema.json";
 import { createBundleValidator, limitsFromSchema } from "./validate-bundle.js";
 import { openEnvelope } from "./envelope.js";
 import { b64u, createOpener, mailboxIdFor, newEd25519, newPairCode, newX25519, pairMailboxIds, randomBytes, rawPublic, signRelayRequest, unb64u } from "./crypto.js";
 import { browserOffer, browserReadCommit, browserReadReveal, PAIR_TTL_MS } from "./pairing.js";
-import { admit, checkRelay, holdQuery, nextColor, pruneSeen, pushLog } from "./policy.js";
+import { admit, belowFloor, checkRelay, clearedHistory, holdQuery, nextColor, pruneSeen, pushLog, seenKey } from "./policy.js";
 import { deleteAgentKeys, deletePairing, getAgentKeys, getPairing, putAgentKeys, putPairing, type PairingRecord } from "./keystore";
-import { shieldCheck } from "./shield";
+import { shieldBurnedAt, shieldCheck } from "./shield";
 import { DEFAULT_AGENT_SETTINGS, K, type AgentRecord, type AgentRequest, type AgentSettings, type LogEntry, type Notice, type PairingView, type SummaryCard } from "./store";
 import { isValidWebNavigationUrl } from "../urls";
 
@@ -101,12 +104,17 @@ export async function receive(agent: AgentRecord, keys: { xPrivate: CryptoKey; x
     agent: { edPub: unb64u(agent.agentEdPub, 32), xPub: unb64u(agent.agentXPub, 32) },
     expectedFrameBytes: limits.paddedFrameBytes,
   });
-  const opened = await openEnvelope(wire, { opener, validate, limits, seenNonce: (n) => n in seen, now });
+  const opened = await openEnvelope(wire, { opener, validate, limits, seenNonce: (n) => seenKey(agent.id, n) in seen || n in seen, now });
   const done = async (entry: LogEntry) => { await log(entry); return entry; };
   if (!opened.ok) return done({ at: now, agentId: agent.id, outcome: "rejected", reason: opened.reason });
 
   // Authenticated from here: remember the nonce until the packet would be too old anyway.
-  seen[opened.nonce] = opened.ts + (limits.maxPacketAgeSeconds + limits.maxClockSkewSeconds) * 1000;
+  const until = opened.ts + (limits.maxPacketAgeSeconds + limits.maxClockSkewSeconds) * 1000;
+  // After "Limpar histórico" the nonces are gone; the agent's replay floor still refuses its old packets.
+  if (belowFloor({ floors: await get<Record<string, number>>(K.floors, {}), agentId: agent.id, until, now })) {
+    return done({ at: now, agentId: agent.id, outcome: "rejected", reason: "replay" });
+  }
+  seen[seenKey(agent.id, opened.nonce)] = until;
   await set({ [K.seen]: seen });
   const { bundle } = opened;
   const meta = { at: now, agentId: agent.id, title: bundle.title, links: bundle.links.length };
@@ -239,12 +247,15 @@ async function unpair(id: string): Promise<void> {
   await deleteAgentKeys(id);
   const rate = await get<Record<string, number[]>>(K.rate, {});
   delete rate[id];
+  const floors = await get<Record<string, number>>(K.floors, {});
+  delete floors[id];
   await set({
     [K.agents]: agents.filter((a) => a.id !== id),
     [K.pending]: (await getPending()).filter((n) => n.agentId !== id),
     [K.cards]: (await get<SummaryCard[]>(K.cards, [])).filter((c) => c.agentId !== id),
     [K.log]: (await get<LogEntry[]>(K.log, [])).filter((e) => e.agentId !== id),
     [K.rate]: rate,
+    [K.floors]: floors,
   });
   await syncAlarm();
   await updateBadge();
@@ -276,7 +287,7 @@ async function accept(id: string, windowId?: number): Promise<{ groupId: number;
   const base = chrome.runtime.getURL(HOLD_PAGE);
   const tabIds: number[] = [];
   for (const [i, l] of notice.links.entries()) {
-    const tab = await chrome.tabs.create({ windowId: win, active: i === 0, url: base + holdQuery({ url: l.url, host: l.host, label: l.label, group: notice.title, sender: agent.name, color: agent.color }) });
+    const tab = await chrome.tabs.create({ windowId: win, active: i === 0, url: base + holdQuery({ url: l.url, host: l.host, label: l.label, group: notice.title, sender: agent.name, color: agent.color, unchecked: !notice.shieldChecked }) });
     if (tab.id !== undefined) tabIds.push(tab.id);
   }
   if (!tabIds.length) throw new Error("Nenhuma aba foi criada");
@@ -296,6 +307,43 @@ async function decline(id: string): Promise<void> {
   await set({ [K.pending]: pending.filter((n) => n.id !== id) });
   await log({ at: Date.now(), agentId: notice.agentId, title: notice.title, links: notice.links.length, outcome: "declined" });
   await updateBadge();
+}
+
+// ------------------------------------------------------------------ clearing the history
+
+/**
+ * "Limpar histórico de abas recebidas", and Enki Shield's Burn: deletes what Receive tabs remembers
+ * about packets (waiting notices, summary cards, the log, "Último pacote" dates, hourly counters and
+ * seen nonces) and keeps the pairings and their keys. Tabs already open are not touched (Burn
+ * closes them itself). See policy.clearedHistory for the replay floor that replaces the nonces.
+ */
+async function clearHistory(): Promise<void> {
+  const now = Date.now();
+  const next = clearedHistory({
+    agents: await getAgents(),
+    seen: await get<Record<string, number>>(K.seen, {}),
+    floors: await get<Record<string, number>>(K.floors, {}),
+  }, now);
+  await set({
+    [K.agents]: next.agents, [K.pending]: next.pending, [K.cards]: next.cards, [K.log]: next.log,
+    [K.seen]: next.seen, [K.rate]: next.rate, [K.floors]: next.floors,
+  });
+  await updateBadge();
+}
+
+/**
+ * Follows Enki Shield's Burn. Chromium tells extensions nothing when browsing data is cleared, so
+ * Enki asks the Shield when it last burned (when the Shield says it just did, and when the browser
+ * starts) and clears once per Burn. Without a Shield (the extension on its own) this does nothing.
+ */
+export function followShieldBurn(): Promise<boolean> {
+  return serial(async () => {
+    const at = await shieldBurnedAt();
+    if (!at || at <= (await get<number>(K.burnSynced, 0))) return false;
+    await clearHistory();
+    await set({ [K.burnSynced]: at });
+    return true;
+  });
 }
 
 // ------------------------------------------------------------------ messages from Enki's own pages
@@ -335,7 +383,7 @@ export async function handleAgentRequest(msg: AgentRequest): Promise<Record<stri
     case "agents:dismiss-card":
       await serial(async () => set({ [K.cards]: (await get<SummaryCard[]>(K.cards, [])).filter((c) => c.id !== msg.id) }));
       return {};
-    case "agents:clear-log": await serial(() => set({ [K.log]: [] })); return {};
+    case "agents:clear-history": await serial(clearHistory); return {};
   }
 }
 

@@ -42,6 +42,49 @@ export function pruneSeen(seen, now) {
   return out;
 }
 
+/** Key of a seen nonce: per agent, so "Limpar histórico" can keep one replay floor per agent. */
+export function seenKey(agentId, nonce) {
+  return `${agentId}:${nonce}`;
+}
+
+/**
+ * "Limpar histórico de abas recebidas" (and Enki Shield's Burn): what Receive tabs keeps after it.
+ *
+ * Gone: waiting notices, summary cards, the 50-packet log, every agent's "Último pacote" date, the
+ * hourly counters and the seen nonces. Kept: the paired agents (name, color, fingerprint, public
+ * keys, mailbox) and, outside this function, their non-exportable keys in IndexedDB.
+ *
+ * Dropping the seen nonces outright would let the relay replay an already-seen packet during the
+ * minutes it is still young enough to pass the age check. So each agent keeps one number instead,
+ * its replay floor: the moment its newest seen packet stops passing the age check. Until then a
+ * packet of that agent stamped no later than that one is refused as a replay; after it the age
+ * check alone refuses them, and the floor is pruned. No nonce, title or link survives.
+ * Seen keys without an agent (none are written any more) give a floor that applies to every agent.
+ */
+export function clearedHistory({ agents, seen, floors }, now) {
+  const next = pruneSeen(floors ?? {}, now);
+  for (const [key, until] of Object.entries(pruneSeen(seen ?? {}, now))) {
+    const i = key.indexOf(":");
+    const agent = i > 0 ? key.slice(0, i) : "*";
+    next[agent] = Math.max(next[agent] ?? 0, until);
+  }
+  return {
+    agents: agents.map(({ lastPacketAt: _drop, ...a }) => a),
+    pending: [],
+    cards: [],
+    log: [],
+    seen: {},
+    rate: {},
+    floors: next,
+  };
+}
+
+/** True when a packet that passed every other check is older than what was cleared (a replay). */
+export function belowFloor({ floors, agentId, until, now }) {
+  const live = pruneSeen(floors ?? {}, now);
+  return until <= Math.max(live[agentId] ?? 0, live["*"] ?? 0);
+}
+
 /** The relay must be https; plain http only for a relay on this computer (development). */
 export function checkRelay(raw) {
   let u;
@@ -54,8 +97,10 @@ export function checkRelay(raw) {
 }
 
 /** hold.html?… for one link. Everything in it is shown with textContent only. */
-export function holdQuery({ url, host, label, group, sender, color }) {
+export function holdQuery({ url, host, label, group, sender, color, unchecked }) {
   const q = new URLSearchParams({ u: url, h: host, t: label || host, g: group, s: sender, c: color });
+  // Only where no Enki Shield exists (the extension on its own): the hold page says so too.
+  if (unchecked) q.set("v", "0");
   return `?${q.toString()}`;
 }
 

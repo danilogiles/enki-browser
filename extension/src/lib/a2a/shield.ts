@@ -9,7 +9,8 @@
  *
  * Fail closed: when Enki Browser says a Shield exists but it does not answer, the packet is
  * rejected. Only where no Shield is shipped at all (the extension installed on its own in another
- * browser) do links go unchecked, and the notice says so.
+ * browser, so no ids.json) do links go unchecked: the notice says "Links não verificados pelo Enki
+ * Shield", the hold page says it again, and the tabs still wait on hold.html until Abrir.
  */
 export type ShieldVerdict = { ok: true; checked: boolean } | { ok: false; reason: "shield_blocked" | "shield_unavailable"; url?: string };
 
@@ -38,4 +39,24 @@ export async function shieldCheck(urls: string[]): Promise<ShieldVerdict> {
     if (res.domain || res.page) return { ok: false, reason: "shield_blocked", url };
   }
   return { ok: true, checked: true };
+}
+
+/** True only for messages from the Enki Shield this build was shipped with. */
+export async function isShield(senderId: string | undefined): Promise<boolean> {
+  const id = await getShieldId();
+  return !!id && senderId === id;
+}
+
+/**
+ * When the user last used the Shield's Burn (🔥 Burn all data, or burn-on-close at the next start),
+ * by the Shield's own clock; 0 if never, null where there is no Shield or it does not answer.
+ * Read-only and local: the Shield answers this for Enki's id only.
+ */
+export async function shieldBurnedAt(): Promise<number | null> {
+  const id = await getShieldId();
+  if (!id) return null;
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), 5000));
+  const answer = chrome.runtime.sendMessage(id, { type: "shield:burned-at" }).catch(() => null) as Promise<unknown>;
+  const res = (await Promise.race([answer, timeout])) as { at?: unknown } | null;
+  return res && typeof res.at === "number" ? res.at : null;
 }

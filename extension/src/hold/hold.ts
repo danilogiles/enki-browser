@@ -36,6 +36,8 @@ document.getElementById("dot")!.style.background = color;
 // Same chip as the side panel: the agent's tab-group colour on a ~14% tint of itself.
 Object.assign(document.getElementById("chip")!.style, { background: `${color}24`, color });
 document.title = `${title} — aguardando`;
+// The extension on its own, outside Enki Browser: no Enki Shield checked this link (receiver.ts).
+if (q.get("v") === "0") document.getElementById("unchecked")!.hidden = false;
 
 const button = document.getElementById("open") as HTMLButtonElement;
 if (ok && link.ok) {

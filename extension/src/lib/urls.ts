@@ -19,3 +19,22 @@ export function isValidWebNavigationUrl(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * Receive tabs (0.9): Enki's hold page carries an agent's text in its title and address (the
+ * link, its label, the group title and the sender's name). That text must reach the assistant
+ * only when the user asks ("Perguntar ao Enki", wrapped as untrusted data), so wherever a tab's
+ * title and URL are shown to the model, a hold page is described without them.
+ */
+const HOLD_PAGE = /^chrome-extension:\/\/[a-p]{32}\/src\/hold\/hold\.html(?:[?#]|$)/;
+
+export function isHoldPage(url: string | undefined): boolean {
+  return !!url && HOLD_PAGE.test(url.trim());
+}
+
+export function tabForModel(tab: { title?: string; url?: string; pendingUrl?: string }): { title: string; url: string } {
+  if (isHoldPage(tab.url) || isHoldPage(tab.pendingUrl)) {
+    return { title: "Enki hold page", url: "(a link an agent sent, waiting for the user to click Abrir; its title and address are not shown to you)" };
+  }
+  return { title: tab.title ?? "", url: tab.url ?? "" };
+}

@@ -4,6 +4,7 @@ import { loadSettings, onSettingsChange, presetOf, saveSettings, type Settings }
 import { onHandoff, takeHandoff, type Handoff } from "../lib/handoff";
 import { createProvider } from "../lib/providers";
 import { BrowserExecutor, isRestrictedUrl } from "../lib/tools/executor";
+import { tabForModel } from "../lib/urls";
 import { toolsForMode } from "../lib/tools/definitions";
 import { runTurn, type AgentEvent } from "../lib/agent/loop";
 import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
@@ -402,14 +403,19 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   );
 
   // ----- send -----
-  const send = useCallback(async (text: string, intent: "normal" | "continue" | "observe" = "normal") => {
+  /**
+   * `untrusted`: text that did not come from the user, already wrapped by lib/agent/untrusted.js,
+   * that the user chose to show the assistant (a received packet's summary card). It rides after
+   * the user's own words, and that turn runs in Ask: it can never make Enki act on a page.
+   */
+  const send = useCallback(async (text: string, intent: "normal" | "continue" | "observe" = "normal", untrusted?: string) => {
     const executor = executorRef.current;
     if (!settings || !executor || !ready || abortRef.current || !text.trim()) return;
     // /task runs a saved task in its own mode; @app points the request at one connected app.
     // The answer page only answers, so a task saved for Act runs there as Ask.
-    const ex = intent === "normal" ? expand(text, tasks, apps) : ({ text: text.trim() } as ReturnType<typeof expand>);
+    const ex = intent === "normal" && !untrusted ? expand(text, tasks, apps) : ({ text: text.trim() } as ReturnType<typeof expand>);
     text = ex.text;
-    const runMode: Mode = asPage ? "ask" : ex.mode ?? mode;
+    const runMode: Mode = asPage || untrusted ? "ask" : ex.mode ?? mode;
     executor.setConnections(apps);
     // One turn at a time per conversation — see turnlock.ts. Without this, a question typed here
     // while the other document is still answering would run a second turn over the same history.
@@ -435,9 +441,10 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       const restricted = !current || isRestrictedUrl(current.url);
       const context = asPage
         ? "[Current tab] none: this is one of Enki's own pages, not a site. There is no page to read; answer from your knowledge or, for anything current, from web_search and read_url."
-        : current ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
+        : current ? `[Current tab] ${tabForModel(current).title} — ${tabForModel(current).url}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
       const hint = ex.hint ? `\n${ex.hint}` : "";
-      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}${hint}\n\n${text.trim()}` }];
+      const data = untrusted ? `\n\n${untrusted}` : "";
+      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}${hint}\n\n${text.trim()}${data}` }];
       let thumb: string | undefined;
       if (settings.vision && settings.attachScreenshot && !restricted) {
         // captureVisibleTab fails transiently while a page is still painting and is limited to two
@@ -642,7 +649,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         progress={running ? { ...progress, maxSteps: settings.maxSteps, elapsed, message: progress.message === "Waiting for provider" ? `Waiting for ${presetOf(settings.preset).label.split(" (")[0]}` : progress.message } as Progress : null}
       />
 
-      {!asPage && <AgentInbox />}
+      {!asPage && <AgentInbox onAsk={(question, data) => { setView("chat"); void send(question, "normal", data); }} canAsk={!running && !needsKey} />}
 
       {settings.acceptedTerms !== TERMS_VERSION && (
         <div role="note" className="mx-3 mb-1 rounded-xl border border-ink-700 bg-ink-900 px-3 py-2.5 text-xs text-zinc-300">

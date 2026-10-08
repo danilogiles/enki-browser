@@ -49,6 +49,8 @@ export function AgentsTab() {
   const [busy, setBusy] = useState(false);
   const [confirmUnpair, setConfirmUnpair] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -161,9 +163,24 @@ export function AgentsTab() {
                 <span className="shrink-0">{OUTCOME[e.outcome]}{e.reason ? ` · ${REASON[e.reason] ?? e.reason}` : ""}</span>
               </div>
             ))}
-            {log.length > 0 && <button type="button" className={btn} onClick={() => void call({ type: "agents:clear-log" })}>Limpar registro</button>}
           </div>
         )}
+      </div>
+
+      <div className="rounded-xl border border-ink-700 bg-ink-900 px-4 py-3.5" data-testid="clear-history">
+        <div className="text-sm font-semibold text-zinc-100">Histórico de abas recebidas</div>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-400">Apaga os avisos pendentes, os cartões de resumo, o registro e as datas de último pacote. Os agentes pareados e as chaves deles ficam; pra apagar a chave de um agente, use Desparear. O Burn do Enki Shield também apaga este histórico. Limpar dados de navegação pelas configurações do navegador não apaga.</p>
+        <div className="mt-2.5 flex items-center gap-2">
+          {confirmClear ? (
+            <>
+              <button type="button" className={danger} onClick={() => { setConfirmClear(false); void call({ type: "agents:clear-history" }).then((r) => setCleared(r.ok)); }}>Confirmar limpeza</button>
+              <button type="button" className={btn} onClick={() => setConfirmClear(false)}>Não</button>
+            </>
+          ) : (
+            <button type="button" className={danger} onClick={() => { setCleared(false); setConfirmClear(true); }}>Limpar histórico de abas recebidas</button>
+          )}
+          {cleared && <span role="status" className="text-[11px] text-emerald-400">Histórico apagado.</span>}
+        </div>
       </div>
 
       {dialog && <PairingDialog view={pairing} onClose={() => setDialog(false)} onError={setError} />}

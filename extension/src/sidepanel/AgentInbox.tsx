@@ -4,11 +4,14 @@
  *
  * Everything shown here came from an agent and is untrusted plain text, rendered as React text
  * (textContent), never as HTML or Markdown. None of it is added to the conversation or handed to
- * the assistant or Act. Nothing is shown in incognito windows.
+ * the assistant or Act on its own: only "Perguntar ao Enki" on a summary card sends that card to
+ * the assistant, in Ask mode, wrapped as untrusted data (lib/a2a/ask.js). Nothing is shown in
+ * incognito windows.
  */
 import { useEffect, useState } from "react";
-import { Square, X } from "lucide-react";
+import { MessageCircleQuestion, ShieldAlert, Square, X } from "lucide-react";
 import { AGENT_COLORS } from "../lib/a2a/policy.js";
+import { bundleForAssistant } from "../lib/a2a/ask.js";
 import { K, request, type AgentRecord, type Notice, type SummaryCard } from "../lib/a2a/store";
 import { AgentChip } from "./AgentsTab";
 
@@ -20,7 +23,14 @@ const shortPath = (url: string) => {
   } catch { return ""; }
 };
 
-export function AgentInbox() {
+type Props = {
+  /** Sends the user's fixed question plus the wrapped card to the assistant (App.send, Ask mode). */
+  onAsk?: (question: string, untrusted: string) => void;
+  /** False while a turn runs or no provider is set up. */
+  canAsk?: boolean;
+};
+
+export function AgentInbox({ onAsk, canAsk = true }: Props = {}) {
   const [pending, setPending] = useState<Notice[]>([]);
   const [cards, setCards] = useState<SummaryCard[]>([]);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -81,7 +91,12 @@ export function AgentInbox() {
                   </li>
                 ))}
               </ol>
-              {!n.shieldChecked && <p className="mt-2 text-[11px] text-amber-300">O Enki Shield não está disponível aqui: estes links não foram verificados.</p>}
+              {!n.shieldChecked && (
+                <div role="note" data-testid="shield-unchecked" className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-300">
+                  <ShieldAlert size={14} className="mt-px shrink-0 text-amber-500" aria-hidden />
+                  <span><b className="font-semibold text-amber-500">Links não verificados pelo Enki Shield.</b> Esta extensão está fora do Enki Browser, sem o Shield. As abas abrem mesmo assim na página de espera e nada carrega antes do Abrir.</span>
+                </div>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button type="button" className="rounded-lg bg-enki-400 py-2.5 text-sm font-semibold text-ink-950 shadow-sm transition hover:brightness-110" onClick={() => void act({ type: "agents:accept", id: n.id, windowId })}>Aceitar</button>
                 <button type="button" className="rounded-lg border border-ink-700 py-2.5 text-sm font-semibold text-zinc-400 transition hover:bg-ink-800 hover:text-zinc-200" onClick={() => void act({ type: "agents:decline", id: n.id })}>Recusar</button>
@@ -111,6 +126,16 @@ export function AgentInbox() {
                 <ul className="mt-3 space-y-1.5">
                   {c.hosts.map((h, i) => <li key={i} className="flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-800/60 px-2.5 py-1.5 font-mono text-xs text-zinc-200"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-enki-400" aria-hidden /><span className="min-w-0 truncate">{h}</span></li>)}
                 </ul>
+                {onAsk && (
+                  <button
+                    type="button" disabled={!canAsk}
+                    title="Manda o título, os domínios e o resumo pro assistente, marcados como dado não confiável, no modo Ask"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:bg-ink-800 hover:text-zinc-100 disabled:opacity-50"
+                    onClick={() => { const b = bundleForAssistant({ agentName: agent.name, title: c.title, summary: c.summary, hosts: c.hosts }); onAsk(b.question, b.data); }}
+                  >
+                    <MessageCircleQuestion size={12} aria-hidden />Perguntar ao Enki sobre o resumo
+                  </button>
+                )}
               </div>
             </article>
             <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">O resumo só vai pro assistente se você pedir. Cada aba fica em hold.html até você clicar em Abrir.</p>

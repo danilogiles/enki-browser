@@ -22,7 +22,7 @@ export type ToolPlan = {
 };
 
 // The navigation rule lives in ../urls so Receive tabs uses the very same one.
-import { isRestrictedUrl, isValidWebNavigationUrl } from "../urls";
+import { isRestrictedUrl, isValidWebNavigationUrl, tabForModel } from "../urls";
 export { isRestrictedUrl, isValidWebNavigationUrl };
 
 const text = (t: string): TextPart => ({ type: "text", text: t });
@@ -138,7 +138,7 @@ export class BrowserExecutor {
     const tab = await chrome.tabs.get(tabId);
     if (isRestrictedUrl(tab.url)) {
       throw new Error(
-        `This tab (${tab.url ?? "internal page"}) is a browser-internal page and cannot be read or controlled. Navigate to a website first.`,
+        `This tab (${tab.url ? tabForModel(tab).url : "internal page"}) is a browser-internal page and cannot be read or controlled. Navigate to a website first.`,
       );
     }
     const attempt = async (): Promise<T> => {
@@ -382,7 +382,7 @@ export class BrowserExecutor {
             const tabs = await chrome.tabs.query({ windowId: this.windowId });
             return ok(
               tabs
-                .map((t) => `${t.active ? "* " : "  "}[${t.id}] ${t.title ?? ""} — ${t.url ?? ""}`)
+                .map((t) => { const v = tabForModel(t); return `${t.active ? "* " : "  "}[${t.id}] ${v.title} — ${v.url}`; })
                 .join("\n"),
             );
           },
@@ -552,7 +552,8 @@ export class BrowserExecutor {
             const tab = await chrome.tabs.update(tabId, { active: true });
             this.retarget(tabId);
             await this.applyOverlay();
-            return ok(`Switched to "${tab?.title ?? ""}" — ${tab?.url ?? ""}.`);
+            const v = tabForModel(tab ?? {});
+            return ok(`Switched to "${v.title}" — ${v.url}.`);
           },
         };
       }

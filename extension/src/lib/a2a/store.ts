@@ -14,6 +14,10 @@ export const K = {
   log: "enki:agents:log",
   seen: "enki:agents:seen",
   rate: "enki:agents:rate",
+  /** After "Limpar histórico": one replay floor per agent, minutes long (policy.clearedHistory). */
+  floors: "enki:agents:replay-floors",
+  /** The last Enki Shield Burn this extension already followed (Shield's own timestamp). */
+  burnSynced: "enki:agents:burn-synced",
   /** chrome.storage.session: the pairing in progress, public parts only (no keys). */
   pairing: "enki:agents:pairing",
 } as const;
@@ -73,7 +77,7 @@ export type AgentRequest =
   | { type: "agents:accept"; id: string; windowId?: number }
   | { type: "agents:decline"; id: string }
   | { type: "agents:dismiss-card"; id: string }
-  | { type: "agents:clear-log" };
+  | { type: "agents:clear-history" };
 
 export type AgentReply = { ok: true; [k: string]: unknown } | { ok: false; error: string };
 

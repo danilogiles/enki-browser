@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import type { BrowserExecutor, ToolOutput } from "../tools/executor";
 import { log } from "../debug";
+import { tabForModel } from "../urls";
 import { budgetHistory, trimToolResults, compactHistory, estimateTokens, historySize } from "./context";
 import { CLAIMS_NO_TOOLS, extractTextToolCalls } from "./toolcall-text";
 
@@ -240,7 +241,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
         });
         const where = await o.executor
           .currentTab()
-          .then((t) => `"${t.title ?? ""}" (${t.url ?? ""})`)
+          .then((t) => { const v = tabForModel(t); return `"${v.title}" (${v.url})`; })
           .catch(() => "an unknown page");
         onEvent({ type: "retract_text" });
         o.history.push({ role: "assistant", parts });

@@ -32,6 +32,11 @@ h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.
 .btn-abrir:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-abrir:focus-visible { outline: 3px solid #e2e8f0; outline-offset: 2px; }
 .btn-abrir:disabled { background: #334155; color: var(--muted); cursor: not-allowed; }
+.unchecked {
+  font-size: 12px; font-weight: 650; color: #fcd34d; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 8px; padding: 8px 12px; margin: -8px auto 20px; max-width: 100%;
+}
+.unchecked[hidden] { display: none; }
 .hint { font-size: 12px; color: var(--dim); line-height: 1.45; }
 .from-row {
   margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted);
