@@ -46,9 +46,29 @@ autoBurn.onclick = async () => {
   await chrome.storage.local.set({ [AUTO_BURN]: on });
   await applySites(await sites());
 };
-$("burn-now").onclick = async () => {
-  if (!confirm("Close every tab and delete all history, cookies, site data, cache, download history and autofill? Passwords, bookmarks and Enki's settings are kept.")) return;
-  await chrome.runtime.sendMessage({ type: "shields:burn" });
+// Burn now asks in the page, not with confirm(): there OK was the default, so Enter (or a quick
+// second click) burned everything. Here Cancel has the focus, so Enter cancels, and so does Esc.
+const burnNow = $("burn-now");
+const burnConfirm = $("burn-confirm");
+const burnCancel = $("burn-cancel");
+const burnGo = $("burn-go");
+const behind = () => [...document.body.children].filter((el) => el !== burnConfirm && el.tagName !== "SCRIPT");
+function askBurn(open) {
+  burnConfirm.hidden = !open;
+  for (const el of behind()) el.inert = open; // the page behind the modal cannot be reached
+  if (open) burnCancel.focus();
+  else burnNow.focus();
+}
+burnNow.onclick = () => askBurn(true);
+burnCancel.onclick = () => askBurn(false);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !burnConfirm.hidden && !burnGo.disabled) { e.preventDefault(); askBurn(false); }
+});
+// (An "Also delete Enki chats" choice would be read here and sent with the message; not in 0.8.4.)
+burnGo.onclick = async () => {
+  burnGo.disabled = burnCancel.disabled = true;
+  burnGo.textContent = "Burning…";
+  await chrome.runtime.sendMessage({ type: "shields:burn" }); // closes every tab, this one too
 };
 
 // Enki Browser: its version, and "Check for updates" (updates.js).

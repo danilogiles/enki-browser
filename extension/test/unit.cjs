@@ -201,6 +201,65 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.equal(maskKey('short'), '••••••'); // too short to show any of it safely
     assert.equal(maskKey(''), '');
   });
+  {
+    // Act never reaches a browser-internal page: not Enki Shields' settings (Burn all data), not its
+    // panel, not chrome://. Every tool that acts on the page is refused before the content script,
+    // scripting or the debugger is touched, so nothing on the page can be clicked or pressed.
+    const { BrowserExecutor, isRestrictedUrl } = require('../src/lib/tools/executor.ts');
+    const realChrome = global.chrome;
+    const touched = [];
+    const internal = [
+      'chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html',
+      'chrome-extension://abcdefghijklmnopabcdefghijklmnop/popup.html?tab=3',
+      'chrome://settings/clearBrowserData',
+      undefined, // a tab whose address the panel cannot see counts as internal too
+    ];
+    for (const url of internal) {
+      touched.length = 0;
+      global.chrome = {
+        runtime: { getManifest: () => ({ content_scripts: [{ js: ['content.js'] }] }) },
+        tabs: {
+          get: async (id) => ({ id, url, windowId: 1, active: true, title: 'Enki Shields settings' }),
+          query: async () => [{ id: 7, url, windowId: 1, active: true }],
+          sendMessage: async (...a) => { touched.push(['tabs.sendMessage', a[1]?.type]); return { ok: true, data: { x: 10, y: 10, tag: 'button', role: 'button', name: 'Burn', sensitive: false } }; },
+          update: async (...a) => { touched.push(['tabs.update', a[1]]); return {}; },
+          create: async (...a) => { touched.push(['tabs.create', a[0]]); return { id: 8 }; },
+        },
+        scripting: { executeScript: async () => { touched.push(['scripting.executeScript']); } },
+        debugger: {
+          onDetach: { addListener() {} },
+          attach: async () => { touched.push(['debugger.attach']); },
+          sendCommand: async (...a) => { touched.push(['debugger.sendCommand', a[1], a[2]?.type]); },
+          detach: async () => {},
+        },
+      };
+      const ex = new BrowserExecutor(1);
+      const tries = [
+        { name: 'click', input: { x: 120, y: 80 } },
+        { name: 'click', input: { ref: 'ref_1' } },
+        { name: 'press_key', input: { key: 'Enter' } },
+        { name: 'press_key', input: { key: 'Tab' } },
+        { name: 'type', input: { text: 'x', submit: true } },
+        { name: 'scroll', input: { direction: 'down' } },
+        { name: 'read_page', input: {} },
+        { name: 'navigate', input: { url: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html' } },
+        { name: 'navigate', input: { url: 'chrome://settings/' } },
+        { name: 'new_tab', input: { url: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html' } },
+      ];
+      for (const t of tries) {
+        let refused = null;
+        try {
+          const plan = await ex.prepare({ type: 'tool_call', id: 'c', name: t.name, input: t.input });
+          await plan.run();
+        } catch (e) { refused = e instanceof Error ? e.message : String(e); }
+        assert.ok(refused && /browser-internal page|Security restriction/.test(refused), `${t.name} ${JSON.stringify(t.input)} on ${url} was not refused: ${refused}`);
+      }
+      assert.deepEqual(touched, [], `Act touched ${url}: ${JSON.stringify(touched)}`);
+    }
+    assert.ok(isRestrictedUrl('chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html'));
+    global.chrome = realChrome;
+    checks++; console.log('PASS', "Act cannot click, type, press keys on or navigate to Shields' settings, its panel or chrome:// pages");
+  }
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');
