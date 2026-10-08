@@ -26,11 +26,15 @@ const sender = clip(normalizeText(q.get("s") ?? ""), 40);
 const color = AGENT_COLORS[(q.get("c") ?? "") as AgentColor] ?? AGENT_COLORS.blue;
 
 (document.getElementById("logo") as HTMLImageElement).src = logo;
+// Shield Buddy as the tab icon too (bundled with the extension, same origin); the site's favicon is never requested.
+(document.getElementById("tab-icon") as HTMLLinkElement).href = logo;
 text("title", title);
 text("domain", ok ? host : "link inválido");
 text("group", group);
 text("sender", sender);
 document.getElementById("dot")!.style.background = color;
+// Same chip as the side panel: the agent's tab-group colour on a ~14% tint of itself.
+Object.assign(document.getElementById("chip")!.style, { background: `${color}24`, color });
 document.title = `${title} — aguardando`;
 
 const button = document.getElementById("open") as HTMLButtonElement;
