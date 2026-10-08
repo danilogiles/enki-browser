@@ -3,10 +3,12 @@
 //
 //   npm run build && npm run verify                    Windows: out/EnkiBrowser
 //   node test/verify.mjs                               Linux: out/linux/enki-browser (or ENKI_LINUX_DIR)
+//   node test/verify.mjs                               macOS: out/mac-<arch>/Enki Browser.app (or ENKI_MAC_APP)
 //   ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6 ...       also run one Act task through a local OmniRoute
 //   ENKI_NO_SANDBOX=1 ...                              containers without user namespaces only
+//   ENKI_MOCK_KEYCHAIN=1 ...                           macOS CI runners: no keychain prompt to wait on
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -15,12 +17,27 @@ import { chromium } from "playwright-core";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const linux = process.platform === "linux";
+const mac = process.platform === "darwin";
 // Windows: the stub and `current` at the top, the release in app/<version>/. Linux: one folder.
-const installRoot = linux ? (process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser")) : path.join(root, "out", "EnkiBrowser");
-const app = linux ? installRoot : path.join(installRoot, "app", readFileSync(path.join(installRoot, "current"), "utf8").trim());
+// macOS: the .app, with Enki Browser's files in Contents/Resources/enki.
+const macApp = process.env.ENKI_MAC_APP ?? path.join(root, "out", `mac-${process.arch === "arm64" ? "arm64" : "x64"}`, "Enki Browser.app");
+const installRoot = linux ? (process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser")) : mac ? macApp : path.join(root, "out", "EnkiBrowser");
+const app = linux ? installRoot : mac ? path.join(macApp, "Contents", "Resources", "enki") : path.join(installRoot, "app", readFileSync(path.join(installRoot, "current"), "utf8").trim());
 const version = JSON.parse(readFileSync(path.join(app, "version.json"), "utf8"));
 const port = 9333;
 const results = [];
+/** Retries fn until it returns something truthy or the time runs out; returns its last result.
+ *  For outcomes that take longer on a slow runner (macOS CI), where a fixed pause was a coin toss. */
+async function until(fn, ms) {
+  const end = Date.now() + ms;
+  let last;
+  do {
+    last = await fn().catch(() => undefined);
+    if (last?.ok ?? last) return last;
+    await new Promise((r) => setTimeout(r, 500));
+  } while (Date.now() < end);
+  return last;
+}
 const check = (name, ok, detail = "") => {
   results.push({ name, ok });
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -43,11 +60,16 @@ const local = `http://127.0.0.1:${server.address().port}/`;
 const userData = mkdtempSync(path.join(os.tmpdir(), "enki-browser-verify-"));
 // Started the way the menu entry starts it: on Windows stub → launcher → Chromium, on Linux the
 // launcher script → Chromium.
-const launcher = linux ? path.join(installRoot, "enki-browser") : path.join(installRoot, "EnkiBrowser.exe");
+const launcher = linux ? path.join(installRoot, "enki-browser") : mac ? path.join(macApp, "Contents", "MacOS", "Enki Browser") : path.join(installRoot, "EnkiBrowser.exe");
 const extraArgs = process.env.ENKI_NO_SANDBOX === "1" ? ["--no-sandbox"] : [];
+if (process.env.ENKI_MOCK_KEYCHAIN === "1") extraArgs.push("--use-mock-keychain");
+const startedAt = Date.now();
+// What the launcher and Chromium print goes to a file, shown if the browser never starts.
+const launchLog = path.join(os.tmpdir(), `enki-browser-verify-${process.pid}.log`);
+const logFd = openSync(launchLog, "w");
 const proc = spawn(launcher, [`--remote-debugging-port=${port}`, ...extraArgs, "about:blank"], {
   env: { ...process.env, ENKI_BROWSER_USER_DATA: userData },
-  stdio: "ignore",
+  stdio: ["ignore", logFd, logFd],
 });
 
 let browser;
@@ -58,7 +80,11 @@ try {
     await new Promise((r) => setTimeout(r, 500));
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`).catch(() => undefined);
   }
-  if (!browser) throw new Error("Enki Browser did not start (no debug endpoint after 30s).");
+  if (!browser) {
+    const tail = readFileSync(launchLog, "utf8").split("\n").slice(-60).join("\n");
+    console.log(`--- launcher and browser output (${launchLog}) ---\n${tail}\n---`);
+    throw new Error("Enki Browser did not start (no debug endpoint after 30s).");
+  }
   const ctx = browser.contexts()[0];
   cdp = await browser.newBrowserCDPSession();
   const product = (await cdp.send("Browser.getVersion")).product;
@@ -126,7 +152,7 @@ try {
   check("the Shields panel reaches uBlock's per-site mode", before.levels);
   const badgeText = await shieldsPage.evaluate((tabId) => chrome.action.getBadgeText({ tabId }), siteTab);
   check("the Shields button shows the number blocked", badgeText === String(before.count), `badge "${badgeText}"`);
-  const firstRun = JSON.parse(readFileSync(path.join(app, "chromium", "initial_preferences"), "utf8"));
+  const firstRun = JSON.parse(readFileSync(mac ? path.join(app, "initial_preferences") : path.join(app, "chromium", "initial_preferences"), "utf8"));
   check("new profiles get the Shields button pinned next to the address bar", firstRun.extensions?.pinned_extensions?.includes(version.shieldExtensionId), JSON.stringify(firstRun.extensions?.pinned_extensions));
   const loadTrackers = async () => {
     outcome.clear();
@@ -137,11 +163,18 @@ try {
   };
   await shieldsPage.click("#toggle"); // Shields down, and the panel reloads the tab
   await page.waitForTimeout(1500);
-  const down = await loadTrackers();
+  // uBlock applies the site's new mode asynchronously; try again until it has.
+  const down = (await until(async () => {
+    const o = await loadTrackers();
+    return { ok: o.some((x) => !/BLOCKED_BY_CLIENT|neutered/.test(x)), o };
+  }, 15000))?.o ?? [];
   check("Shields down lets a site's trackers through", (await openShields()).up === false && down.some((o) => !/BLOCKED_BY_CLIENT|neutered/.test(o)), down.join(", "));
   await shieldsPage.click("#toggle"); // and back up
   await page.waitForTimeout(1500);
-  const up = await loadTrackers();
+  const up = (await until(async () => {
+    const o = await loadTrackers();
+    return { ok: o.every((x) => /BLOCKED_BY_CLIENT|neutered/.test(x)), o };
+  }, 15000))?.o ?? [];
   check("Shields up blocks them again", up.every((o) => /BLOCKED_BY_CLIENT|neutered/.test(o)), up.join(", "));
   // Shields' per-site choices name sites the user visits: stored sealed, never as host names.
   const sealedSites = await shieldsPage.evaluate(async () => {
@@ -182,15 +215,19 @@ try {
   });
   check("third-party cookies are blocked", /block/i.test(cookieState ?? ""), cookieState ?? "no checked option found");
 
-  // ---- closing the last window must end the browser, or a staged update never installs
-  await page.goto("chrome://settings/system");
-  await page.waitForTimeout(1500);
-  const background = await page.evaluate(() => {
-    const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
-    const row = all(document).find((el) => el.tagName === "SETTINGS-TOGGLE-BUTTON" && /background/i.test(el.getAttribute("label") ?? el.label ?? ""));
-    return row ? { label: row.getAttribute("label") ?? row.label, checked: !!row.checked } : null;
-  });
-  check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
+  // ---- closing the last window must end the browser, or a staged update never installs.
+  // Not on macOS: Chromium there has no such setting (a Mac app runs until it is quit, ⌘Q, like
+  // every Mac app), and there is no updater waiting for the browser to close.
+  if (!mac) {
+    await page.goto("chrome://settings/system");
+    await page.waitForTimeout(1500);
+    const background = await page.evaluate(() => {
+      const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
+      const row = all(document).find((el) => el.tagName === "SETTINGS-TOGGLE-BUTTON" && /background/i.test(el.getAttribute("label") ?? el.label ?? ""));
+      return row ? { label: row.getAttribute("label") ?? row.label, checked: !!row.checked } : null;
+    });
+    check("the browser does not keep running after it is closed", background?.checked === false, background ? `${background.label}: ${background.checked ? "on" : "off"}` : "toggle not found");
+  }
 
   // ---- Enki Shield: phishing protection checked on this device
   const shieldPage = `chrome-extension://${version.shieldExtensionId}/blocked.html?url=about%3Ablank`;
@@ -274,13 +311,32 @@ try {
   // system light or dark mode like other browsers.
   check("the window follows the system theme (no custom theme)", !!themeRow && !/Reset to default|Redefinir|Restablecer/i.test(themeRow), themeRow || "theme row not found");
 
-  if (!linux) {
+  if (mac) {
+    const info = path.join(macApp, "Contents", "Info.plist");
+    const read = (key) => { try { return execFileSync("plutil", ["-extract", key, "raw", info]).toString().trim(); } catch { return ""; } };
+    check("the app is called Enki Browser, with its own bundle id", read("CFBundleName") === "Enki Browser" && read("CFBundleIdentifier") === "io.github.danilogiles.EnkiBrowser", `${read("CFBundleName")} · ${read("CFBundleIdentifier")}`);
+    let signed = "";
+    try { execFileSync("codesign", ["--verify", "--deep", "--strict", macApp], { stdio: "pipe" }); } catch (e) { signed = e.stderr?.toString().trim() || "invalid"; }
+    check("the app's signature is intact (nothing was changed after signing)", signed === "", signed);
+    // The launcher execs Chromium: the browser runs in the process macOS started, so it is one app
+    // (the Dock's icon, links from other apps), not a launcher and a separate Chromium.
+    const comm = execFileSync("ps", ["-o", "comm=", "-p", String(proc.pid)]).toString().trim();
+    check("the browser runs in the app's own process", comm.endsWith("Enki Browser.app/Contents/MacOS/Chromium"), comm);
+  } else if (!linux) {
     const winInfo = execFileSync("powershell.exe", ["-NoProfile", "-Command",
       `$c = Join-Path '${app}' 'chromium\\chrome.exe'; ` +
       `(Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $c -and $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle; ` +
       `(Get-Item $c).VersionInfo.FileDescription`]).toString().trim().split(/\r?\n/);
     check("the window title ends in Enki Browser", / - Enki Browser$/.test(winInfo[0] ?? ""), winInfo[0] ?? "no window");
     check("chrome.exe describes itself as Enki Browser", winInfo.at(-1) === "Enki Browser", winInfo.at(-1));
+  }
+
+  if (mac) {
+    // The first-run defaults go through Chromium's own folder and must not stay there.
+    const leftover = path.join(os.homedir(), "Library", "Application Support", "Chromium", "Chromium Initial Preferences");
+    const wait = 70000 - (Date.now() - startedAt);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    check("the first-run defaults are removed from Chromium's folder afterwards", !existsSync(leftover), leftover);
   }
 
   // ---- the assistant itself
@@ -303,7 +359,8 @@ try {
     await p.goto(`chrome-extension://${version.shieldExtensionId}/options.html`);
     const tabId = await p.evaluate(async (u) => (await chrome.tabs.query({ url: u }))[0]?.id, url);
     await p.goto(`chrome-extension://${version.shieldExtensionId}/popup.html?tab=${tabId}`);
-    await p.waitForTimeout(500);
+    // The panel names the site once its script has run; clicking before that does nothing.
+    await p.waitForFunction(() => document.getElementById("host")?.textContent.trim().length > 0, null, { timeout: 15000 }).catch(() => undefined);
     return p;
   };
   const shred = await panelFor("https://example.com/*");
@@ -316,7 +373,9 @@ try {
   check("Shred this site deletes that site's data and keeps others'", !shredded.storage && !/enki_verify/.test(shredded.cookie) && otherKept === "1", JSON.stringify({ shredded, otherKept }));
   const burn = await panelFor("https://example.org/*");
   await burn.click("#burn"); await burn.click("#burn-go").catch(() => undefined);
-  await new Promise((r) => setTimeout(r, 3000));
+  // Burning closes every tab and then clears the data; wait for it to finish rather than guess.
+  await until(async () => ctx.pages().filter((p) => !p.isClosed()).length <= 1, 20000);
+  await new Promise((r) => setTimeout(r, 1500));
   const left = ctx.pages().filter((p) => !p.isClosed());
   const after = left[0] ?? await ctx.newPage();
   await after.goto("https://example.org/");
