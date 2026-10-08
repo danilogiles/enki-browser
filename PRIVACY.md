@@ -44,6 +44,12 @@ third-party cookies, known trackers and ads, and the local network address WebRT
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
 | History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker; macOS: FileVault, in System Settings → Privacy & Security) to protect them if someone gets your disk |
 
+Whether Enki Browser is your default browser (Windows) is read from the registry on your computer,
+only to decide whether to show the one-time *Make Enki Browser your default browser?* page and the
+row in Shields' settings; the answer is not sent anywhere. Chromium's import dialog reads another
+browser's data only when you open it and choose what to import, and starts with saved passwords
+and autofill unticked.
+
 Updates change only the program: your profile — history, bookmarks, logins, Enki's settings and
 chats, Shields' choices — is kept exactly as it was, and an update restart reopens your windows
 and tabs.

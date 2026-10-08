@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Enki Browser</title>
+  <link rel="icon" href="icons/shield32.png">
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    body { width: auto; max-width: 520px; margin: 12vh auto; padding: 0 16px; }
+    .card { background: var(--card); border-radius: 16px; padding: 24px; text-align: center; }
+    .card img { width: 64px; height: 64px; }
+    h1 { font-size: 20px; margin: 12px 0 8px; }
+    p { color: var(--muted); line-height: 1.5; margin: 8px 0; }
+    .actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+    .actions .pill { flex: 0 0 auto; padding: 8px 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="icons/shield128.png" alt="">
+    <h1 id="title">Make Enki Browser your default browser?</h1>
+    <p id="text">Links you open from email, documents and other apps will open in Enki Browser, with its Shields. Windows asks you to confirm in Settings: choose Enki Browser and select “Set default”.</p>
+    <p id="state" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button id="open-settings" class="pill">Open Windows Settings</button>
+      <button id="not-now" class="pill quiet">Not now</button>
+    </div>
+    <p class="fixed">This page does not come back. You can still do it later from Enki Shields settings.</p>
+  </div>
+  <script type="module" src="welcome.js"></script>
+</body>
+</html>

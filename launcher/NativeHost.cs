@@ -3,7 +3,10 @@
 // names, with the calling extension's origin as its first argument, and they exchange JSON over
 // stdin and stdout, each message prefixed with its length. Only Enki Shield may call it (the
 // manifest's allowed_origins), and all it can ask for is what the tray notification already
-// offers: check now, and restart into a downloaded update.
+// offers (check now, and restart into a downloaded update), plus, since 0.8.5, whether Enki
+// Browser is the default browser (a registry read on this computer) and opening the Settings page
+// where the user makes it so (DefaultBrowser.cs). Nothing it does goes over the network but the
+// update check.
 //
 // The manifest names the launcher of the version that started the browser, so it is written at
 // every start; the registry entry pointing at it lives under HKCU\Software\Chromium, where Chromium
@@ -42,7 +45,7 @@ static class NativeHost
             File.WriteAllText(manifest, json.Serialize(new Dictionary<string, object>
             {
                 { "name", Name },
-                { "description", "Enki Browser: check for updates" },
+                { "description", "Enki Browser: updates and default browser" },
                 { "path", Path.Combine(appDir, "EnkiBrowserLauncher.exe") },
                 { "type", "stdio" },
                 { "allowed_origins", new[] { "chrome-extension://" + shield + "/" } },
@@ -62,6 +65,13 @@ static class NativeHost
             var request = json.DeserializeObject(Read(Console.OpenStandardInput())) as Dictionary<string, object>;
             string type = request != null && request.ContainsKey("type") ? request["type"] as string : null;
             if (type == "check") reply = Check(root, appDir);
+            else if (type == "default-status") reply = DefaultStatus(root);
+            else if (type == "open-default-apps")
+            {
+                // Only for an install Windows knows as a browser; Settings would not list it otherwise.
+                bool registered = DefaultBrowser.IsRegistered(Registry.CurrentUser, root);
+                reply = new Dictionary<string, object> { { "opened", registered && DefaultBrowser.OpenSettings() } };
+            }
             else if (type == "restart")
             {
                 // The running browser's own launcher restarts it, as the tray's "Restart and update" does.
@@ -73,6 +83,18 @@ static class NativeHost
         catch (Exception e) { reply = new Dictionary<string, object> { { "error", e.Message } }; }
         Write(Console.OpenStandardOutput(), json.Serialize(reply));
         return 0;
+    }
+
+    /// Whether this install is registered as a browser and is the user's default for links.
+    /// Portable copies are never registered (Install.SyncRegistration).
+    static Dictionary<string, object> DefaultStatus(string root)
+    {
+        return new Dictionary<string, object>
+        {
+            { "registered", DefaultBrowser.IsRegistered(Registry.CurrentUser, root) },
+            { "isDefault", DefaultBrowser.IsDefault(Registry.CurrentUser) },
+            { "portable", File.Exists(Path.Combine(root, "portable")) },
+        };
     }
 
     static Dictionary<string, object> Check(string root, string appDir)

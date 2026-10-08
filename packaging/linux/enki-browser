@@ -63,6 +63,12 @@ if [[ -f "$DATA/Local State" ]]; then
   fi
 fi
 
+# Chromium's "Make default" button and its "is this the default browser?" check run
+# `xdg-settings ... default-web-browser $CHROME_DESKTOP`, which otherwise names Chromium's own
+# chromium-browser.desktop: the button failed, or made a distribution's Chromium the default, and
+# Settings never showed Enki as the default. This is the menu entry install.sh and the .deb add.
+export CHROME_DESKTOP=enki-browser.desktop
+
 exec "$HERE/chromium/chrome" \
   --user-data-dir="$DATA" \
   --load-extension="$EXTENSIONS" \

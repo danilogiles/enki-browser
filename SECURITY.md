@@ -20,7 +20,11 @@ You are credited in the advisory unless you prefer otherwise.
 - Data leaving the browser that `PRIVACY.md` does not list.
 - A bypass of Enki Shield (phishing warnings, Shields settings) or of the privacy defaults.
 - Installer, launcher or uninstaller behavior that touches files outside the install and profile
-  folders.
+  folders, or registry keys other than the per-user ones they document (`launcher/Install.cs`,
+  `launcher/DefaultBrowser.cs`).
+- A link or file opened in Enki Browser through Windows (for example once it is the default
+  browser) that reaches Chromium, the launcher or `EnkiBrowser.exe` as a switch instead of as one
+  literal argument (`launcher/Args.cs`).
 
 ## Chromium itself
 

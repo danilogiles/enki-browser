@@ -4,7 +4,7 @@
 //   EnkiBrowserSetup.exe                 window with progress, opens the browser when done
 //   EnkiBrowserSetup.exe /S              silent
 //   EnkiBrowserSetup.exe /D=<folder>     install somewhere other than %LOCALAPPDATA%\Programs
-//   EnkiBrowserSetup.exe /NoIntegration  no shortcuts or Apps entry (tests)
+//   EnkiBrowserSetup.exe /NoIntegration  no shortcuts, Apps entry or browser registration (tests)
 using System;
 using System.Drawing;
 using System.IO;
@@ -95,6 +95,15 @@ static class Setup
             status(Win.T("Criando atalhos…", "Creando accesos directos…", "Creating shortcuts…"));
             Install.CreateShortcuts(root);
             Install.Register(root, version, Install.FolderSizeKb(root));
+            // Listed in Settings → Default apps and "Open with"; the user makes it the default there.
+            // Never a reason to fail the install: the launcher writes it again at every start.
+            try
+            {
+                DefaultBrowser.Register(Microsoft.Win32.Registry.CurrentUser, root);
+                DefaultBrowser.Repair(Microsoft.Win32.Registry.CurrentUser, root);
+            }
+            catch { }
+            DefaultBrowser.NotifyShell();
         }
     }
 }

@@ -1,6 +1,7 @@
 // Enki Shields' global settings, opened from the panel's "Global settings".
 import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
-import { DOWNLOAD, check, compare, restart, status } from "./updates.js";
+import { DOWNLOAD, check, compare, native, restart, status } from "./updates.js";
+import { defaultStatus, openDefaultApps } from "./default-browser.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -97,6 +98,21 @@ function showUpdates(s, checked) {
     updateState.textContent = s.updater ? "Updates download by themselves every couple of hours." : "This copy does not update by itself; check here for a new release.";
   }
 }
+// Default browser (default-browser.js): only for an install Windows knows as a browser.
+async function showDefault() {
+  const s = await defaultStatus(native);
+  $("default-row").hidden = !s?.registered;
+  if (!s?.registered) return;
+  $("default-state").textContent = s.isDefault ? "Enki Browser is your default browser." : "Another browser opens links from other apps.";
+  $("make-default").hidden = s.isDefault;
+}
+$("make-default").onclick = async () => {
+  $("default-state").textContent = (await openDefaultApps(native))
+    ? "In Windows Settings, choose Enki Browser, then “Set default”."
+    : "Windows Settings could not be opened. Open Settings → Apps → Default apps and choose Enki Browser.";
+};
+window.addEventListener("focus", () => void showDefault());
+void showDefault();
 showUpdates(await status(), false);
 document.documentElement.dataset.updates = "ready"; // tests wait for this before reading or clicking
 checkUpdates.onclick = async () => {

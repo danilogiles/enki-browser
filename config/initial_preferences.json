@@ -39,5 +39,7 @@
   },
   "session": {
     "restore_on_startup": 1
-  }
+  },
+  "import_dialog_saved_passwords": false,
+  "import_dialog_autofill_form_data": false
 }

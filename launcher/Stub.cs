@@ -10,9 +10,14 @@ using System.Windows.Forms;
 static class Stub
 {
     [STAThread]
-    static int Main(string[] args)
+    static int Main(string[] argv)
     {
         string root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+        // A link or file opened through Windows arrives after --single-argument: only what comes
+        // before it is read as arguments, and the rest is passed on untouched (Args.cs). So a URL
+        // can never ask for --uninstall.
+        var parsed = Args.Parse(Environment.CommandLine, argv);
+        string[] args = parsed.Head;
         if (args.Contains("--uninstall")) return Uninstaller.Start(root, args);
         string from = args.FirstOrDefault(a => a.StartsWith("--uninstall-from="));
         if (from != null) return Uninstaller.Run(from.Substring("--uninstall-from=".Length).Trim('"'), args.Contains("/S"), !args.Contains("/NoIntegration"));
@@ -28,7 +33,7 @@ static class Stub
                 "Enki Browser", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
-        Process.Start(new ProcessStartInfo(launcher, Win.JoinArgs(args)) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(launcher) });
+        Process.Start(new ProcessStartInfo(launcher, Args.Compose(args, parsed.Raw)) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(launcher) });
         RemoveOldVersions(root, version);
         return 0;
     }
@@ -112,7 +117,7 @@ static class Uninstaller
         if (integrate)
         {
             Install.RemoveShortcuts();
-            Install.Unregister();
+            Install.Unregister(root);
         }
         Win.DeleteTree(root);
         if (removeData) Win.DeleteTree(Install.DataDir);
