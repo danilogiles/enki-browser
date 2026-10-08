@@ -156,7 +156,7 @@ if (runs("programs")) {
 using System.Reflection;
 [assembly: AssemblyTitle("Enki Browser")]
 [assembly: AssemblyProduct("Enki Browser")]
-[assembly: AssemblyCompany("Enki contributors")]
+[assembly: AssemblyCompany("Danilo De Souza")]
 [assembly: AssemblyVersion("${pkg.version}.0")]
 [assembly: AssemblyFileVersion("${pkg.version}.0")]
 

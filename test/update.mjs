@@ -124,6 +124,30 @@ const restoreHost = () => {
   } catch { /* nothing registered either way */ }
 };
 
+// Fake Apps entry for this throwaway install: SyncRegistration rewrites DisplayVersion and
+// Publisher when InstallLocation matches; portable installs never create an entry of their own.
+// Save and put back whatever was registered so a real Enki Browser on a developer's machine is left alone.
+const arpKey = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EnkiBrowser";
+const arpBackup = path.join(tmp, "arp-before.reg");
+const arpExisted = (() => { try { execFileSync("reg", ["export", arpKey, arpBackup, "/y"], { stdio: "ignore" }); return true; } catch { return false; } })();
+const arpValue = (name) => {
+  try { return /REG_SZ\s+(.+)$/m.exec(execFileSync("reg", ["query", arpKey, "/v", name], { stdio: ["ignore", "pipe", "ignore"] }).toString())?.[1].trim() ?? ""; }
+  catch { return ""; }
+};
+const plantArp = (root, version) => {
+  execFileSync("reg", ["add", arpKey, "/v", "DisplayName", "/d", "Enki Browser", "/f"], { stdio: "ignore" });
+  execFileSync("reg", ["add", arpKey, "/v", "DisplayVersion", "/d", version, "/f"], { stdio: "ignore" });
+  // Old publisher on purpose: SyncRegistration must rewrite it to match the certificate.
+  execFileSync("reg", ["add", arpKey, "/v", "Publisher", "/d", "Enki contributors", "/f"], { stdio: "ignore" });
+  execFileSync("reg", ["add", arpKey, "/v", "InstallLocation", "/d", root, "/f"], { stdio: "ignore" });
+};
+const restoreArp = () => {
+  try {
+    if (arpExisted) execFileSync("reg", ["import", arpBackup], { stdio: "ignore" });
+    else execFileSync("reg", ["delete", arpKey, "/f"], { stdio: "ignore" });
+  } catch { /* nothing registered either way */ }
+};
+
 try {
   check("installed version is 0.0.1", current() === "0.0.1" && has("0.0.1"), current());
 
@@ -140,6 +164,8 @@ try {
   // the page asks this browser's launcher (native messaging), which checks the feed now. Its own
   // background check stays quiet: the checks above were minutes ago, within its interval.
   const genuine = manifest("genuine", {}, good.privateKey);
+  // Plant an Apps entry pointing at this portable copy so SyncRegistration has something to update.
+  plantArp(install, "0.0.1");
   run(["--remote-debugging-port=9451", "about:blank"], { ENKI_BROWSER_UPDATE_FEED: genuine });
   browser = await connect(9451);
   writeFileSync(path.join(install, "User Data", "enki-test-marker"), "keep me"); // exists once the browser has run
@@ -164,6 +190,8 @@ try {
   browser = await connect(9452);
   const product = (await (await browser.newBrowserCDPSession()).send("Browser.getVersion")).product;
   check("the next start opens 0.0.2", chromes().length > 0 && chromes().every((p) => p.includes("\\app\\0.0.2\\")), product);
+  check("Settings → Apps shows the version that now runs", arpValue("DisplayVersion") === "0.0.2", arpValue("DisplayVersion"));
+  check("Settings → Apps shows the publisher that matches the certificate", arpValue("Publisher") === "Danilo De Souza", arpValue("Publisher"));
   check("the profile survives the update", existsSync(path.join(install, "User Data", "enki-test-marker")));
   check("the previous version is kept for rollback", has("0.0.1"));
   check("versions older than that are removed", !existsSync(path.join(install, "app", "0.0.0")));
@@ -278,6 +306,7 @@ try {
   console.log("--- update.log\n" + log());
   results.push({ name: "no unexpected error", ok: false });
 } finally {
+  restoreArp();
   restoreHost();
   if (browser) await closeBrowser(browser).catch(() => undefined);
   // Whatever this run started from its temp folder goes, even after a failure: a browser left on
