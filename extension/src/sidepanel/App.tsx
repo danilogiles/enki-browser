@@ -98,6 +98,8 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
   /** savedAt of the snapshot this document last wrote, so its own echo off storage is not
    *  mistaken for the other document having changed the conversation. */
   const lastSavedAt = useRef(0);
+  // The messages last taken from the other document's save; see the persist effect.
+  const followedMessages = useRef<unknown>(null);
 
   // ----- settings -----
   useEffect(() => {
@@ -138,6 +140,10 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
     if (!ready || !settings) return;
     if (!settings.saveConversations) { void clearChats().then(() => setChats([])); return; }
     if (!messages.length) return;
+    // What we just read from the other document's save is not ours to write back. Echoing it
+    // raced that document: a mid-answer snapshot we re-saved could land after its final save and
+    // overwrite it, cutting the answer short in both places (CI's flaky home sync test, #37).
+    if (messages === followedMessages.current) return;
     const id = chatId ?? uid();
     if (!chatId) { setChatId(id); if (!isolated) void setCurrentChat(id); }
     const persist = () => {
@@ -181,6 +187,7 @@ export function App({ host = "panel", seed }: { host?: Host; seed?: string } = {
         // The page under us was read by the OTHER document, not this one: anything it observed
         // is not ours to trust, so the next turn here reads the page again.
         restoredRef.current = true;
+        followedMessages.current = restored.messages;
         setMessages(restored.messages);
       });
     };
