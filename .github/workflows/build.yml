@@ -212,6 +212,9 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          # The signer role is granted on the certificate profile only, so this identity may see no
+          # subscription at all; AZURE_SUBSCRIPTION_ID can then stay unset.
+          allow-no-subscriptions: true
       # Exactly two files, by path: before packaging, so the zip and the installer carry them signed.
       - name: Sign the stub and the launcher
         uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
@@ -376,6 +379,8 @@ jobs:
        (vars.ARTIFACT_SIGNING_ENDPOINT == '' && needs.windows-signed.result == 'skipped'))
     needs: [windows, windows-signed, updater, linux, macos]
     runs-on: ubuntu-latest
+    # Protected environment (required reviewer, v* tags only) that alone holds UPDATE_SIGNING_KEY.
+    environment: release
     # The only job allowed to write, and only for a tag pushed by a maintainer.
     permissions:
       contents: write
