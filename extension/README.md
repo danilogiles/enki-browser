@@ -15,6 +15,7 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 - **Connected apps (MCP)**: Settings → Connections links Jira & Confluence, Linear, Notion, Sentry, GitHub or any MCP server. You sign in on the app's own page (OAuth with dynamic registration and PKCE); then ask `@jira create a ticket for this bug`. Read tools run at once; anything that changes your data waits for your OK unless you allow that tool.
 - **Saved tasks**: a request you repeat, run with `/name` plus extra words, in the mode it was saved with. In Act mode it works on any site, apps without MCP included.
 - **Unfiltered tone** (developer mode): Enki's own tone rules off, so the model's policy is the only filter. The browser safety rules stay on.
+- **Enki Home** (Enki Browser's new tab): one box to ask or search; answers appear right on the page, and your conversations are listed on the left, as in Comet, to reopen, start anew or delete.
 - **Answer page**: `src/sidepanel/index.html?q=…` answers a question in a full tab, which is how Enki Browser makes Enki its address bar search.
 - **Voice input**: press the microphone and speak instead of typing. Whisper runs on your computer, inside the browser; the audio never leaves it. The model (~80 MB) downloads once from Hugging Face the first time.
 - **Bring your own model**: Anthropic Claude, OpenAI, Google Gemini, Groq, OpenRouter, Ollama (local), or any OpenAI-compatible endpoint.
