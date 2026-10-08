@@ -1,17 +1,17 @@
 # Enki Browser brand
 
 Enki Browser's own icon and logo. The build reads these instead of the Enki extension's toolbar
-icons, so the browser's look is reviewed here, in this repository.
+icons (`extension/public/icons`), so a change to the extension's icons doesn't change the browser's.
 
 The mark is the shield robot: a silver shield with a dark visor and two sky-blue (`#38bdf8`) eyes.
 It replaced the earlier face mark on 2026-10-05. The same artwork is in the Enki extension
-(`danilogiles/enkibrowser`, `src/assets/logo.svg`).
+(`extension/src/assets/logo.svg`), which the macOS app icon is drawn from.
 
 | File | What | Used by |
 |---|---|---|
 | `icons/enki-browser-{16,20,24,32,40,48,64,96,128,256,512}.png` | App icon: the shield on a dark rounded plate (`#1e1e1e`) | Windows: `enki.ico` (16, 20, 24, 32, 40, 48, 64, 256) → chrome.exe, chrome.dll, EnkiBrowser.exe, EnkiBrowserLauncher.exe, EnkiBrowserSetup.exe. Linux: hicolor 16–512 and Chromium's `product_logo_48.png` |
 | `enki-browser.svg` | The app icon as a vector | Linux `hicolor/scalable/apps` |
-| `logo-master.png` | The shield alone, no plate, 512 px | Chromium's product logos in the paks (About page, profile menu), resized to each one |
+| `logo-master.png` | The shield alone, no plate, 512 px | Chromium's product logos in the paks (About page, profile menu), resized to each one, on Windows, Linux and macOS |
 | `logo.svg` | The shield alone as a vector (256 viewBox) | Source of `logo-master.png`; matches the New Tab page and side panel |
 
 The plate is for the operating system (taskbar, Start menu, dock), where the icon sits next to
