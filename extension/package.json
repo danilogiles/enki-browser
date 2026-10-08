@@ -16,7 +16,8 @@
     "test:resilience": "node test/resilience.mjs",
     "test:unit": "node test/unit.cjs",
     "test:quality": "node test/quality.mjs",
-    "test:voice": "node test/voice.mjs"
+    "test:voice": "node test/voice.mjs",
+    "test:shortcut": "node test/shortcut.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

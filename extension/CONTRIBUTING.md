@@ -55,6 +55,7 @@ npm run mock             # in a second terminal: a scripted model the suites bel
 npm run test:e2e         # the extension in Chromium: Ask, Act, approval card, password gate
 npm run test:resilience  # badly-behaved models: stalls, reasoning-only replies, ignored tools
 npm run test:quality     # restore, Continue, tab locking, keyboard commands, narrow panel
+xvfb-run -a npm run test:shortcut  # real Ctrl+Shift+E opens the side panel (needs xdotool, no mock)
 ```
 
 The browser suites need Playwright's Chromium once: `npx playwright install chromium`. CI runs

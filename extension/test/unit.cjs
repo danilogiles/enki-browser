@@ -216,5 +216,72 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     walk(path.join(__dirname, '..', 'src'));
     assert.deepEqual(found, []);
   });
+  {
+    // Ctrl+Shift+E: chrome.sidePanel.open is only allowed inside the user gesture that fired the
+    // command. The fake rejects any call made after the listener's first synchronous run, the way
+    // Chromium does, so an await before sidePanel.open (the 0.8.3 bug) falls back to a popup here.
+    const path = require('node:path');
+    let gesture = false;
+    const calls = [];
+    let commandListener;
+    const realChrome = global.chrome;
+    global.chrome = {
+      runtime: {
+        getManifest: () => ({}), getURL: (p) => 'chrome-extension://enki/' + p,
+        onInstalled: { addListener() {} }, onStartup: { addListener() {} },
+        sendMessage: async (m) => { calls.push(['sendMessage', m.command, m.windowId]); },
+      },
+      sidePanel: {
+        setPanelBehavior: async () => {},
+        open: async ({ windowId }) => {
+          calls.push(['sidePanel.open', windowId, gesture]);
+          if (!gesture) throw new Error('`sidePanel.open()` may only be called in response to a user gesture.');
+        },
+      },
+      action: { onClicked: { addListener() {} } },
+      commands: { onCommand: { addListener: (fn) => { commandListener = fn; } } },
+      windows: {
+        getLastFocused: async () => { calls.push(['getLastFocused']); return { id: 99 }; },
+        create: async () => { calls.push(['windows.create']); return {}; },
+        update: async () => {},
+      },
+      tabs: { query: async () => [] },
+    };
+    const swPath = path.join(__dirname, '..', 'src', 'background', 'service-worker.ts');
+    delete require.cache[swPath];
+    require(swPath);
+    const press = async (command, tab) => {
+      calls.length = 0;
+      gesture = true;
+      const done = commandListener(command, tab);
+      gesture = false; // the gesture ends when the listener yields for the first time
+      await done;
+      return calls.map((c) => c.join(' '));
+    };
+    let log = await press('open-panel', { id: 3, windowId: 7 });
+    check('Ctrl+Shift+E opens the side panel inside the shortcut gesture', () => {
+      assert.deepEqual(log[0], 'sidePanel.open 7 true');
+      assert.ok(!log.includes('windows.create'), 'no popup fallback: ' + log.join(', '));
+    });
+    log = await press('focus-composer', { id: 3, windowId: 7 });
+    check('focus-composer opens the panel inside the gesture, then reaches the composer', () => {
+      assert.deepEqual(log[0], 'sidePanel.open 7 true');
+      assert.ok(log.includes('sendMessage focus-composer 7'), log.join(', '));
+      assert.ok(!log.includes('windows.create'));
+    });
+    log = await press('stop-task', { id: 3, windowId: 7 });
+    check('stop-task does not open the panel', () => {
+      assert.deepEqual(log, ['sendMessage stop-task 7']);
+    });
+    const warn = console.warn;
+    console.warn = () => {}; // the gesture is gone after getLastFocused, so this case warns and falls back
+    log = await press('open-panel', undefined);
+    console.warn = warn;
+    check('a command without a tab still targets the last focused window', () => {
+      assert.ok(log.includes('getLastFocused'));
+      assert.ok(log.some((l) => l.startsWith('sidePanel.open 99')), log.join(', '));
+    });
+    global.chrome = realChrome;
+  }
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });
