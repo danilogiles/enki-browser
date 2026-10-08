@@ -292,6 +292,9 @@ Honest list; each is on the roadmap.
 - **macOS: not notarized.** The first launch needs *Open Anyway* (see [macOS](#macos)), and after
   an update macOS may ask again for the keychain item that encrypts your logins. A Developer ID
   signature would end both; it needs an Apple Developer account.
+- **No DRM video yet.** Netflix, Crunchyroll, Disney+ and other sites that need Widevine do not
+  play: ungoogled-chromium ships without it, and it is closed source, so it cannot be bundled. An
+  opt-in download is planned; until then, watch those in another browser.
 - **x86_64 only on Windows and Linux**; macOS has Apple silicon and Intel builds.
 
 ## Roadmap
