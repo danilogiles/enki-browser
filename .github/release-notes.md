@@ -1,5 +1,7 @@
 Early alpha. Read *Known gaps* in the README first.
 
+**Known issue:** video that needs DRM (Netflix, Crunchyroll, Disney+) does not play yet, because the Widevine component is not included. An opt-in download is planned; until then, watch those in another browser.
+
 **Windows** — run `EnkiBrowserSetup-<version>.exe` (it also upgrades older installs, keeping your profile). The Windows installer is now signed, with verified publisher Danilo De Souza. For the first few days SmartScreen may still show a warning, until the signature builds reputation. Without an installer: the `windows-x64.zip` is the same browser, portable; or with Scoop:
 `scoop install https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser.json`
 
