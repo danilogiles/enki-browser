@@ -147,13 +147,23 @@ export class BrowserExecutor {
     }
   }
 
-  private async send<T>(tabId: number, req: ContentRequest): Promise<T> {
+  /**
+   * Refuses a tab showing a browser-internal page: chrome://, and every chrome-extension:// page,
+   * such as Enki Shields' settings with its Burn all data button. Checked before anything reaches
+   * the page, whether through the content script or through the debugger's trusted input; the
+   * browser also refuses the debugger there, but Act must not depend on that.
+   */
+  private async refuseInternal(tabId: number): Promise<void> {
     const tab = await chrome.tabs.get(tabId);
     if (isRestrictedUrl(tab.url)) {
       throw new Error(
         `This tab (${tab.url ?? "internal page"}) is a browser-internal page and cannot be read or controlled. Navigate to a website first.`,
       );
     }
+  }
+
+  private async send<T>(tabId: number, req: ContentRequest): Promise<T> {
+    await this.refuseInternal(tabId);
     const attempt = async (): Promise<T> => {
       const res = (await chrome.tabs.sendMessage(tabId, req)) as ContentResponse<T> | undefined;
       if (!res) throw new Error("No response from page.");
@@ -191,6 +201,7 @@ export class BrowserExecutor {
   // ---------- CDP helpers ----------
 
   private async attach(tabId: number): Promise<boolean> {
+    await this.refuseInternal(tabId); // also when already attached: the tab may have navigated since
     if (this.attached.has(tabId)) return true;
     try {
       await chrome.debugger.attach({ tabId }, "1.3");
@@ -249,6 +260,7 @@ export class BrowserExecutor {
   }
 
   private async clickAt(tabId: number, x: number, y: number, fallbackRef?: string): Promise<void> {
+    await this.refuseInternal(tabId);
     this.send(tabId, { type: "enki:flash", x, y }).catch(() => undefined);
     if (await this.attach(tabId)) {
       const base = { x, y, button: "left", clickCount: 1 };
@@ -265,6 +277,7 @@ export class BrowserExecutor {
   }
 
   private async pressKey(tabId: number, combo: string): Promise<void> {
+    await this.refuseInternal(tabId);
     if (!(await this.attach(tabId))) {
       throw new Error("Keyboard input is unavailable on this page (debugger could not attach).");
     }

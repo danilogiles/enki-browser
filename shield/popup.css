@@ -37,8 +37,21 @@ select { background: var(--card); color: var(--text); border: 1px solid var(--li
 .burn { display: flex; gap: 8px; margin-top: 12px; }
 .pill.fire { background: #e8590c; border-color: #e8590c; color: #fff; }
 .pill.quiet { color: var(--text); font-weight: 500; }
-.confirm { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card); }
+.confirm { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--card); border: 1px solid rgba(232, 89, 12, .45); }
 .confirm p { margin: 0 0 10px; }
+.confirm-title { font-weight: 650; font-size: 14px; margin-bottom: 2px; }
+.confirm .confirm-sub { color: var(--muted); font-size: 12px; }
+.confirm-sub strong { color: #f4a261; font-weight: 600; }
+.confirm-list { margin-bottom: 8px; }
+.confirm-list h3 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 3px; }
+.confirm-list.del h3 { color: #f08c4a; }
+.confirm-list.keep h3 { color: var(--accent); }
+.confirm .confirm-list p { font-size: 12.5px; margin: 0; }
+.confirm .buttons { margin-top: 12px; }
+.confirm .confirm-hint { color: var(--muted); font-size: 11px; text-align: center; margin: 8px 0 0; }
+.burn.dim { opacity: .45; }
+/* Cancel is the default: it shows it has the focus even after a mouse click opened the question. */
+#burn-cancel:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
 footer { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
 .buttons { display: flex; gap: 8px; }
 .pill { flex: 1; border: 1px solid var(--line); background: none; color: var(--accent); border-radius: 18px; padding: 8px; font: inherit; font-weight: 600; cursor: pointer; }

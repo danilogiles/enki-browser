@@ -11,6 +11,28 @@
     .sites li { display: flex; gap: 10px; align-items: center; padding: 6px 0; }
     .sites li span { flex: 1; } .sites { list-style: none; padding: 0; margin: 0; }
     button.link { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; }
+    /* Burn's confirmation: a modal over the page, Cancel focused (Enter or Esc cancels). */
+    .scrim { position: fixed; inset: 0; background: rgba(6, 7, 7, .62); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+    .scrim[hidden] { display: none; }
+    .modal { width: 560px; max-width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 22px 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+    .m-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+    .m-ico { width: 36px; height: 36px; border-radius: 50%; background: rgba(232, 89, 12, .16); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .m-title { font-size: 17px; font-weight: 650; margin: 0; }
+    .m-sub { color: var(--muted); margin: 0 0 16px 48px; }
+    .m-sub strong { color: #f4a261; font-weight: 600; }
+    .lists { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+    .list { border-radius: 12px; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); }
+    .list.del { border-color: rgba(232, 89, 12, .45); }
+    .list h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
+    .list.del h3, .list.del li i { color: #f08c4a; }
+    .list.keep h3, .list.keep li i { color: var(--accent); }
+    .list ul { list-style: none; margin: 0; padding: 0; }
+    .list li { display: flex; gap: 8px; padding: 3px 0; }
+    .list li i { font-style: normal; width: 14px; flex-shrink: 0; text-align: center; }
+    .modal .buttons { gap: 10px; }
+    .modal .buttons .pill { padding: 10px; }
+    .modal .hint { color: var(--muted); font-size: 11.5px; text-align: center; margin: 10px 0 0; }
+    kbd { font: 11px ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
   </style>
 </head>
 <body>
@@ -28,7 +50,7 @@
   <h2>Burn</h2>
   <div class="card">
     <div class="row"><span class="grow">Burn all data when I close the browser<br><span class="fixed">Cookies and site data are deleted when the last window closes; history and cache when the browser next opens, and the tabs do not come back. Passwords and bookmarks are kept.</span></span><button id="auto-burn" class="switch" role="switch" aria-checked="false" aria-label="Burn all data when the browser closes"><span></span></button></div>
-    <div class="row"><span class="grow">Burn everything now</span><button id="burn-now" class="pill fire" style="flex:0 0 auto;padding:6px 14px">🔥 Burn all data</button></div>
+    <div class="row"><span class="grow">Burn everything now</span><button id="burn-now" type="button" class="pill fire" style="flex:0 0 auto;padding:6px 14px">🔥 Burn all data</button></div>
   </div>
   <h2>Enki Browser</h2>
   <div class="card">
@@ -42,6 +64,44 @@
   <h2>Sites with their own settings</h2>
   <div class="card"><ul id="sites" class="sites"></ul></div>
   <p class="note links"><a href="https://github.com/danilogiles/enki-browser/blob/main/TERMS.md" target="_blank">Terms</a> · <a href="https://github.com/danilogiles/enki-browser/blob/main/PRIVACY.md" target="_blank">Privacy</a></p>
+  <!-- Burn cannot be undone, so it asks first, here and in the Shields panel (popup.html). The
+       lists match burn.js: browsingData deletes websites' data only, so extensions' storage
+       (Enki's chats, settings and API keys; these Shields settings) is kept. -->
+  <div id="burn-confirm" class="scrim" hidden>
+    <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="burn-title" aria-describedby="burn-text">
+      <div class="m-head"><span class="m-ico" aria-hidden="true">🔥</span><h2 id="burn-title" class="m-title" style="color:var(--text);text-transform:none;letter-spacing:0">Burn everything now?</h2></div>
+      <p id="burn-text" class="m-sub">Every tab closes and this browsing data is deleted. <strong>This cannot be undone.</strong></p>
+      <div class="lists">
+        <div class="list del">
+          <h3>Deletes</h3>
+          <ul>
+            <li><i aria-hidden="true">✕</i>Every open tab (closed)</li>
+            <li><i aria-hidden="true">✕</i>History</li>
+            <li><i aria-hidden="true">✕</i>Cookies and site data</li>
+            <li><i aria-hidden="true">✕</i>Cache</li>
+            <li><i aria-hidden="true">✕</i>Download history</li>
+            <li><i aria-hidden="true">✕</i>Autofill (saved addresses &amp; cards)</li>
+          </ul>
+        </div>
+        <div class="list keep">
+          <h3>Kept</h3>
+          <ul>
+            <li><i aria-hidden="true">✓</i>Passwords</li>
+            <li><i aria-hidden="true">✓</i>Bookmarks</li>
+            <li><i aria-hidden="true">✓</i>Enki chats, settings, and API keys</li>
+            <li><i aria-hidden="true">✓</i>Shields settings</li>
+          </ul>
+        </div>
+      </div>
+      <!-- Later (Spark, after 0.8.4): an "Also delete Enki chats" checkbox goes here, unchecked by
+           default; checked, it moves "Enki chats" from Kept to Deletes. Not in this version. -->
+      <div class="buttons">
+        <button id="burn-cancel" type="button" class="pill quiet">Cancel</button>
+        <button id="burn-go" type="button" class="pill fire">Burn</button>
+      </div>
+      <p class="hint"><kbd>Enter</kbd> or <kbd>Esc</kbd> cancels</p>
+    </div>
+  </div>
   <script type="module" src="options.js"></script>
 </body>
 </html>
