@@ -455,7 +455,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
 
             <Section title="About">
               <p className="text-xs text-zinc-400">
-                Enki {chrome.runtime.getManifest().version} ·{" "}
+                Enki {chrome.runtime.getManifest().version_name ?? chrome.runtime.getManifest().version} ·{" "}
                 <a className="underline" href={legalLinks().terms} target="_blank" rel="noreferrer">Terms of Use</a> ·{" "}
                 <a className="underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">Privacy Policy</a> ·{" "}
                 <a className="underline" href="https://github.com/danilogiles/enki-browser" target="_blank" rel="noreferrer">Source code</a>
