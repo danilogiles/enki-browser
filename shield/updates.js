@@ -16,7 +16,7 @@ export async function shippedVersion() {
   return typeof ids.browser === "string" ? ids.browser : null;
 }
 
-/** One request to the launcher; null when there is none to ask (not Windows, or portable). */
+/** One request to the launcher; null when there is none to ask (not Windows). */
 export function native(message) {
   return new Promise((resolve) => {
     try {

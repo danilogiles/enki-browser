@@ -2,6 +2,7 @@
 import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
 import { DOWNLOAD, check, compare, native, restart, status } from "./updates.js";
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
+import { showWidevine } from "./widevine.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -144,3 +145,7 @@ if (!navigator.language?.startsWith("pt")) $("show-guide").textContent = navigat
 $("show-guide").onclick = () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
 };
+
+// Protected video (widevine.js).
+await showWidevine($, native, restart);
+document.documentElement.dataset.widevine = "ready"; // tests wait for this before reading or clicking

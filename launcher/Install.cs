@@ -27,6 +27,16 @@ static class Install
         get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EnkiBrowser"); }
     }
 
+    /// The browser's profile folder for the install at `root`: beside the program for a portable
+    /// copy (a file named "portable" next to EnkiBrowser.exe), else under DataDir;
+    /// ENKI_BROWSER_USER_DATA overrides both (tests).
+    public static string UserData(string root)
+    {
+        string over = Environment.GetEnvironmentVariable("ENKI_BROWSER_USER_DATA");
+        if (!string.IsNullOrEmpty(over)) return over;
+        return File.Exists(Path.Combine(root, "portable")) ? Path.Combine(root, "User Data") : Path.Combine(DataDir, "User Data");
+    }
+
     public static string ShortcutPath(Environment.SpecialFolder folder)
     {
         return Path.Combine(Environment.GetFolderPath(folder), "Enki Browser.lnk");

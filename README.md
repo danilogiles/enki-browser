@@ -301,14 +301,17 @@ Honest list; each is on the roadmap.
 - **macOS: not notarized.** The first launch needs *Open Anyway* (see [macOS](#macos)), and after
   an update macOS may ask again for the keychain item that encrypts your logins. A Developer ID
   signature would end both; it needs an Apple Developer account.
-- **No DRM video yet.** Netflix, Crunchyroll, Disney+ and other sites that need Widevine do not
-  play: ungoogled-chromium ships without it, and it is closed source, so it cannot be bundled. An
-  opt-in download is planned; until then, watch those in another browser.
+- **Protected (DRM) video is opt-in, and Windows-only for now.** Sites that need Widevine
+  (Crunchyroll, Spotify and others) play once you turn on *Protected video* in Shields' settings:
+  Enki Browser downloads Google's closed-source module from Google, checks its signature and keeps
+  it current; it is never bundled. Some services (Netflix among them) also require a browser
+  certified by Google (VMP), which Enki Browser is not, so they may still refuse. macOS and Linux
+  come next.
 - **No import from Chrome or Edge yet.** Chromium's *Import bookmarks and settings* dialog reads
   Firefox, Internet Explorer and a bookmarks HTML file (in Chrome or Edge: *Bookmarks → Export
   bookmarks*), not Chrome or Edge directly; saved passwords and autofill start unticked there.
   Importing from Chrome and Edge, with passwords only from a file you export yourself, is planned
-  for 0.8.6.
+  for 0.8.7.
 - **Making Enki Browser the default takes a click in Windows Settings.** Windows 10 and 11 do not
   let any browser make itself the default (see [Windows](#windows)).
 - **x86_64 only on Windows and Linux**; macOS has Apple silicon and Intel builds.

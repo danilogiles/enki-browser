@@ -1,6 +1,6 @@
 # Enki Browser Privacy Policy
 
-**Version 4 · Effective 8 October 2026**
+**Version 5 · Effective 9 October 2026**
 
 Enki Browser is an open-source web browser built on ungoogled-chromium, with the Enki AI
 assistant, uBlock Origin Lite and Enki Shield built in. This policy describes what the browser
@@ -27,6 +27,7 @@ included (`extension/`).
 | Your address bar typing, for suggestions | DuckDuckGo's suggestion service | While you type in the address bar | Change or turn off suggestions in the browser's settings |
 | Nothing from voice input. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
 | Update checks | GitHub (the browser's release page) | About every two hours while the browser is open, and when you click *Check for updates* (in Enki's Settings › About, the Shields popup, the Shields button's right-click menu or Shields' settings; on Windows). On macOS and Linux, only when you click it: one request for the latest release's number | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
+| Protected video (Widevine), only if you turn it on (Windows) | Google (`update.googleapis.com` and Google's download servers) | When you click *Download from Google* in Shields' settings, then about once a day to keep it current. The request names the module, your Windows version and Enki Browser's Chromium version; no cookies, nothing about you or the sites you visit | *Turn off* in Shields' settings removes the module and stops the requests. Google's terms apply to the module |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
 
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:

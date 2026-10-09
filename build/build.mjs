@@ -149,7 +149,7 @@ static class UpdateKey
 `);
   // Shortcuts point at the stub, which updates never replace; each version brings its own launcher.
   csc(stub, [src("Stub.cs"), src("Args.cs"), src("Common.cs"), src("Install.cs"), src("DefaultBrowser.cs")]);
-  csc(launcher, [src("Launcher.cs"), src("Updater.cs"), src("NativeHost.cs"), src("Migration.cs"), src("Watcher.cs"), src("ShellIdentity.cs"), src("Args.cs"), src("Common.cs"), src("Install.cs"), src("DefaultBrowser.cs")]);
+  csc(launcher, [src("Launcher.cs"), src("Updater.cs"), src("NativeHost.cs"), src("Widevine.cs"), src("Migration.cs"), src("Watcher.cs"), src("ShellIdentity.cs"), src("Args.cs"), src("Common.cs"), src("Install.cs"), src("DefaultBrowser.cs")]);
   cpSync(ico, path.join(app, "enki.ico"));
 
   step("Licenses and version");

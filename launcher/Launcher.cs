@@ -55,11 +55,11 @@ static class Launcher
         // USB stick, a synced folder). Chromium ties the profile to this machine with a machine id,
         // which portable mode turns off; its encryption of passwords and cookies stays on.
         bool portable = File.Exists(Path.Combine(root, "portable"));
-        string userData = Environment.GetEnvironmentVariable("ENKI_BROWSER_USER_DATA");
-        if (string.IsNullOrEmpty(userData))
-            userData = portable ? Path.Combine(root, "User Data") : Path.Combine(Install.DataDir, "User Data");
+        string userData = Install.UserData(root);
         flags.Add("--user-data-dir=" + userData);
         Migration.Run(userData, root, appDir);
+        // Nothing holds the protected-video module before Chromium starts (Widevine.cs).
+        Widevine.Tidy(userData);
         // "Check for updates" in Shields' settings reaches this copy, portable ones included (the
         // registry entry names whichever copy started last, and the uninstaller removes it).
         NativeHost.Register(root, appDir);

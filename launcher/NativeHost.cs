@@ -5,8 +5,9 @@
 // manifest's allowed_origins), and all it can ask for is what the tray notification already
 // offers (check now, and restart into a downloaded update), plus, since 0.8.6, whether Enki
 // Browser is the default browser (a registry read on this computer) and opening the Settings page
-// where the user makes it so (DefaultBrowser.cs). Nothing it does goes over the network but the
-// update check.
+// where the user makes it so (DefaultBrowser.cs), and protected video (Widevine.cs): its state,
+// and turning it on (a download from Google, only on the user's click) or off. Nothing else it
+// does goes over the network but the update check.
 //
 // The manifest names the launcher of the version that started the browser, so it is written at
 // every start; the registry entry pointing at it lives under HKCU\Software\Chromium, where Chromium
@@ -71,6 +72,20 @@ static class NativeHost
                 // Only for an install Windows knows as a browser; Settings would not list it otherwise.
                 bool registered = DefaultBrowser.IsRegistered(Registry.CurrentUser, root);
                 reply = new Dictionary<string, object> { { "opened", registered && DefaultBrowser.OpenSettings() } };
+            }
+            // Protected video (Widevine.cs): only on a click in Shields' settings, which shows what it is first.
+            else if (type == "widevine-status") reply = Widevine.Status(Install.UserData(root));
+            else if (type == "widevine-install")
+            {
+                string userData = Install.UserData(root);
+                Widevine.Install(root, appDir, userData);
+                reply = Widevine.Status(userData);
+                reply["restartNeeded"] = true;
+            }
+            else if (type == "widevine-remove")
+            {
+                Widevine.Remove(root, Install.UserData(root));
+                reply = Widevine.Status(Install.UserData(root));
             }
             else if (type == "restart")
             {

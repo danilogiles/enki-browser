@@ -65,7 +65,7 @@ static class Watcher
             }
             bool restart;
             using (var signal = new EventWaitHandle(false, EventResetMode.AutoReset, "EnkiBrowserRestart-" + Id(root)))
-            using (var watch = new Watch(root, appDir, signal, forceFirst))
+            using (var watch = new Watch(root, appDir, userData, signal, forceFirst))
             {
                 Application.Run(watch);
                 restart = watch.Restart;
@@ -80,7 +80,7 @@ static class Watcher
 
     class Watch : ApplicationContext
     {
-        readonly string root, appDir;
+        readonly string root, appDir, userData;
         readonly EventWaitHandle signal;
         readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer { Interval = 2000 };
         readonly Version running;
@@ -94,10 +94,10 @@ static class Watcher
 
         readonly bool updatesOff;
 
-        public Watch(string root, string appDir, EventWaitHandle signal, bool forceFirst)
+        public Watch(string root, string appDir, string userData, EventWaitHandle signal, bool forceFirst)
         {
             updatesOff = Updater.Disabled(root);
-            this.root = root; this.appDir = appDir; this.signal = signal; forceNext = forceFirst;
+            this.root = root; this.appDir = appDir; this.userData = userData; this.signal = signal; forceNext = forceFirst;
             running = Updater.ReadVersion(appDir);
             timer.Tick += delegate { Tick(); };
             timer.Start();
@@ -119,6 +119,8 @@ static class Watcher
                     try
                     {
                         Updater.CheckAndStage(root, appDir, force);
+                        // The protected-video module, if the user turned it on: about once a day (Widevine.cs).
+                        Widevine.UpdateIfDue(root, appDir, userData);
                         string installed = File.ReadAllText(Path.Combine(root, "current")).Trim();
                         Version v;
                         if (Version.TryParse(installed, out v) && v > running
