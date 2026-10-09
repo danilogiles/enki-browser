@@ -1,5 +1,6 @@
 import "./shields.js";
 import "./burn.js";
+import "./menu.js";
 // Enki Shield: warns before a known phishing site opens.
 //
 // Privacy is the point of doing this locally. Google Safe Browsing (which ungoogled-chromium
