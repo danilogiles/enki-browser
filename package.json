@@ -1,6 +1,6 @@
 {
   "name": "enki-browser",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "private": true,
   "description": "Enki Browser: a private Chromium browser with the Enki AI assistant built in.",
   "type": "module",
