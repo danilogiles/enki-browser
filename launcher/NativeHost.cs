@@ -3,7 +3,8 @@
 // names, with the calling extension's origin as its first argument, and they exchange JSON over
 // stdin and stdout, each message prefixed with its length. Only Enki Shield may call it (the
 // manifest's allowed_origins), and all it can ask for is what the tray notification already
-// offers: check now, and restart into a downloaded update.
+// offers: check now, and restart into a downloaded update; and, since 0.8.6, protected video
+// (Widevine.cs): its state, and turning it on (a download from Google) or off.
 //
 // The manifest names the launcher of the version that started the browser, so it is written at
 // every start; the registry entry pointing at it lives under HKCU\Software\Chromium, where Chromium
@@ -62,6 +63,20 @@ static class NativeHost
             var request = json.DeserializeObject(Read(Console.OpenStandardInput())) as Dictionary<string, object>;
             string type = request != null && request.ContainsKey("type") ? request["type"] as string : null;
             if (type == "check") reply = Check(root, appDir);
+            // Protected video (Widevine.cs): only on a click in Shields' settings, which shows what it is first.
+            else if (type == "widevine-status") reply = Widevine.Status(Install.UserData(root));
+            else if (type == "widevine-install")
+            {
+                string userData = Install.UserData(root);
+                Widevine.Install(root, appDir, userData);
+                reply = Widevine.Status(userData);
+                reply["restartNeeded"] = true;
+            }
+            else if (type == "widevine-remove")
+            {
+                Widevine.Remove(root, Install.UserData(root));
+                reply = Widevine.Status(Install.UserData(root));
+            }
             else if (type == "restart")
             {
                 // The running browser's own launcher restarts it, as the tray's "Restart and update" does.

@@ -61,6 +61,23 @@
       <button id="check-updates" class="pill quiet" style="flex:0 0 auto;padding:6px 14px">Check for updates</button>
     </div>
   </div>
+  <h2>Protected video</h2>
+  <div class="card">
+    <div class="row">
+      <span class="grow">Widevine, for Crunchyroll, Spotify and other streaming sites<br><span id="widevine-state" class="fixed" role="status" aria-live="polite"></span></span>
+      <button id="widevine-restart" class="pill" style="flex:0 0 auto;padding:6px 14px" hidden>Restart Enki Browser</button>
+      <button id="widevine-off" class="pill quiet" style="flex:0 0 auto;padding:6px 14px" hidden>Turn off</button>
+      <button id="widevine-on" class="pill" style="flex:0 0 auto;padding:6px 14px" hidden>Turn on</button>
+    </div>
+    <div id="widevine-consent" class="confirm" style="border-color:var(--line)" hidden>
+      <p class="confirm-title">Download Widevine from Google?</p>
+      <p>Widevine is Google's closed-source module that streaming sites use to play protected video. Enki Browser does not include it: this downloads it from Google (update.googleapis.com), checks Google's signature, and keeps it up to date with about one request to Google a day. Google's terms apply. It runs only when a site plays protected video, and you can turn it off here at any time.</p>
+      <div class="actions" style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="widevine-cancel" class="pill quiet" style="flex:0 0 auto;padding:6px 14px">Cancel</button>
+        <button id="widevine-go" class="pill" style="flex:0 0 auto;padding:6px 14px">Download from Google</button>
+      </div>
+    </div>
+  </div>
   <h2>Sites with their own settings</h2>
   <div class="card"><ul id="sites" class="sites"></ul></div>
   <p class="note links"><a href="https://github.com/danilogiles/enki-browser/blob/main/TERMS.md" target="_blank">Terms</a> · <a href="https://github.com/danilogiles/enki-browser/blob/main/PRIVACY.md" target="_blank">Privacy</a></p>

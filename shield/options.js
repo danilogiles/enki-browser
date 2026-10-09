@@ -1,6 +1,7 @@
 // Enki Shields' global settings, opened from the panel's "Global settings".
 import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
-import { DOWNLOAD, check, compare, restart, status } from "./updates.js";
+import { DOWNLOAD, check, compare, native, restart, status } from "./updates.js";
+import { showWidevine } from "./widevine.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -109,3 +110,7 @@ restartUpdate.onclick = async () => {
   updateState.textContent = "Restarting…";
   await restart();
 };
+
+// Protected video (widevine.js).
+await showWidevine($, native, restart);
+document.documentElement.dataset.widevine = "ready"; // tests wait for this before reading or clicking

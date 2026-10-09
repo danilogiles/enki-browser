@@ -43,6 +43,9 @@ jobs:
           ENKI_SIGN_COMMAND: ${{ secrets.ENKI_SIGN_COMMAND }}
       - run: npm run verify
       - run: node test/session.mjs
+      # Protected video against a local stand-in for Google's service, with the module of the
+      # Google Chrome the runner has (it skips, and says so, without one).
+      - run: node test/widevine.mjs
       - run: node test/setup.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

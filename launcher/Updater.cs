@@ -251,14 +251,14 @@ static class Updater
         return new Manifest { Version = new Version((string)d["version"]), Url = (string)d["url"], Sha256 = (string)d["sha256"] };
     }
 
-    static WebClient Client()
+    internal static WebClient Client()
     {
         var web = new WebClient();
         web.Headers[HttpRequestHeader.UserAgent] = "EnkiBrowser-Updater";
         return web;
     }
 
-    static string Sha256(string file)
+    internal static string Sha256(string file)
     {
         using (var sha = SHA256.Create())
         using (var s = File.OpenRead(file))
@@ -266,7 +266,7 @@ static class Updater
     }
 
     /// Extracts refusing any entry that would land outside `dest` ("zip slip").
-    static void SafeExtract(string zip, string dest)
+    internal static void SafeExtract(string zip, string dest)
     {
         string full = Path.GetFullPath(dest) + Path.DirectorySeparatorChar;
         using (var archive = ZipFile.OpenRead(zip))
