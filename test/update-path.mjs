@@ -72,14 +72,26 @@ const MOCK = `http://127.0.0.1:${mock.address().port}`;
 const profile = mkdtempSync(path.join(os.tmpdir(), "enki-update-"));
 let port = 9400 + Math.floor(Math.random() * 400);
 
-/** Starts a build through its launcher on the shared profile; returns the browser and a stop(). */
-async function start(dir) {
+/**
+ * Starts a build through its launcher on the shared profile; returns the browser and a stop().
+ * A browser that does not come up fails with the end of its stderr, which says why (on Ubuntu
+ * 23.10+ usually the sandbox: no AppArmor profile for that binary's path).
+ */
+async function start(dir, extraArgs = []) {
   port++;
-  const proc = spawn(path.join(dir, "enki-browser"), [`--remote-debugging-port=${port}`, "--window-size=1100,800", "--window-position=40,40", "about:blank"], {
-    env: { ...process.env, ENKI_BROWSER_USER_DATA: profile }, stdio: "ignore",
+  const proc = spawn(path.join(dir, "enki-browser"), [`--remote-debugging-port=${port}`, "--window-size=1100,800", "--window-position=40,40", ...extraArgs, "about:blank"], {
+    env: { ...process.env, ENKI_BROWSER_USER_DATA: profile }, stdio: ["ignore", "ignore", "pipe"],
   });
-  const browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 30000);
-  if (!browser) throw new Error(`${dir} did not start`);
+  let stderr = "";
+  proc.stderr.on("data", (d) => { stderr = (stderr + d).slice(-20000); });
+  const browser = await until(() => (proc.exitCode !== null ? Promise.resolve("exited") : chromium.connectOverCDP(`http://127.0.0.1:${port}`)), 30000);
+  if (!browser || browser === "exited") {
+    proc.kill("SIGKILL");
+    const tail = stderr.trim().split("\n").slice(-25).join("\n") || "(no stderr)";
+    const err = new Error(`${dir} did not start${proc.exitCode !== null ? ` (exit ${proc.exitCode})` : ""}; its stderr ends:\n${tail}`);
+    err.stderr = stderr;
+    throw err;
+  }
   const stop = async () => {
     await browser.close().catch(() => {});
     proc.kill("SIGTERM");
@@ -87,6 +99,22 @@ async function start(dir) {
     await pause(1000);
   };
   return { browser, context: browser.contexts()[0], stop };
+}
+
+/**
+ * The previous release only sets the stage: what is under test is this build on its profile.
+ * CI installs an AppArmor profile for it (build.yml), as install.sh --apparmor does for this
+ * build. If its sandbox still cannot start (a system that restricts user namespaces, without the
+ * profile), it is started once more with --no-sandbox, said in the output. This build never is.
+ */
+async function startPrevious(dir) {
+  try {
+    return await start(dir);
+  } catch (e) {
+    if (!/namespace|sandbox|zygote/i.test(e.stderr ?? "")) throw e;
+    console.log(`NOTE the previous release's sandbox could not start here; starting it with --no-sandbox (this build keeps its sandbox):\n${e.message}`);
+    return start(dir, ["--no-sandbox"]);
+  }
 }
 const workerOf = (context, id) => context.serviceWorkers().find((w) => new URL(w.url()).host === id);
 /** The extension's worker; an extension page wakes a worker that is registered but asleep. */
@@ -103,7 +131,7 @@ async function wake(context, id) {
 
 try {
   // ---- the previous release, as people had it
-  const old = await start(oldDir);
+  const old = await startPrevious(oldDir);
   const oldEnki = await wake(old.context, ids.enkiExtensionId);
   await wake(old.context, ids.shieldExtensionId);
   console.log(`previous release: Enki ${manifest(oldDir, "enki").version}, worker ${oldEnki && new URL(oldEnki.url()).pathname}`);

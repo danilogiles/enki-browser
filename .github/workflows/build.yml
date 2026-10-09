@@ -116,6 +116,16 @@ jobs:
           prev=$(mktemp -d)
           gh release download --repo "${{ github.repository }}" --pattern 'enki-browser-*-linux-x64.tar.gz' --dir "$prev"
           tar -xzf "$prev"/enki-browser-*-linux-x64.tar.gz -C "$prev"
+          echo "previous release: $(sed -n 's/.*"enkiBrowser": *"\([^"]*\)".*/\1/p' "$prev/enki-browser/version.json")"
+          # Ubuntu 24.04 lets Chromium's sandbox use user namespaces only with an AppArmor profile
+          # for that binary's path; install.sh --apparmor gave this build one. The previous
+          # release gets its own under another name (one named enki-browser would replace this
+          # build's).
+          if [[ -f "$prev/enki-browser/apparmor-profile" ]]; then
+            sed -e "s#@CHROME@#$prev/enki-browser/chromium/chrome#" -e 's/^profile enki-browser /profile enki-browser-previous /' \
+              "$prev/enki-browser/apparmor-profile" | sudo tee /etc/apparmor.d/enki-browser-previous >/dev/null
+            sudo apparmor_parser -r /etc/apparmor.d/enki-browser-previous
+          fi
           ENKI_OLD_LINUX_DIR="$prev/enki-browser" ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/update-path.mjs
       # The .deb on clean systems: dependencies resolve, the browser renders, removal is clean.
       - run: docker run --rm -v "$PWD/out:/out:ro" -v "$PWD/test:/t:ro" ubuntu:24.04 bash /t/linux-deb.sh
