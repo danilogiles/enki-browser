@@ -1,4 +1,4 @@
-# Set up your AI assistant (Enki 0.8.3)
+# Set up your AI assistant
 
 A few minutes, once. Tick each box as you go.
 
