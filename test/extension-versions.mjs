@@ -9,44 +9,18 @@
 //
 //   node test/extension-versions.mjs [previous-tag]    default: the newest v* tag not at HEAD
 // Needs the tag: `git fetch --depth=1 origin 'refs/tags/v*:refs/tags/v*'` in a shallow clone.
-import { execFileSync } from "node:child_process";
+import { changedSince, previousTag, shipped } from "./shipped.mjs";
 
-const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
-const head = git("rev-parse", "HEAD");
-const semver = (t) => t.replace(/^v/, "").split(".").map(Number);
-const newer = (a, b) => { const x = semver(a), y = semver(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
-const tags = git("tag", "--list", "v*.*.*").split("\n").filter((t) => /^v\d+\.\d+\.\d+$/.test(t)).sort(newer).reverse();
-const previous = process.argv[2] ?? tags.find((t) => git("rev-list", "-n", "1", t) !== head);
+const previous = process.argv[2] ?? previousTag();
 if (!previous) {
   console.log("no earlier release tag to compare with; nothing to check");
   process.exit(0);
 }
 
-const show = (ref, file) => git("show", `${ref}:${file}`);
-const json = (ref, file) => JSON.parse(show(ref, file));
-const changed = (pathspecs) => git("diff", "--name-only", previous, "HEAD", "--", ...pathspecs).split("\n").filter(Boolean);
-// What ends up in the extension folder: not tests, docs or dev tooling.
-const shipped = {
-  Enki: {
-    paths: ["extension", ":(exclude)extension/test", ":(exclude)extension/docs", ":(exclude)extension/docker", ":(exclude)extension/docker-compose.yml", ":(exclude,glob)extension/**/*.md"],
-    version: (ref) => json(ref, "extension/package.json").version,
-    bump: "extension/package.json and extension/package-lock.json",
-  },
-  "Enki Shield": {
-    paths: ["shield", ":(exclude,glob)shield/**/*.md"],
-    version: (ref) => json(ref, "shield/manifest.json").version,
-    bump: "shield/manifest.json",
-  },
-  "uBlock Origin Lite (with Enki's patch)": {
-    paths: ["patches/ublock-lite-shields.js", "config/ublock-extension.pub"],
-    version: (ref) => json(ref, "upstream.json").blocker.version,
-    bump: "nothing of ours: its version is uBlock's, so ship a patch change together with a uBlock update",
-  },
-};
-
 let failed = 0;
-for (const [name, ext] of Object.entries(shipped)) {
-  const files = changed(ext.paths);
+for (const [key, ext] of Object.entries(shipped)) {
+  const { name } = ext;
+  const files = changedSince(previous, key);
   const before = ext.version(previous);
   const now = ext.version("HEAD");
   if (files.length && before === now) {

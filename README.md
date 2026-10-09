@@ -86,7 +86,8 @@ you ignore it, the next time you start Enki Browser you are on the new version a
 restarts without your click. Your profile, history and Enki settings are untouched.
 
 Don't want to wait? **Check for updates** is in Shields' settings (the Shields button → *Global
-settings*, or its *Check for updates* link): on Windows it checks now, downloads and verifies the
+settings*, its *Check for updates* link, or *Check for updates* in the Shields button's
+right-click menu): on Windows it checks now, downloads and verifies the
 release and offers the restart; on macOS and Linux it tells you whether a newer release is out and
 links to it.
 
