@@ -475,7 +475,8 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                   className="text-xs font-medium text-enki-400 underline"
                   onClick={() => chrome.tabs.create({ url: "chrome-extension://aacambieennepbgemjkpailjdkldbjjf/welcome.html" })}
                 >
-                  Ver o guia de novo
+                  {/* In the guide's language (shield/welcome.js): "Ver o guia de novo" in Portuguese. */}
+                  {navigator.language.startsWith("pt") ? "Ver o guia de novo" : navigator.language.startsWith("es") ? "Ver la guía otra vez" : "Show the guide again"}
                 </button>
               </div>
             </Section>

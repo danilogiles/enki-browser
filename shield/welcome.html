@@ -110,8 +110,8 @@
   <section class="card" role="dialog" aria-modal="true" aria-labelledby="title">
     <div class="card-head">
       <img src="icons/buddy.svg" alt="">
-      <span class="eyebrow">Primeira abertura</span>
-      <div class="steps" aria-label="Progresso do guia">
+      <span class="eyebrow" data-i18n="eyebrow">Primeira abertura</span>
+      <div class="steps" data-i18n-aria="progress" aria-label="Progresso do guia">
         <div class="pips" id="pips"></div>
         <span class="count" id="count">1/3</span>
       </div>
@@ -119,39 +119,39 @@
 
     <div id="step-default" class="card-body" hidden>
       <div class="hero"><img class="buddy" src="icons/buddy.svg" alt=""></div>
-      <h1 id="title">Bem-vindo ao Enki</h1>
+      <h1 id="title" data-i18n="welcomeTitle">Bem-vindo ao Enki</h1>
       <p class="lead" id="default-lead">O Enki é um navegador privado com assistente de IA. Quer torná-lo o navegador padrão?</p>
       <p id="state" role="status" aria-live="polite"></p>
     </div>
 
     <div id="step-ai" class="card-body" hidden>
-      <h1>Configure o assistente</h1>
-      <p class="lead">Para começar, pegue uma <strong>chave grátis do Nemotron</strong> (sem cartão) ou use o <strong>Ollama</strong> no seu computador. Abra o painel pelo botão <strong>Open Enki</strong>. Se não abrir, use <span class="keys" id="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span> ou configure em <code class="shortcuts-url">chrome://extensions/shortcuts</code>.</p>
+      <h1 data-i18n="aiTitle">Configure o assistente</h1>
+      <p class="lead" data-i18n-html="aiLead">Para começar, pegue uma <strong>chave grátis do Nemotron</strong> (sem cartão) ou use o <strong>Ollama</strong> no seu computador. Abra o painel pelo botão <strong>Open Enki</strong>. Se não abrir, use <span class="keys" id="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span> ou configure em <code class="shortcuts-url">chrome://extensions/shortcuts</code>.</p>
       <div class="options">
-        <div class="opt"><b>Nemotron</b><span>Chave grátis, sem cartão · Provider <strong>NVIDIA (Nemotron) · free</strong></span><br><span class="tag">Precisa de chave</span></div>
-        <div class="opt"><b>Ollama</b><span>Modelo no seu computador · <strong>Ollama (local)</strong></span><br><span class="tag">Local</span></div>
+        <div class="opt"><b>Nemotron</b><span data-i18n-html="nemotron">Chave grátis, sem cartão · Provider <strong>NVIDIA (Nemotron) · free</strong></span><br><span class="tag" data-i18n="needsKey">Precisa de chave</span></div>
+        <div class="opt"><b>Ollama</b><span data-i18n-html="ollama">Modelo no seu computador · <strong>Ollama (local)</strong></span><br><span class="tag">Local</span></div>
       </div>
-      <button type="button" class="byom" id="other-providers">Ou use outro provedor: <strong>Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter…</strong> <span class="where">→</span></button>
+      <button type="button" class="byom" data-i18n-html="otherProviders" id="other-providers">Ou use outro provedor: <strong>Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter…</strong> <span class="where">→</span></button>
       <a class="link" id="key-help" href="https://github.com/danilogiles/enki-browser/blob/main/docs/AI-SETUP.md" target="_blank" rel="noreferrer">Get a key →</a>
     </div>
 
     <div id="step-shield" class="card-body" hidden>
       <div class="hero"><div class="wrap"><img class="buddy" src="icons/buddy.svg" alt=""><span class="badge" aria-hidden="true">✓</span></div></div>
-      <h1>Proteção ligada</h1>
-      <p class="lead">O Shield bloqueia trackers e anúncios por padrão. Você controla isso a qualquer momento.</p>
+      <h1 data-i18n="shieldTitle">Proteção ligada</h1>
+      <p class="lead" data-i18n="shieldLead">O Shield bloqueia trackers e anúncios por padrão. Você controla isso a qualquer momento.</p>
       <div class="chips">
-        <span class="chip"><span class="dot"></span>Trackers bloqueados</span>
-        <span class="chip"><span class="dot"></span>Anúncios bloqueados</span>
+        <span class="chip" data-i18n-html="trackers"><span class="dot"></span>Trackers bloqueados</span>
+        <span class="chip" data-i18n-html="ads"><span class="dot"></span>Anúncios bloqueados</span>
       </div>
     </div>
 
     <div class="card-foot">
-      <button type="button" class="skip" id="skip">Pular guia</button>
+      <button type="button" class="skip" data-i18n="skip" id="skip">Pular guia</button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-secondary" id="default-next" hidden>Agora não</button>
+      <button type="button" class="btn btn-secondary" data-i18n="notNow" id="default-next" hidden>Agora não</button>
       <button type="button" class="btn btn-primary" id="primary">Tornar padrão</button>
     </div>
-    <div class="note"><img src="icons/buddy.svg" alt="">Você pode reabrir em Settings › About.</div>
+    <div class="note" data-i18n-html="note"><img src="icons/buddy.svg" alt="">Você pode reabrir em Settings › About.</div>
   </section>
   <script type="module" src="welcome.js"></script>
 </body>

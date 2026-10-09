@@ -143,6 +143,19 @@ function profile(reply) {
   check("step 3 Shield chips match the mock", /Trackers bloqueados/.test(html) && /Anúncios bloqueados/.test(html));
   check("0.8.6 import step is a commented placeholder only", /0\.8\.6/.test(js) && /Importar favoritos/.test(js) && !/id="step-import"/.test(html));
   check("Ink mock tokens: accent #38bdf8, panel #1e1e1e, buddy logo", /#38bdf8/.test(html) && /#1e1e1e/.test(html) && /icons\/buddy\.svg/.test(html));
+  {
+    // Everyone gets the guide once: Portuguese is the page's own wording, and every marked text
+    // has its English and Spanish; every text the script writes exists in all three.
+    const pageKeys = [...html.matchAll(/data-i18n(?:-html|-aria)?="(\w+)"/g)].map((m) => m[1]);
+    const pageTable = js.slice(js.indexOf("const PAGE_TEXT"), js.indexOf("const TEXT"));
+    const missing = pageKeys.filter((k) => (pageTable.match(new RegExp(`^\\s+${k}:`, "gm")) ?? []).length !== 2);
+    check("every marked text in the guide has English and Spanish", pageKeys.length >= 14 && missing.length === 0, `${pageKeys.length} marked; missing: ${missing.join(", ") || "none"}`);
+    const textTable = js.slice(js.indexOf("const TEXT"), js.indexOf("const t = TEXT"));
+    const keys = [...textTable.slice(0, textTable.indexOf("en: {")).matchAll(/^\s+(\w+):/gm)].map((m) => m[1]).filter((k) => k !== "pt");
+    const partial = keys.filter((k) => (textTable.match(new RegExp(`^\\s+${k}:`, "gm")) ?? []).length !== 3);
+    check("every text the guide's script writes exists in Portuguese, English and Spanish", keys.length >= 10 && partial.length === 0, `${keys.length} texts; incomplete: ${partial.join(", ") || "none"}`);
+    check("the guide picks its language from the browser and translates before it shows", /navigator\.language/.test(js) && /translatePage\(\);\s*\n\s*status = await defaultStatus/.test(js));
+  }
 }
 
 // ---- wiring: no new permission, Chromium's own bar still off, background and About reopen
