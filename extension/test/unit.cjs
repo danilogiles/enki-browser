@@ -201,6 +201,65 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.equal(maskKey('short'), '••••••'); // too short to show any of it safely
     assert.equal(maskKey(''), '');
   });
+  {
+    // Act never reaches a browser-internal page: not Enki Shields' settings (Burn all data), not its
+    // panel, not chrome://. Every tool that acts on the page is refused before the content script,
+    // scripting or the debugger is touched, so nothing on the page can be clicked or pressed.
+    const { BrowserExecutor, isRestrictedUrl } = require('../src/lib/tools/executor.ts');
+    const realChrome = global.chrome;
+    const touched = [];
+    const internal = [
+      'chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html',
+      'chrome-extension://abcdefghijklmnopabcdefghijklmnop/popup.html?tab=3',
+      'chrome://settings/clearBrowserData',
+      undefined, // a tab whose address the panel cannot see counts as internal too
+    ];
+    for (const url of internal) {
+      touched.length = 0;
+      global.chrome = {
+        runtime: { getManifest: () => ({ content_scripts: [{ js: ['content.js'] }] }) },
+        tabs: {
+          get: async (id) => ({ id, url, windowId: 1, active: true, title: 'Enki Shields settings' }),
+          query: async () => [{ id: 7, url, windowId: 1, active: true }],
+          sendMessage: async (...a) => { touched.push(['tabs.sendMessage', a[1]?.type]); return { ok: true, data: { x: 10, y: 10, tag: 'button', role: 'button', name: 'Burn', sensitive: false } }; },
+          update: async (...a) => { touched.push(['tabs.update', a[1]]); return {}; },
+          create: async (...a) => { touched.push(['tabs.create', a[0]]); return { id: 8 }; },
+        },
+        scripting: { executeScript: async () => { touched.push(['scripting.executeScript']); } },
+        debugger: {
+          onDetach: { addListener() {} },
+          attach: async () => { touched.push(['debugger.attach']); },
+          sendCommand: async (...a) => { touched.push(['debugger.sendCommand', a[1], a[2]?.type]); },
+          detach: async () => {},
+        },
+      };
+      const ex = new BrowserExecutor(1);
+      const tries = [
+        { name: 'click', input: { x: 120, y: 80 } },
+        { name: 'click', input: { ref: 'ref_1' } },
+        { name: 'press_key', input: { key: 'Enter' } },
+        { name: 'press_key', input: { key: 'Tab' } },
+        { name: 'type', input: { text: 'x', submit: true } },
+        { name: 'scroll', input: { direction: 'down' } },
+        { name: 'read_page', input: {} },
+        { name: 'navigate', input: { url: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html' } },
+        { name: 'navigate', input: { url: 'chrome://settings/' } },
+        { name: 'new_tab', input: { url: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html' } },
+      ];
+      for (const t of tries) {
+        let refused = null;
+        try {
+          const plan = await ex.prepare({ type: 'tool_call', id: 'c', name: t.name, input: t.input });
+          await plan.run();
+        } catch (e) { refused = e instanceof Error ? e.message : String(e); }
+        assert.ok(refused && /browser-internal page|Security restriction/.test(refused), `${t.name} ${JSON.stringify(t.input)} on ${url} was not refused: ${refused}`);
+      }
+      assert.deepEqual(touched, [], `Act touched ${url}: ${JSON.stringify(touched)}`);
+    }
+    assert.ok(isRestrictedUrl('chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html'));
+    global.chrome = realChrome;
+    checks++; console.log('PASS', "Act cannot click, type, press keys on or navigate to Shields' settings, its panel or chrome:// pages");
+  }
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');
@@ -216,5 +275,72 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     walk(path.join(__dirname, '..', 'src'));
     assert.deepEqual(found, []);
   });
+  {
+    // Ctrl+Shift+E: chrome.sidePanel.open is only allowed inside the user gesture that fired the
+    // command. The fake rejects any call made after the listener's first synchronous run, the way
+    // Chromium does, so an await before sidePanel.open (the 0.8.3 bug) falls back to a popup here.
+    const path = require('node:path');
+    let gesture = false;
+    const calls = [];
+    let commandListener;
+    const realChrome = global.chrome;
+    global.chrome = {
+      runtime: {
+        getManifest: () => ({}), getURL: (p) => 'chrome-extension://enki/' + p,
+        onInstalled: { addListener() {} }, onStartup: { addListener() {} },
+        sendMessage: async (m) => { calls.push(['sendMessage', m.command, m.windowId]); },
+      },
+      sidePanel: {
+        setPanelBehavior: async () => {},
+        open: async ({ windowId }) => {
+          calls.push(['sidePanel.open', windowId, gesture]);
+          if (!gesture) throw new Error('`sidePanel.open()` may only be called in response to a user gesture.');
+        },
+      },
+      action: { onClicked: { addListener() {} } },
+      commands: { onCommand: { addListener: (fn) => { commandListener = fn; } } },
+      windows: {
+        getLastFocused: async () => { calls.push(['getLastFocused']); return { id: 99 }; },
+        create: async () => { calls.push(['windows.create']); return {}; },
+        update: async () => {},
+      },
+      tabs: { query: async () => [] },
+    };
+    const swPath = path.join(__dirname, '..', 'src', 'background', 'service-worker.ts');
+    delete require.cache[swPath];
+    require(swPath);
+    const press = async (command, tab) => {
+      calls.length = 0;
+      gesture = true;
+      const done = commandListener(command, tab);
+      gesture = false; // the gesture ends when the listener yields for the first time
+      await done;
+      return calls.map((c) => c.join(' '));
+    };
+    let log = await press('open-panel', { id: 3, windowId: 7 });
+    check('Ctrl+Shift+E opens the side panel inside the shortcut gesture', () => {
+      assert.deepEqual(log[0], 'sidePanel.open 7 true');
+      assert.ok(!log.includes('windows.create'), 'no popup fallback: ' + log.join(', '));
+    });
+    log = await press('focus-composer', { id: 3, windowId: 7 });
+    check('focus-composer opens the panel inside the gesture, then reaches the composer', () => {
+      assert.deepEqual(log[0], 'sidePanel.open 7 true');
+      assert.ok(log.includes('sendMessage focus-composer 7'), log.join(', '));
+      assert.ok(!log.includes('windows.create'));
+    });
+    log = await press('stop-task', { id: 3, windowId: 7 });
+    check('stop-task does not open the panel', () => {
+      assert.deepEqual(log, ['sendMessage stop-task 7']);
+    });
+    const warn = console.warn;
+    console.warn = () => {}; // the gesture is gone after getLastFocused, so this case warns and falls back
+    log = await press('open-panel', undefined);
+    console.warn = warn;
+    check('a command without a tab still targets the last focused window', () => {
+      assert.ok(log.includes('getLastFocused'));
+      assert.ok(log.some((l) => l.startsWith('sidePanel.open 99')), log.join(', '));
+    });
+    global.chrome = realChrome;
+  }
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });

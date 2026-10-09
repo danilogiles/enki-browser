@@ -106,21 +106,37 @@ $("lists").onclick = async () => {
 $("global").onclick = () => chrome.runtime.openOptionsPage();
 
 // Burn (everything) and shred (this site) both ask first: they cannot be undone.
+// Cancel has the focus, so Enter cancels, and so does Esc; Burn or Shred is never the default.
 let pending = null;
 const confirmBox = (kind) => {
   pending = kind;
-  $("burn-text").textContent = kind === "burn"
-    ? "Close every tab and delete all history, cookies, site data, cache, download history and autofill? Passwords, bookmarks and Enki's settings are kept."
-    : `Delete ${host}'s cookies and site data and close its tabs?`;
-  $("burn-go").textContent = kind === "burn" ? "Burn" : "Shred";
+  const burn = kind === "burn";
+  $("burn-title").hidden = !burn;
+  $("burn-lists").hidden = !burn;
+  $("burn-confirm").setAttribute("aria-labelledby", burn ? "burn-title" : "burn-text");
+  if (burn) $("burn-text").replaceChildren("Every tab closes. ", Object.assign(document.createElement("strong"), { textContent: "This cannot be undone." }));
+  else $("burn-text").textContent = `Delete ${host}'s cookies and site data and close its tabs?`;
+  $("burn-go").textContent = burn ? "Burn" : "Shred";
   $("burn-confirm").hidden = false;
+  document.querySelector(".burn").classList.add("dim");
+  $("burn-cancel").focus();
+};
+const cancelBox = () => {
+  const from = pending === "shred" ? $("shred") : $("burn");
+  pending = null;
+  $("burn-confirm").hidden = true;
+  document.querySelector(".burn").classList.remove("dim");
+  from.focus();
 };
 $("burn").onclick = () => confirmBox("burn");
 $("shred").onclick = () => confirmBox("shred");
-$("burn-cancel").onclick = () => { pending = null; $("burn-confirm").hidden = true; };
+$("burn-cancel").onclick = cancelBox;
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("burn-confirm").hidden && !$("burn-go").disabled) { e.preventDefault(); cancelBox(); }
+});
 $("burn-go").onclick = async () => {
-  $("burn-go").disabled = true;
-  $("burn-text").textContent = pending === "burn" ? "Burning…" : "Shredding…";
+  $("burn-go").disabled = $("burn-cancel").disabled = true;
+  $("burn-go").textContent = pending === "burn" ? "Burning…" : "Shredding…";
   await chrome.runtime.sendMessage(pending === "burn" ? { type: "shields:burn" } : { type: "shields:shred", host });
   window.close();
 };

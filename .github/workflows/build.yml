@@ -89,7 +89,14 @@ jobs:
         with:
           path: cache/*.tar.xz
           key: upstream-linux-${{ hashFiles('upstream.json') }}
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unzip xz-utils
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unzip xz-utils xdotool
+      # An extension that changed since the last release must change its version too: Chromium
+      # keeps the worker registered for an unchanged version, so after the update its background
+      # did not run (0.8.4). Only the tags are needed, not the history.
+      - name: Extension versions changed with their code
+        run: |
+          git fetch --no-tags --depth=1 origin 'refs/tags/v*:refs/tags/v*'
+          node test/extension-versions.mjs
       - run: node build/build-linux.mjs
       # Installed the way a user would, without root, plus the AppArmor profile Ubuntu 24.04 needs;
       # then verified with Chromium's sandbox on, as on a real desktop.
@@ -99,9 +106,33 @@ jobs:
           "$tmp/enki-browser/install.sh" --apparmor
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/verify.mjs
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/session.mjs
+          ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/burn-confirm.mjs
+          ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/shield-menu.mjs
+      # Fresh profiles hide what an update breaks: the latest published release runs on a profile
+      # first, then this build on the same one (extension workers, Ctrl+Shift+E, Act refusals).
+      - name: Update from the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(mktemp -d)
+          gh release download --repo "${{ github.repository }}" --pattern 'enki-browser-*-linux-x64.tar.gz' --dir "$prev"
+          tar -xzf "$prev"/enki-browser-*-linux-x64.tar.gz -C "$prev"
+          echo "previous release: $(sed -n 's/.*"enkiBrowser": *"\([^"]*\)".*/\1/p' "$prev/enki-browser/version.json")"
+          # Ubuntu 24.04 lets Chromium's sandbox use user namespaces only with an AppArmor profile
+          # for that binary's path; install.sh --apparmor gave this build one. The previous
+          # release gets its own under another name (one named enki-browser would replace this
+          # build's).
+          if [[ -f "$prev/enki-browser/apparmor-profile" ]]; then
+            sed -e "s#@CHROME@#$prev/enki-browser/chromium/chrome#" -e 's/^profile enki-browser /profile enki-browser-previous /' \
+              "$prev/enki-browser/apparmor-profile" | sudo tee /etc/apparmor.d/enki-browser-previous >/dev/null
+            sudo apparmor_parser -r /etc/apparmor.d/enki-browser-previous
+          fi
+          ENKI_OLD_LINUX_DIR="$prev/enki-browser" ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/update-path.mjs
       # The .deb on clean systems: dependencies resolve, the browser renders, removal is clean.
-      - run: docker run --rm -v "$PWD/out:/out:ro" -v "$PWD/test:/t:ro" ubuntu:24.04 bash /t/linux-deb.sh
-      - run: docker run --rm -v "$PWD/out:/out:ro" -v "$PWD/test:/t:ro" debian:12 bash /t/linux-deb.sh
+      # The official images through Google's mirror of Docker Hub (mirror.gcr.io): Docker Hub refuses
+      # anonymous pulls past a rate limit that GitHub's shared runners reach (toomanyrequests).
+      - run: docker run --rm -v "$PWD/out:/out:ro" -v "$PWD/test:/t:ro" mirror.gcr.io/library/ubuntu:24.04 bash /t/linux-deb.sh
+      - run: docker run --rm -v "$PWD/out:/out:ro" -v "$PWD/test:/t:ro" mirror.gcr.io/library/debian:12 bash /t/linux-deb.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: enki-browser-linux-x64

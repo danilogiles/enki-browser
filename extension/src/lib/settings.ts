@@ -67,7 +67,7 @@ export const PRESETS: Preset[] = [
       { id: "nvidia/nemotron-3.5-lightning-30b-a3b", note: "fastest" },
     ],
     hint:
-      "Free with an NVIDIA Developer account — no credit card. Open the link below, sign in, and press \"Get API Key\". The free tier allows about 40 requests a minute, plenty for browsing; long Act tasks can hit it. Nemotron reads text, not images, so Enki works from the page DOM.",
+      "Free with an NVIDIA Developer account — no credit card. Open the link below, sign in, and press \"Get API Key\". The free tier is rate-limited; long Act tasks can hit the limit. Nemotron reads text, not images, so Enki works from the page DOM.",
   },
   {
     id: "omniroute",
@@ -110,7 +110,7 @@ export const PRESETS: Preset[] = [
     editableBaseUrl: true,
     setupUrl: "https://github.com/ollama/ollama",
     hint:
-      "Runs on your machine, free. Pick a vision-capable model with tool support. Ollama must be started with OLLAMA_ORIGINS=chrome-extension://* so it accepts calls from the extension.",
+      "Runs on your machine, free. Pick a vision-capable model with tool support. Ollama must be started with OLLAMA_ORIGINS=chrome-extension://caelfocbikejgdamghjlkpmbbaobehlp so it accepts calls from Enki (if you loaded the extension from source, use the ID shown in chrome://extensions).",
   },
   {
     id: "anthropic",

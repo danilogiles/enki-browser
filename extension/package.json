@@ -1,6 +1,6 @@
 {
   "name": "enki",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Enki - open-source AI browser assistant. Bring your own model, see the page, let it act.",
   "type": "module",
@@ -16,7 +16,8 @@
     "test:resilience": "node test/resilience.mjs",
     "test:unit": "node test/unit.cjs",
     "test:quality": "node test/quality.mjs",
-    "test:voice": "node test/voice.mjs"
+    "test:voice": "node test/voice.mjs",
+    "test:shortcut": "node test/shortcut.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

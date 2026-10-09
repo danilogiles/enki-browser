@@ -1,13 +1,14 @@
 {
   "name": "enki-browser",
-  "version": "0.8.3",
+  "version": "0.8.5",
   "private": true,
   "description": "Enki Browser: a private Chromium browser with the Enki AI assistant built in.",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "node build/build.mjs",
-    "verify": "node test/verify.mjs"
+    "verify": "node test/verify.mjs",
+    "test:burn": "node test/burn-confirm.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -66,12 +66,21 @@
       <button id="shred" class="pill quiet" title="Delete this site's cookies and storage and close its tabs">Shred this site</button>
       <button id="burn" class="pill fire" title="Close every tab and delete history, cookies, site data and cache">🔥 Burn all data</button>
     </div>
-    <div id="burn-confirm" class="confirm" hidden>
-      <p id="burn-text"></p>
-      <div class="buttons">
-        <button id="burn-cancel" class="pill quiet">Cancel</button>
-        <button id="burn-go" class="pill fire">Burn</button>
+    <!-- Burn and Shred ask here first, Cancel focused. Burn's lists match burn.js and Shields'
+         settings page (options.html): browsingData keeps extensions' storage. -->
+    <div id="burn-confirm" class="confirm" role="alertdialog" aria-labelledby="burn-title" aria-describedby="burn-text" hidden>
+      <div id="burn-title" class="confirm-title">🔥 Burn everything now?</div>
+      <p id="burn-text" class="confirm-sub"></p>
+      <div id="burn-lists">
+        <div class="confirm-list del"><h3>✕ Deletes</h3><p>History, cookies and site data, cache, download history, autofill (saved addresses &amp; cards)</p></div>
+        <div class="confirm-list keep"><h3>✓ Kept</h3><p>Passwords, bookmarks, and Enki chats, settings, and API keys. Shields settings too.</p></div>
+        <!-- Later (Spark, after 0.8.4): "Also delete Enki chats", unchecked by default. -->
       </div>
+      <div class="buttons">
+        <button id="burn-cancel" type="button" class="pill quiet">Cancel</button>
+        <button id="burn-go" type="button" class="pill fire">Burn</button>
+      </div>
+      <p class="confirm-hint">Enter cancels</p>
     </div>
 
     <footer>

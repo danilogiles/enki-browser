@@ -15,6 +15,8 @@ export const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf
 if (process.env.ENKI_VERSION) pkg.version = process.env.ENKI_VERSION;
 export const cache = path.join(root, "cache");
 export const out = path.join(root, "out");
+/** Enki Browser's own icons and logos (brand/README.md): the plated app icon and the unplated mark. */
+export const brand = path.join(root, "brand");
 
 export const step = (msg) => console.log(`\n▸ ${msg}`);
 export const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: "inherit", ...opts });
@@ -118,8 +120,25 @@ function withKey(dir, keyFile, extra = {}) {
  * ran). Clearing Chromium's record of the registration in Secure Preferences, or the extension's
  * whole entry, did not help, and deleting the store would take every website's service workers
  * with it. A new script URL does work: Chromium has to register it, and the new code runs.
+ *
+ * But only when the manifest version changes too. Chromium records the version it registered
+ * the worker for (service_worker_registration_info in Preferences) and, for the same version,
+ * keeps the old registration: its script URL is the previous build's file, which is gone, so the
+ * worker never started. Enki stayed 0.3.0 from 0.8.0 to 0.8.4 and Shield 1.2.0 from 0.8.2, so
+ * after updating to 0.8.4 neither background ran and Ctrl+Shift+E did nothing (a fresh profile
+ * was fine). Shield changes every release anyway (ids.json carries the browser version). So the
+ * version of every extension of ours also carries the release (`stamp`): 0.3.1 in Enki Browser
+ * 0.8.5 is 0.3.1.805, a new version in every release; version_name keeps "0.3.1" for display.
  */
-function freshWorker(dir) {
+export function releaseStamp(version = pkg.version) {
+  const [major, minor, patch] = version.split(/[.+-]/).map(Number);
+  if (![major, minor, patch].every(Number.isInteger) || minor > 99 || patch > 99 || major > 5) {
+    throw new Error(`cannot stamp extension versions with Enki Browser ${version}: expected a.b.c, b and c below 100`);
+  }
+  return major * 10000 + minor * 100 + patch;
+}
+
+function freshWorker(dir, { stamp = false } = {}) {
   const manifestPath = path.join(dir, "manifest.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   const worker = manifest.background?.service_worker;
@@ -136,6 +155,11 @@ function freshWorker(dir) {
   const renamed = worker.replace(/(\.m?js)$/, `-${digest.digest("hex").slice(0, 10)}$1`);
   cpSync(path.join(dir, worker), path.join(dir, renamed));
   manifest.background.service_worker = renamed;
+  if (stamp) {
+    if (manifest.version.split(".").length > 3) throw new Error(`${manifestPath}: version ${manifest.version} already has four parts`);
+    manifest.version_name ??= manifest.version;
+    manifest.version = `${manifest.version}.${releaseStamp()}`;
+  }
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
@@ -189,7 +213,11 @@ export async function addExtensions(app) {
   // Its settings page shows the Enki Browser version it shipped with ("Check for updates").
   writeFileSync(path.join(shieldDir, "ids.json"), JSON.stringify({ ublock: blocker.id, browser: pkg.version }));
 
-  for (const dir of ["enki", "shield", "ublock-lite"]) freshWorker(path.join(app, "extensions", dir));
+  // uBlock's own version is left alone (its code reads it); its worker only changes with a new
+  // uBlock release or a new patch, and test/extension-versions.mjs holds a patch to the former.
+  freshWorker(enkiDir, { stamp: true });
+  freshWorker(shieldDir, { stamp: true });
+  freshWorker(blockerDir);
 
   // Icons up to 256 px live in icons/ (older Enki builds only had public/icons up to 128).
   const iconDir = existsSync(path.join(enkiDir, "icons", "icon16.png")) ? path.join(enkiDir, "icons") : path.join(enkiDir, "public", "icons");
@@ -220,10 +248,11 @@ const CHROMIUM_LOGOS = [
 
 /**
  * Replaces Chromium's logo inside the resource paks (the About page, the profile menu and other
- * WebUI) with Enki's, at the same pixel size. The logo images are identified by being byte-for-byte
- * the PNGs in Chromium's source at this exact version — never guessed from size or position.
+ * WebUI) with Enki's unplated mark (brand/logo-master.png), at the same pixel size. The logo images
+ * are identified by being byte-for-byte the PNGs in Chromium's source at this exact version — never
+ * guessed from size or position.
  */
-export async function replaceLogos(chromiumDir, chromiumVersion, iconDir) {
+export async function replaceLogos(chromiumDir, chromiumVersion) {
   const tag = chromiumVersion.replace(/-.*$/, "");
   const dir = path.join(cache, `chromium-logos-${tag}`);
   mkdirSync(dir, { recursive: true });
@@ -237,7 +266,7 @@ export async function replaceLogos(chromiumDir, chromiumVersion, iconDir) {
     }
     known.add(hash(file));
   }
-  const source = readFileSync(path.join(iconDir, "icon256.png"));
+  const source = readFileSync(path.join(brand, "logo-master.png"));
   let replaced = 0;
   for (const name of ["chrome_100_percent.pak", "chrome_200_percent.pak", "resources.pak"]) {
     const file = path.join(chromiumDir, name);
