@@ -36,9 +36,16 @@ needs only a free key.
 
 | How | |
 |---|---|
-| **Installer** | Run `EnkiBrowserSetup-<version>.exe`. No administrator rights: it installs for your user into `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start menu and desktop shortcuts, appears in *Settings → Apps*, and upgrades older installs keeping your profile. Silent: `/S`; another folder: `/D=<folder>`. |
+| **Installer** | Run `EnkiBrowserSetup-<version>.exe`. No administrator rights: it installs for your user into `%LOCALAPPDATA%\Programs\EnkiBrowser`, adds Start menu and desktop shortcuts, appears in *Settings → Apps*, and upgrades older installs keeping your profile. It also registers Enki Browser with Windows as a browser, for your user only: it is listed in *Settings → Default apps* and in *Open with* for web pages and PDFs. Silent: `/S`; another folder: `/D=<folder>`. |
 | **Scoop** | `scoop install https://github.com/danilogiles/enki-browser/releases/latest/download/enki-browser.json` — no installer runs; Scoop keeps it updated (`scoop update enki-browser`). |
 | **Portable** | Extract `EnkiBrowser-<version>-windows-x64.zip` anywhere and run `EnkiBrowser.exe`. With an empty file named `portable` next to it, the profile lives in that folder too; saved passwords and logins stay encrypted for this Windows user, so they do not carry over to another computer. |
+
+> **Default browser.** Windows lets only you choose the default browser. On its first start as an
+> installed browser, Enki Browser opens one page offering to take you to *Settings → Default apps*
+> (on Windows 11 straight to Enki Browser's entry; select **Set default**). It never asks again;
+> *Enki Shields settings → Make default* does the same later. The check reads only this computer's
+> registry; nothing is sent. Installs from before 0.8.6 are registered by the update, on the first
+> start after the browser has closed once. Portable copies are never registered.
 
 > **Signed, and SmartScreen.** Since 0.8.3 the installer, `EnkiBrowser.exe` and the launcher are
 > signed by **Danilo De Souza** (see [Code signing policy](#code-signing-policy)); right-click →
@@ -74,7 +81,8 @@ one; your profile is kept. To remove it, move the app to the Bin and delete the 
 | **Any distro, no root** | Extract `enki-browser-<version>-linux-x64.tar.gz` and run `./enki-browser/install.sh` (into `~/.local`, with a menu entry). On Ubuntu 23.10+, run it once with `--apparmor` (asks for sudo for the sandbox profile). `uninstall.sh` removes it. |
 | **One line** | `curl -fsSL https://raw.githubusercontent.com/danilogiles/enki-browser/main/packaging/linux/get-enki-browser.sh \| bash` — downloads the newest release, checks its SHA-256 and runs `install.sh`. |
 
-Tested on Ubuntu 24.04 and Debian 12.
+Tested on Ubuntu 24.04 and Debian 12. *Make default* in Enki Browser's settings
+(`chrome://settings/defaultBrowser`) makes the menu entry the default browser, through `xdg-settings`.
 
 ## Updates
 
@@ -86,7 +94,8 @@ you ignore it, the next time you start Enki Browser you are on the new version a
 restarts without your click. Your profile, history and Enki settings are untouched.
 
 Don't want to wait? **Check for updates** is in Shields' settings (the Shields button → *Global
-settings*, or its *Check for updates* link): on Windows it checks now, downloads and verifies the
+settings*, its *Check for updates* link, or *Check for updates* in the Shields button's
+right-click menu): on Windows it checks now, downloads and verifies the
 release and offers the restart; on macOS and Linux it tells you whether a newer release is out and
 links to it.
 
@@ -298,6 +307,13 @@ Honest list; each is on the roadmap.
   it current; it is never bundled. Some services (Netflix among them) also require a browser
   certified by Google (VMP), which Enki Browser is not, so they may still refuse. macOS and Linux
   come next.
+- **No import from Chrome or Edge yet.** Chromium's *Import bookmarks and settings* dialog reads
+  Firefox, Internet Explorer and a bookmarks HTML file (in Chrome or Edge: *Bookmarks → Export
+  bookmarks*), not Chrome or Edge directly; saved passwords and autofill start unticked there.
+  Importing from Chrome and Edge, with passwords only from a file you export yourself, is planned
+  for 0.8.7.
+- **Making Enki Browser the default takes a click in Windows Settings.** Windows 10 and 11 do not
+  let any browser make itself the default (see [Windows](#windows)).
 - **x86_64 only on Windows and Linux**; macOS has Apple silicon and Intel builds.
 
 ## Roadmap

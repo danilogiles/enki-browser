@@ -130,13 +130,16 @@ static class Install
         }
     }
 
-    /// Keeps the Apps entry's version and publisher in step with what runs. The updater installs a
-    /// release beside the old one without running the installer, so without this Settings → Apps
-    /// (and winget, which reads the same entry) would keep showing the version first installed and
-    /// an older publisher. Only the entry of this install is touched: a portable copy or a test
-    /// install elsewhere (InstallLocation differs, or there is no entry) is left alone.
-    public static void SyncRegistration(string root, string version)
+    /// Keeps the Apps entry's version and publisher in step with what runs, and Windows' knowledge
+    /// of Enki Browser as a browser (DefaultBrowser.cs) in place. The updater installs a release
+    /// beside the old one without running the installer, so without this Settings → Apps (and
+    /// winget, which reads the same entry) would keep showing the version first installed and an
+    /// older publisher, and installs from before 0.8.6 would never be registered as a browser.
+    /// Only this install is touched: a portable copy or a test install elsewhere (InstallLocation
+    /// differs, or there is no entry) gets nothing.
+    public static void SyncRegistration(string root, string appDir)
     {
+        string version = Path.GetFileName(appDir);
         try
         {
             using (var key = Registry.CurrentUser.OpenSubKey(UninstallKey, true))
@@ -148,16 +151,38 @@ static class Install
                 if ((key.GetValue("Publisher") as string) != "Danilo De Souza") key.SetValue("Publisher", "Danilo De Souza");
             }
         }
-        catch { /* never stop the browser from starting over the Apps entry */ }
+        catch { return; /* never stop the browser from starting over the Apps entry */ }
+
+        try
+        {
+            // Every registered command runs the stub with --single-argument, which only a stub from
+            // 0.8.6 on reads safely (Args.cs). Right after an update the old stub is still in place
+            // until the browser closes (Updater.RefreshStub), so wait for the one this version ships.
+            if (!SameFile(Path.Combine(root, "EnkiBrowser.exe"), Path.Combine(appDir, "EnkiBrowser.exe"))) return;
+            if (File.Exists(Path.Combine(root, "portable"))) return; // a portable copy never claims links
+            bool changed = DefaultBrowser.Register(Registry.CurrentUser, root);
+            changed |= DefaultBrowser.Repair(Registry.CurrentUser, root);
+            if (changed) DefaultBrowser.NotifyShell();
+        }
+        catch { /* nor over the browser registration */ }
+    }
+
+    static bool SameFile(string a, string b)
+    {
+        if (!File.Exists(a) || !File.Exists(b)) return false;
+        byte[] x = File.ReadAllBytes(a), y = File.ReadAllBytes(b);
+        return x.Length == y.Length && x.SequenceEqual(y);
     }
 
     /// Where Chromium finds the manifest of the "Check for updates" host (NativeHost.cs).
     public const string NativeHostKey = @"Software\Chromium\NativeMessagingHosts\io.github.danilogiles.enki_browser";
 
-    public static void Unregister()
+    public static void Unregister(string root)
     {
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false); } catch { }
         try { Registry.CurrentUser.DeleteSubKeyTree(NativeHostKey, false); } catch { }
+        try { DefaultBrowser.Unregister(Registry.CurrentUser, root); } catch { }
+        DefaultBrowser.NotifyShell();
     }
 
     public static long FolderSizeKb(string dir)

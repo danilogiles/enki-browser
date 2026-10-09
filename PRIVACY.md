@@ -26,7 +26,7 @@ included (`extension/`).
 | Requests to apps you connect (Jira, Linear, Notion, Sentry, GitHub, or other MCP servers) | That app | Only after you connect it in Settings → Connections, and only when Enki uses it for your request | Disconnect any app at any time; changes in an app wait for your confirmation unless you allow that tool |
 | Your address bar typing, for suggestions | DuckDuckGo's suggestion service | While you type in the address bar | Change or turn off suggestions in the browser's settings |
 | Nothing from voice input. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
-| Update checks | GitHub (the browser's release page) | About every two hours while the browser is open, and when you click *Check for updates* in Shields' settings (Windows). On macOS and Linux, only when you click it: one request for the latest release's number | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
+| Update checks | GitHub (the browser's release page) | About every two hours while the browser is open, and when you click *Check for updates* (in Enki's Settings › About, the Shields popup, the Shields button's right-click menu or Shields' settings; on Windows). On macOS and Linux, only when you click it: one request for the latest release's number | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
 | Protected video (Widevine), only if you turn it on (Windows) | Google (`update.googleapis.com` and Google's download servers) | When you click *Download from Google* in Shields' settings, then about once a day to keep it current. The request names the module, your Windows version and Enki Browser's Chromium version; no cookies, nothing about you or the sites you visit | *Turn off* in Shields' settings removes the module and stops the requests. Google's terms apply to the module |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
 
@@ -44,6 +44,12 @@ third-party cookies, known trackers and ads, and the local network address WebRT
 | Your voice, when you use Enki's microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
 | History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker; macOS: FileVault, in System Settings → Privacy & Security) to protect them if someone gets your disk |
+
+Whether Enki Browser is your default browser (Windows) is read from the registry on your computer,
+only to decide whether to show the one-time *Make Enki Browser your default browser?* page and the
+row in Shields' settings; the answer is not sent anywhere. Chromium's import dialog reads another
+browser's data only when you open it and choose what to import, and starts with saved passwords
+and autofill unticked.
 
 Updates change only the program: your profile — history, bookmarks, logins, Enki's settings and
 chats, Shields' choices — is kept exactly as it was, and an update restart reopens your windows

@@ -15,8 +15,13 @@ using System.Windows.Forms;
 static class Launcher
 {
     [STAThread]
-    static int Main(string[] args)
+    static int Main(string[] argv)
     {
+        // Only the arguments before --single-argument are arguments; a link or file opened through
+        // Windows comes after it and goes to Chromium untouched, last (Args.cs).
+        var parsed = Args.Parse(Environment.CommandLine, argv);
+        string[] args = parsed.Head;
+
         string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
         string root = Path.GetFullPath(Path.Combine(appDir, "..", ".."));
         string chrome = Path.Combine(appDir, "chromium", "chrome.exe");
@@ -58,8 +63,9 @@ static class Launcher
         // "Check for updates" in Shields' settings reaches this copy, portable ones included (the
         // registry entry names whichever copy started last, and the uninstaller removes it).
         NativeHost.Register(root, appDir);
-        // After an update, Settings → Apps and `winget list` show the version that now runs.
-        Install.SyncRegistration(root, Path.GetFileName(appDir));
+        // After an update, Settings → Apps and `winget list` show the version that now runs, and
+        // Windows knows Enki Browser as a browser (DefaultBrowser.cs).
+        Install.SyncRegistration(root, appDir);
         ShellIdentity.RepairShortcuts(root);
         if (portable)
         {
@@ -80,10 +86,11 @@ static class Launcher
 
         if (RestoreByDefault(userData, args)) flags.Add("--restore-last-session");
 
-        // Whatever Windows or the user passed (a URL, a file to open) goes last, unchanged.
+        // Whatever Windows or the user passed (a URL, a file to open) goes last, unchanged; a link
+        // opened through Windows goes after everything as --single-argument <the text as it came>.
         flags.AddRange(args.Where(a => !a.StartsWith("--enki-")));
 
-        Process.Start(new ProcessStartInfo(chrome, Win.JoinArgs(flags))
+        Process.Start(new ProcessStartInfo(chrome, Args.Compose(flags, parsed.Raw))
         {
             UseShellExecute = false,
             WorkingDirectory = Path.Combine(appDir, "chromium"),

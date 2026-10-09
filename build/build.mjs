@@ -29,28 +29,8 @@ const TAR = path.join(process.env.WINDIR ?? "C:\\Windows", "System32", "tar.exe"
 if (process.platform !== "win32") throw new Error("build.mjs builds the Windows edition; use build-linux.mjs on Linux.");
 
 // ---------------------------------------------------------------- icon
-/** Builds a Windows .ico that embeds PNGs directly (supported since Vista). */
-function pngsToIco(pngs) {
-  const header = Buffer.alloc(6);
-  header.writeUInt16LE(0, 0);
-  header.writeUInt16LE(1, 2);
-  header.writeUInt16LE(pngs.length, 4);
-  const entries = [];
-  let offset = 6 + 16 * pngs.length;
-  for (const png of pngs) {
-    const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
-    const e = Buffer.alloc(16);
-    e.writeUInt8(w >= 256 ? 0 : w, 0);
-    e.writeUInt8(h >= 256 ? 0 : h, 1);
-    e.writeUInt16LE(1, 4); // planes
-    e.writeUInt16LE(32, 6); // bpp
-    e.writeUInt32LE(png.length, 8);
-    e.writeUInt32LE(offset, 12);
-    offset += png.length;
-    entries.push(e);
-  }
-  return Buffer.concat([header, ...entries, ...pngs]);
-}
+// Small frames as uncompressed DIBs and 256 px as PNG, from whatever icon set is handed in (ico.mjs).
+import { pngsToIco } from "./ico.mjs";
 
 function findCsc() {
   const candidates = [
@@ -168,8 +148,8 @@ static class UpdateKey
 }
 `);
   // Shortcuts point at the stub, which updates never replace; each version brings its own launcher.
-  csc(stub, [src("Stub.cs"), src("Common.cs"), src("Install.cs")]);
-  csc(launcher, [src("Launcher.cs"), src("Updater.cs"), src("NativeHost.cs"), src("Widevine.cs"), src("Migration.cs"), src("Watcher.cs"), src("ShellIdentity.cs"), src("Common.cs"), src("Install.cs")]);
+  csc(stub, [src("Stub.cs"), src("Args.cs"), src("Common.cs"), src("Install.cs"), src("DefaultBrowser.cs")]);
+  csc(launcher, [src("Launcher.cs"), src("Updater.cs"), src("NativeHost.cs"), src("Widevine.cs"), src("Migration.cs"), src("Watcher.cs"), src("ShellIdentity.cs"), src("Args.cs"), src("Common.cs"), src("Install.cs"), src("DefaultBrowser.cs")]);
   cpSync(ico, path.join(app, "enki.ico"));
 
   step("Licenses and version");
@@ -205,7 +185,7 @@ if (runs("package")) {
   rmSync(zipPath, { force: true });
   run(TAR, ["-a", "-c", "-f", zipPath, "-C", out, "EnkiBrowser"]);
   // The installer is one file: the same zip, embedded as a resource.
-  csc(setupPath, [path.join(root, "installer", "Setup.cs"), src("Common.cs"), src("Install.cs")], [`/resource:${zipPath},payload.zip`]);
+  csc(setupPath, [path.join(root, "installer", "Setup.cs"), src("Common.cs"), src("Install.cs"), src("DefaultBrowser.cs")], [`/resource:${zipPath},payload.zip`]);
   signFile(setupPath);
 }
 

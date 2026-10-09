@@ -1,5 +1,8 @@
 import "./shields.js";
 import "./burn.js";
+import "./menu.js";
+import { welcomeOnce } from "./default-browser.js";
+import { native } from "./updates.js";
 // Enki Shield: warns before a known phishing site opens.
 //
 // Privacy is the point of doing this locally. Google Safe Browsing (which ungoogled-chromium
@@ -111,6 +114,16 @@ async function start() {
 
 chrome.runtime.onInstalled.addListener(start);
 chrome.runtime.onStartup.addListener(start);
+
+// First-run guide (welcome.html): once per profile (default-browser.js).
+const welcome = welcomeOnce({
+  native,
+  storage: chrome.storage.local,
+  openPage: (page) => chrome.tabs.create({ url: chrome.runtime.getURL(page) }),
+});
+const offerDefault = () => void welcome().catch((e) => console.warn(`[shield] default browser page: ${e.message}`));
+chrome.runtime.onInstalled.addListener(offerDefault);
+chrome.runtime.onStartup.addListener(offerDefault);
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === "shield-refresh") void refresh(); });
 
 // ------------------------------------------------------------------ matching

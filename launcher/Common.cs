@@ -38,7 +38,10 @@ static class Win
     public static string LongPath(string path)
     {
         var sb = new StringBuilder(1024);
-        uint n = GetLongPathName(path, sb, (uint)sb.Capacity);
+        uint n = 0;
+        try { n = GetLongPathName(path, sb, (uint)sb.Capacity); }
+        catch (DllNotFoundException) { } // not Windows: the unit tests also run under Mono
+        catch (EntryPointNotFoundException) { }
         return (n > 0 && n < sb.Capacity ? sb.ToString() : Path.GetFullPath(path)).TrimEnd('\\');
     }
 

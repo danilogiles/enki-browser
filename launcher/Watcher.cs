@@ -193,8 +193,9 @@ static class Watcher
 
     static void Relaunch(string root, string userData, IEnumerable<string> switches)
     {
-        var args = switches.Where(a => a != "--restore-last-session").ToList();
-        args.Add("--restore-last-session");
+        // Never --single-argument: a link the browser was first opened with is not opened again,
+        // and the switch would turn the next one into a "URL" (Args.RestartSwitches).
+        var args = Args.RestartSwitches(switches);
         // With more than one profile Chromium opens on its profile picker, and the tabs only came
         // back after the user picked one. Reopen the profile last used, which is the one whose
         // windows were just closed for the update.

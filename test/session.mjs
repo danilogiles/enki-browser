@@ -82,6 +82,11 @@ try {
   }, 25000);
   check("a new tab reopened at startup is Enki Home, not Chromium's page", !!home?.ok, home?.href ?? "");
   await quit(session);
+  // "Import bookmarks and settings": saved passwords and autofill start unticked (initial_preferences).
+  const imported = JSON.parse(readFileSync(path.join(userData, "Default", "Preferences"), "utf8"));
+  check("the import dialog starts with saved passwords and autofill unticked",
+    imported.import_dialog_saved_passwords === false && imported.import_dialog_autofill_form_data === false,
+    `passwords ${imported.import_dialog_saved_passwords} · autofill ${imported.import_dialog_autofill_form_data}`);
 
   // 3. A profile from before this default, with no startup choice stored: the launcher's switch.
   for (const file of ["Preferences", "Secure Preferences"]) {
