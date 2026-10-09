@@ -38,10 +38,15 @@ jobs:
           key: upstream-${{ hashFiles('upstream.json') }}
       # Signs the programs when a signing command is configured (README, "Code signing"). Forks,
       # and pull requests from them, have no secrets and build unsigned.
+      # Unit tests: argument passthrough, the browser registration (in a throwaway HKCU key) and the
+      # import defaults, compiled with the same csc as the build; the one-time default browser page.
+      - run: node test/launcher-unit.mjs
+      - run: node test/shield-welcome.mjs
       - run: node build/build.mjs
         env:
           ENKI_SIGN_COMMAND: ${{ secrets.ENKI_SIGN_COMMAND }}
       - run: npm run verify
+      - run: node test/ico.mjs
       - run: node test/session.mjs
       - run: node test/setup.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -97,6 +102,7 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin 'refs/tags/v*:refs/tags/v*'
           node test/extension-versions.mjs
+      - run: node test/ico.mjs && node test/shield-welcome.mjs
       - run: node build/build-linux.mjs
       # Installed the way a user would, without root, plus the AppArmor profile Ubuntu 24.04 needs;
       # then verified with Chromium's sandbox on, as on a real desktop.

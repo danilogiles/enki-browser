@@ -22,5 +22,16 @@ out="$(HOME=/tmp timeout 90 enki-browser --headless=new --no-sandbox --disable-g
 if grep -q '<h1>enki-ok</h1>' <<<"$out"; then echo "PASS the installed browser starts and renders a page"
 else echo "FAIL the browser did not render:"; grep -m5 -E "error|Error|undefined symbol" <<<"$out" || head -5 <<<"$out"; exit 1; fi
 
+# "Make default" in Chromium's settings runs xdg-settings with $CHROME_DESKTOP: the launcher names
+# Enki's own menu entry, and xdg-settings accepts it as the default browser.
+grep -q '^export CHROME_DESKTOP=enki-browser.desktop$' /opt/enki-browser/enki-browser \
+  && echo "PASS the launcher tells Chromium its menu entry (CHROME_DESKTOP=enki-browser.desktop)" \
+  || { echo "FAIL CHROME_DESKTOP is not exported by /opt/enki-browser/enki-browser"; exit 1; }
+apt-get install -y -qq --no-install-recommends xdg-utils >/dev/null
+mkdir -p /tmp/xdg-home
+got="$(HOME=/tmp/xdg-home env -u BROWSER sh -c 'xdg-settings set default-web-browser enki-browser.desktop && xdg-settings get default-web-browser' 2>&1 || true)"
+[[ "$got" == "enki-browser.desktop" ]] && echo "PASS xdg-settings makes enki-browser.desktop the default browser" \
+  || { echo "FAIL xdg-settings answered: $got"; exit 1; }
+
 apt-get remove -y -qq enki-browser >/dev/null
 [[ ! -e /opt/enki-browser && ! -e /usr/bin/enki-browser ]] && echo "PASS apt removes it cleanly"

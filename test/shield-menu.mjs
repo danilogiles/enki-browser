@@ -2,7 +2,7 @@
 // into Chromium with a throwaway profile and checks, in Shield's own worker:
 //   - the item exists, for the toolbar button's menu only (contexts ["action"]);
 //   - making it again (a worker restart, onInstalled after onStartup) is no duplicate-id error;
-//   - clicking it opens Shields' settings at the update check (options.html#check-updates).
+//   - clicking it opens Shields' settings at the update check (options.html#check-updates), which starts it.
 // A toolbar button's context menu cannot be opened by automation, so the click runs the handler
 // the menu calls, from the worker.
 //
@@ -60,13 +60,15 @@ try {
 
   const before = ctx.pages().length;
   await sw.evaluate(() => globalThis.enkiShieldMenu.open());
-  const want = `chrome-extension://${id}/options.html#check-updates`;
-  const opened = await until(async () => ctx.pages().find((p) => p.url() === want), 10000);
-  check("clicking it opens Shields' settings at #check-updates", !!opened, `${ctx.pages().map((p) => p.url()).join(", ")} (had ${before} tabs)`);
+  // The page starts the check when it opens at #check-updates, then drops the hash (a reload must
+  // not check again), so the tab is found by its page, and the proof is that the check started.
+  const settings = `chrome-extension://${id}/options.html`;
+  const opened = await until(async () => ctx.pages().find((p) => p.url().startsWith(settings)), 10000);
+  check("clicking it opens Shields' settings", !!opened, `${ctx.pages().map((p) => p.url()).join(", ")} (had ${before} tabs)`);
   if (opened) {
     await opened.waitForLoadState("domcontentloaded");
-    const button = await opened.evaluate(() => !!document.getElementById("check-updates"));
-    check("the settings page has its Check for updates button", button);
+    const started = await until(() => opened.evaluate(() => /Checking|Checked just now|Could not check|is available|downloaded and verified|turned off/.test(document.getElementById("update-state")?.textContent ?? "")), 10000);
+    check("…and the update check starts by itself", !!started, (await opened.evaluate(() => document.getElementById("update-state")?.textContent ?? "")).trim());
   }
 } catch (e) {
   check("shield menu", false, e.stack ?? String(e));

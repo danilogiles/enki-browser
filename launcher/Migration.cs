@@ -8,6 +8,8 @@
 //  - Chromium's grey palette, unless the user ever chose a colour;
 //  - and, for profiles from 0.3–0.5, the old navy theme reference removed (it kept the window navy
 //    after 0.6 stopped shipping the theme).
+// Since 0.8.6, also once per profile (marker .enki-import-defaults): saved passwords and autofill
+// unticked in Chromium's import dialog (ImportDefaults).
 // These preferences are not among the ones Chromium protects with a MAC (the default search engine
 // is, and writing it here got it reset), so Chromium keeps them. A backup of Preferences is kept.
 using System;
@@ -28,7 +30,11 @@ static class Migration
             if (Win.BrowserProcesses(root).Count > 0) return; // try again on a later start
             var json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
             var pinned = PinnedIds(json, appDir);
-            foreach (string profile in Profiles(json, userData)) Apply(json, Path.Combine(userData, profile), pinned, root);
+            foreach (string profile in Profiles(json, userData))
+            {
+                Apply(json, Path.Combine(userData, profile), pinned, root);
+                ApplyImportDefaults(json, Path.Combine(userData, profile), root);
+            }
         }
         catch (Exception e)
         {
@@ -64,6 +70,46 @@ static class Migration
         catch { }
         // Only plain folder names: never follow a path out of the profile folder.
         return found.Distinct().Where(p => p.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && p != "." && p != "..");
+    }
+
+    /// Chromium's "Import bookmarks and settings" dialog starts with every kind of data ticked,
+    /// saved passwords and autofill included. In Enki Browser those two start unticked: copying
+    /// passwords out of another browser is something to choose, not to slip through. New profiles
+    /// get it from initial_preferences; each existing profile once (its own marker, since the 0.8.6
+    /// change came after the v2 defaults). A choice the profile already stored is kept.
+    public static bool ImportDefaults(Dictionary<string, object> top)
+    {
+        bool changed = false;
+        foreach (string pref in ImportPrefs)
+        {
+            if (top.ContainsKey(pref)) continue;
+            top[pref] = false;
+            changed = true;
+        }
+        return changed;
+    }
+
+    public static readonly string[] ImportPrefs = { "import_dialog_saved_passwords", "import_dialog_autofill_form_data" };
+    const string ImportMarker = ".enki-import-defaults";
+
+    internal static void ApplyImportDefaults(JavaScriptSerializer json, string dir, string root)
+    {
+        string prefs = Path.Combine(dir, "Preferences");
+        try
+        {
+            if (!File.Exists(prefs) || File.Exists(Path.Combine(dir, ImportMarker))) return;
+            var top = json.DeserializeObject(File.ReadAllText(prefs)) as Dictionary<string, object>;
+            if (top == null) return;
+            if (ImportDefaults(top))
+            {
+                // A backup from the v2 defaults (often made on this same start) is older, so it stays.
+                if (!File.Exists(prefs + ".enki-backup")) File.Copy(prefs, prefs + ".enki-backup");
+                File.WriteAllText(prefs, json.Serialize(top));
+                Updater.Log(root, "import dialog: passwords and autofill unticked in profile " + Path.GetFileName(dir));
+            }
+            File.WriteAllText(Path.Combine(dir, ImportMarker), DateTime.UtcNow.ToString("o"));
+        }
+        catch (Exception e) { Updater.Log(root, "profile " + Path.GetFileName(dir) + " import defaults skipped: " + e.Message); }
     }
 
     static Dictionary<string, object> Child(Dictionary<string, object> parent, string key)

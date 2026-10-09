@@ -1,6 +1,7 @@
 // Enki Shields' global settings, opened from the panel's "Global settings".
 import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
-import { DOWNLOAD, check, compare, restart, status } from "./updates.js";
+import { DOWNLOAD, check, compare, native, restart, status } from "./updates.js";
+import { defaultStatus, openDefaultApps } from "./default-browser.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -92,11 +93,29 @@ function showUpdates(s, checked) {
     updateState.textContent = `Enki Browser ${s.latest} is available. Install it the way you installed this one; your profile is kept.`;
     downloadUpdate.hidden = false;
   } else if (checked) {
-    updateState.textContent = s.updater ? "You have the latest version." : s.latest ? "You have the latest version." : "Could not find the latest release.";
+    // Say that a check just happened: "You have the latest version" alone looked like nothing ran.
+    const latest = s.updater ? s.running : s.latest;
+    updateState.textContent = !s.updater && !s.latest ? "Checked just now · could not find the latest release."
+      : latest ? `Checked just now · ${latest} is the latest.` : "Checked just now · you have the latest version.";
   } else {
     updateState.textContent = s.updater ? "Updates download by themselves every couple of hours." : "This copy does not update by itself; check here for a new release.";
   }
 }
+// Default browser (default-browser.js): only for an install Windows knows as a browser.
+async function showDefault() {
+  const s = await defaultStatus(native);
+  $("default-row").hidden = !s?.registered;
+  if (!s?.registered) return;
+  $("default-state").textContent = s.isDefault ? "Enki Browser is your default browser." : "Another browser opens links from other apps.";
+  $("make-default").hidden = s.isDefault;
+}
+$("make-default").onclick = async () => {
+  $("default-state").textContent = (await openDefaultApps(native))
+    ? "In Windows Settings, choose Enki Browser, then “Set default”."
+    : "Windows Settings could not be opened. Open Settings → Apps → Default apps and choose Enki Browser.";
+};
+window.addEventListener("focus", () => void showDefault());
+void showDefault();
 showUpdates(await status(), false);
 document.documentElement.dataset.updates = "ready"; // tests wait for this before reading or clicking
 checkUpdates.onclick = async () => {
@@ -104,8 +123,24 @@ checkUpdates.onclick = async () => {
   updateState.textContent = "Checking… a download can take a minute.";
   try { showUpdates(await check(), true); } finally { checkUpdates.disabled = false; }
 };
+// Settings › About in the Enki panel and the Shields popup open this page at #check-updates:
+// the check starts at once, as if the button had been clicked.
+if (location.hash === "#check-updates") {
+  history.replaceState(null, "", location.pathname); // a reload does not check again
+  checkUpdates.scrollIntoView({ block: "center" });
+  checkUpdates.focus();
+  checkUpdates.click();
+}
 restartUpdate.onclick = async () => {
   restartUpdate.disabled = true;
   updateState.textContent = "Restarting…";
   await restart();
+};
+
+// Re-open the first-run guide (welcome.html). Does not clear the once-only flag;
+// finishing or skipping still sends nothing out.
+// The label follows the guide's language (welcome.js); its Portuguese wording is in options.html.
+if (!navigator.language?.startsWith("pt")) $("show-guide").textContent = navigator.language?.startsWith("es") ? "Ver la guía otra vez" : "Show the guide again";
+$("show-guide").onclick = () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
 };

@@ -17,7 +17,7 @@ export async function shippedVersion() {
 }
 
 /** One request to the launcher; null when there is none to ask (not Windows, or portable). */
-function native(message) {
+export function native(message) {
   return new Promise((resolve) => {
     try {
       chrome.runtime.sendNativeMessage(HOST, message, (reply) => resolve(chrome.runtime.lastError ? null : reply ?? null));

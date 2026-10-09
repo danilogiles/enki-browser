@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Enki Browser</title>
+  <link rel="icon" href="icons/shield32.png">
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #1e1e1e; --panel-2: #252a30; --border: #2a323c; --border-soft: #232a33;
+      --text: #e2e8f0; --muted: #94a3b8; --dim: #64748b; --accent: #38bdf8; --accent-dim: rgba(56,189,248,.14);
+      --ok: #34d399; --ok-dim: rgba(52,211,153,.14);
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh; margin: 0; display: flex; align-items: center; justify-content: center;
+      padding: 24px 16px; background: #0a0e12; color: var(--text); font-family: var(--font);
+    }
+    .card {
+      width: 100%; max-width: 520px; background: var(--panel); border: 1px solid var(--border);
+      border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.6); overflow: hidden;
+    }
+    .card-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 0; }
+    .card-head img { width: 24px; height: 24px; }
+    .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); }
+    .steps { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .pips { display: flex; gap: 5px; }
+    .pips span { width: 18px; height: 4px; border-radius: 2px; background: #334155; }
+    .pips span[aria-current="step"], .pips span.done { background: var(--accent); }
+    .count { font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .card-body { padding: 22px 24px 8px; }
+    .hero {
+      display: flex; align-items: center; justify-content: center; height: 128px; margin-bottom: 18px;
+      border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, rgba(56,189,248,.16), transparent 70%), var(--bg);
+      border: 1px solid var(--border-soft);
+    }
+    .hero .buddy { width: 84px; height: 84px; filter: drop-shadow(0 8px 18px rgba(56,189,248,.25)); }
+    .hero .wrap { position: relative; }
+    .hero .badge {
+      position: absolute; right: -6px; bottom: 2px; width: 28px; height: 28px; border-radius: 50%;
+      background: var(--ok); color: #0b1220; font-weight: 800; font-size: 16px;
+      display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg);
+    }
+    h1 { font-size: 22px; font-weight: 650; letter-spacing: -.015em; margin-bottom: 8px; }
+    p.lead { font-size: 14px; line-height: 1.55; color: var(--muted); }
+    p.lead strong { color: var(--text); font-weight: 600; }
+    code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+    code.shortcuts-url { color: var(--muted); }
+    kbd {
+      font-family: var(--mono); font-size: 12px; color: var(--text); background: var(--panel-2);
+      border: 1px solid #33404d; border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; white-space: nowrap;
+    }
+    .options { display: flex; gap: 10px; margin-top: 16px; }
+    .opt { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .opt b { display: block; font-size: 13px; font-weight: 650; margin-bottom: 3px; }
+    .opt span { font-size: 12px; color: var(--muted); }
+    .opt .tag {
+      display: inline-block; margin-top: 8px; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--accent); background: var(--accent-dim); padding: 3px 7px; border-radius: 5px;
+    }
+    .link {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 13px; font-weight: 600;
+      color: var(--accent); text-decoration: none; background: none; border: 0; font-family: inherit; cursor: pointer; padding: 0;
+    }
+    .link:hover { text-decoration: underline; text-underline-offset: 2px; }
+    .keys { white-space: nowrap; color: var(--dim); }
+    .keys kbd { margin: 0 1px; }
+    .byom {
+      display: block; margin-top: 12px; background: none; border: 0; font: inherit; padding: 0;
+      font-size: 12.5px; line-height: 1.45; color: var(--dim); cursor: pointer; text-align: left;
+    }
+    .byom strong { color: var(--muted); font-weight: 600; }
+    .byom .where { color: var(--accent); font-weight: 600; }
+    .byom:hover strong { color: var(--text); }
+    .others { display: block; margin-top: 10px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650;
+      padding: 6px 11px; border-radius: 999px; background: var(--ok-dim); color: var(--ok);
+    }
+    .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+    .card-foot { display: flex; align-items: center; gap: 10px; padding: 18px 24px 16px; }
+    .skip {
+      background: none; border: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+      padding: 8px 4px; cursor: pointer;
+    }
+    .skip:hover { color: var(--text); }
+    .spacer { flex: 1; }
+    .btn {
+      border-radius: 8px; font: inherit; font-size: 13px; font-weight: 650; padding: 10px 16px; cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: #0b1220; border: 0; }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--muted); }
+    .note {
+      padding: 10px 24px 14px; border-top: 1px solid var(--border-soft); font-size: 11px; color: var(--dim);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .note img { width: 12px; height: 12px; opacity: .8; }
+    #state { min-height: 1.3em; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) {
+      .btn, .skip, .link { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <section class="card" role="dialog" aria-modal="true" aria-labelledby="title">
+    <div class="card-head">
+      <img src="icons/buddy.svg" alt="">
+      <span class="eyebrow" data-i18n="eyebrow">Primeira abertura</span>
+      <div class="steps" data-i18n-aria="progress" aria-label="Progresso do guia">
+        <div class="pips" id="pips"></div>
+        <span class="count" id="count">1/3</span>
+      </div>
+    </div>
+
+    <div id="step-default" class="card-body" hidden>
+      <div class="hero"><img class="buddy" src="icons/buddy.svg" alt=""></div>
+      <h1 id="title" data-i18n="welcomeTitle">Bem-vindo ao Enki</h1>
+      <p class="lead" id="default-lead">O Enki é um navegador privado com assistente de IA. Quer torná-lo o navegador padrão?</p>
+      <p id="state" role="status" aria-live="polite"></p>
+    </div>
+
+    <div id="step-ai" class="card-body" hidden>
+      <h1 data-i18n="aiTitle">Configure o assistente</h1>
+      <p class="lead" data-i18n-html="aiLead">Para começar, pegue uma <strong>chave grátis do Nemotron</strong> (sem cartão) ou use o <strong>Ollama</strong> no seu computador. Abra o painel pelo botão <strong>Open Enki</strong>. Se não abrir, use <span class="keys" id="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span> ou configure em <code class="shortcuts-url">chrome://extensions/shortcuts</code>.</p>
+      <div class="options">
+        <div class="opt"><b>Nemotron</b><span data-i18n-html="nemotron">Chave grátis, sem cartão · Provider <strong>NVIDIA (Nemotron) · free</strong></span><br><span class="tag" data-i18n="needsKey">Precisa de chave</span></div>
+        <div class="opt"><b>Ollama</b><span data-i18n-html="ollama">Modelo no seu computador · <strong>Ollama (local)</strong></span><br><span class="tag">Local</span></div>
+      </div>
+      <button type="button" class="byom" data-i18n-html="otherProviders" id="other-providers">Ou use outro provedor: <strong>Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter…</strong> <span class="where">→</span></button>
+      <a class="link" id="key-help" href="https://github.com/danilogiles/enki-browser/blob/main/docs/AI-SETUP.md" target="_blank" rel="noreferrer">Get a key →</a>
+    </div>
+
+    <div id="step-shield" class="card-body" hidden>
+      <div class="hero"><div class="wrap"><img class="buddy" src="icons/buddy.svg" alt=""><span class="badge" aria-hidden="true">✓</span></div></div>
+      <h1 data-i18n="shieldTitle">Proteção ligada</h1>
+      <p class="lead" data-i18n="shieldLead">O Shield bloqueia trackers e anúncios por padrão. Você controla isso a qualquer momento.</p>
+      <div class="chips">
+        <span class="chip" data-i18n-html="trackers"><span class="dot"></span>Trackers bloqueados</span>
+        <span class="chip" data-i18n-html="ads"><span class="dot"></span>Anúncios bloqueados</span>
+      </div>
+    </div>
+
+    <div class="card-foot">
+      <button type="button" class="skip" data-i18n="skip" id="skip">Pular guia</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-secondary" data-i18n="notNow" id="default-next" hidden>Agora não</button>
+      <button type="button" class="btn btn-primary" id="primary">Tornar padrão</button>
+    </div>
+    <div class="note" data-i18n-html="note"><img src="icons/buddy.svg" alt="">Você pode reabrir em Settings › About.</div>
+  </section>
+  <script type="module" src="welcome.js"></script>
+</body>
+</html>
