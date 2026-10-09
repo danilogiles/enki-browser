@@ -6,6 +6,9 @@
 // still named the previous build's worker file, which no longer existed, so no background ran
 // and Ctrl+Shift+E did nothing — while every fresh-profile test passed. Checks, after the update:
 //   - Enki's and Shield's workers run, from the files this build's manifests name;
+//   - an extension whose shipped files changed since the previous release (the same paths as
+//     extension-versions.mjs) has a new version; one that did not keeps its version (with this
+//     build's release stamp: the same within a release, new in the next) and its worker still runs;
 //   - the real Ctrl+Shift+E (xdotool; synthetic keys never reach extension commands) opens the
 //     side panel, not a popup window;
 //   - Act still refuses an extension page (Shields' settings, with Burn all data): a scripted
@@ -13,13 +16,16 @@
 //
 //   ENKI_OLD_LINUX_DIR=/path/to/previous/enki-browser ENKI_LINUX_DIR=/path/to/new/enki-browser \
 //     xvfb-run -a node test/update-path.mjs
-// Both are unpacked Linux tarballs (the launcher script is what starts them). Needs xdotool.
+// Both are unpacked Linux tarballs (the launcher script is what starts them). Needs xdotool, and
+// run from the repository with the previous release's tag (v<its enkiBrowser version>) fetched.
 import { spawn, execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright-core";
+import { releaseStamp } from "../build/common.mjs";
+import { changedSince, git } from "./shipped.mjs";
 
 const oldDir = process.env.ENKI_OLD_LINUX_DIR;
 const newDir = process.env.ENKI_LINUX_DIR;
@@ -31,6 +37,13 @@ const xdotool = (...a) => execFileSync("xdotool", a, { encoding: "utf8" }).trim(
 try { xdotool("version"); } catch { console.error("xdotool is required (apt-get install xdotool)"); process.exit(2); }
 
 const ids = JSON.parse(readFileSync(path.join(newDir, "version.json"), "utf8"));
+const previousRelease = JSON.parse(readFileSync(path.join(oldDir, "version.json"), "utf8")).enkiBrowser;
+const previousTag = `v${previousRelease}`;
+try { git("rev-parse", "--verify", "--quiet", `refs/tags/${previousTag}^{commit}`); } catch {
+  console.error(`The previous release is ${previousRelease}, but tag ${previousTag} is not here: git fetch --depth=1 origin 'refs/tags/v*:refs/tags/v*'`);
+  process.exit(2);
+}
+const thisRelease = JSON.parse(readFileSync(path.join(newDir, "version.json"), "utf8")).enkiBrowser;
 const manifest = (dir, ext) => JSON.parse(readFileSync(path.join(dir, "extensions", ext, "manifest.json"), "utf8"));
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(fn, ms) {
@@ -143,7 +156,17 @@ try {
   const { context } = now;
   for (const [ext, id] of [["enki", ids.enkiExtensionId], ["shield", ids.shieldExtensionId]]) {
     const before = manifest(oldDir, ext), after = manifest(newDir, ext);
-    check(`${ext}: the version changes with the update`, before.version !== after.version, `${before.version} → ${after.version}`);
+    const files = changedSince(previousTag, ext);
+    if (files.length) {
+      check(`${ext}: the version changes with the update`, before.version !== after.version, `${before.version} → ${after.version} (${files.length} files changed since ${previousTag})`);
+    } else {
+      // Nothing of it changed, so neither did its version (beyond the release stamp) nor, the
+      // worker being named by its content, the worker file: the registration Chromium kept is
+      // still right, and the worker check below says it runs.
+      console.log(`SAME ${ext}: no shipped file changed since ${previousTag}; the version-change check does not apply`);
+      const expected = `${before.version_name ?? before.version.split(".").slice(0, 3).join(".")}.${releaseStamp(thisRelease)}`;
+      check(`${ext}: unchanged, so its version stays (with ${thisRelease}'s release stamp)`, after.version === expected, `${before.version} → ${after.version}, expected ${expected}`);
+    }
     const sw = await wake(context, id);
     const expected = `/${after.background.service_worker.replace(/^\//, "")}`;
     check(`${ext}: the background runs this build's worker after the update`, sw && new URL(sw.url()).pathname === expected, sw ? sw.url() : "no worker running");
