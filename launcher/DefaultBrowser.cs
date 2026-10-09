@@ -9,7 +9,7 @@
 // Everything points at the stub, <root>\EnkiBrowser.exe, which updates never move or rename, and
 // every command is exactly "<stub>" --single-argument %1 (Args.cs: the URL reaches Chromium as one
 // literal argument, never as switches). Written by the installer and, for installs from before
-// 0.8.5, by the launcher at start (Install.SyncRegistration); removed by the uninstaller. Portable
+// 0.8.6, by the launcher at start (Install.SyncRegistration); removed by the uninstaller. Portable
 // copies get none of it.
 //
 // Chromium's own "Make default" button (chrome://settings/defaultBrowser) and its PDF prompt register

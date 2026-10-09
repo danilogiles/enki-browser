@@ -4,7 +4,7 @@
 // channel plus the 1-bit AND mask), and only the 256 px frame as PNG. PNG frames are allowed in an
 // .ico since Vista, but Microsoft's guidance is PNG for 256 px only: some shell paths (the "Open
 // with" app list, ExtractIconEx and the classic icon cache at small sizes) do not draw small
-// PNG-compressed frames and fall back to a blank icon. Until 0.8.5 every frame was a PNG.
+// PNG-compressed frames and fall back to a blank icon. Until 0.8.6 every frame was a PNG.
 //
 // Icon-agnostic on purpose: whatever PNG set the build hands in (Enki's icons today, the plated
 // brand icons once they replace them) becomes the .ico. Synchronous and dependency-free, so the

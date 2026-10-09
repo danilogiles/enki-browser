@@ -44,7 +44,7 @@ needs only a free key.
 > installed browser, Enki Browser opens one page offering to take you to *Settings → Default apps*
 > (on Windows 11 straight to Enki Browser's entry; select **Set default**). It never asks again;
 > *Enki Shields settings → Make default* does the same later. The check reads only this computer's
-> registry; nothing is sent. Installs from before 0.8.5 are registered by the update, on the first
+> registry; nothing is sent. Installs from before 0.8.6 are registered by the update, on the first
 > start after the browser has closed once. Portable copies are never registered.
 
 > **Signed, and SmartScreen.** Since 0.8.3 the installer, `EnkiBrowser.exe` and the launcher are

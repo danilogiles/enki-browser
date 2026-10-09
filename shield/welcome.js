@@ -1,5 +1,5 @@
 // First-run guide (default-browser.js decides when it opens once).
-// Steps match Ink's 0.8.5 onboarding mocks: default → (0.8.6: import) → AI → Shield.
+// Steps match Ink's onboarding mocks: default → (next release: import) → AI → Shield.
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
 import { native } from "./updates.js";
 

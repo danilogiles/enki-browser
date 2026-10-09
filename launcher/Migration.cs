@@ -8,7 +8,7 @@
 //  - Chromium's grey palette, unless the user ever chose a colour;
 //  - and, for profiles from 0.3–0.5, the old navy theme reference removed (it kept the window navy
 //    after 0.6 stopped shipping the theme).
-// Since 0.8.5, also once per profile (marker .enki-import-defaults): saved passwords and autofill
+// Since 0.8.6, also once per profile (marker .enki-import-defaults): saved passwords and autofill
 // unticked in Chromium's import dialog (ImportDefaults).
 // These preferences are not among the ones Chromium protects with a MAC (the default search engine
 // is, and writing it here got it reset), so Chromium keeps them. A backup of Preferences is kept.
@@ -75,7 +75,7 @@ static class Migration
     /// Chromium's "Import bookmarks and settings" dialog starts with every kind of data ticked,
     /// saved passwords and autofill included. In Enki Browser those two start unticked: copying
     /// passwords out of another browser is something to choose, not to slip through. New profiles
-    /// get it from initial_preferences; each existing profile once (its own marker, since the 0.8.5
+    /// get it from initial_preferences; each existing profile once (its own marker, since the 0.8.6
     /// change came after the v2 defaults). A choice the profile already stored is kept.
     public static bool ImportDefaults(Dictionary<string, object> top)
     {

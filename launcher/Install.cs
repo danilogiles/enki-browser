@@ -124,7 +124,7 @@ static class Install
     /// of Enki Browser as a browser (DefaultBrowser.cs) in place. The updater installs a release
     /// beside the old one without running the installer, so without this Settings → Apps (and
     /// winget, which reads the same entry) would keep showing the version first installed and an
-    /// older publisher, and installs from before 0.8.5 would never be registered as a browser.
+    /// older publisher, and installs from before 0.8.6 would never be registered as a browser.
     /// Only this install is touched: a portable copy or a test install elsewhere (InstallLocation
     /// differs, or there is no entry) gets nothing.
     public static void SyncRegistration(string root, string appDir)
@@ -146,7 +146,7 @@ static class Install
         try
         {
             // Every registered command runs the stub with --single-argument, which only a stub from
-            // 0.8.5 on reads safely (Args.cs). Right after an update the old stub is still in place
+            // 0.8.6 on reads safely (Args.cs). Right after an update the old stub is still in place
             // until the browser closes (Updater.RefreshStub), so wait for the one this version ships.
             if (!SameFile(Path.Combine(root, "EnkiBrowser.exe"), Path.Combine(appDir, "EnkiBrowser.exe"))) return;
             if (File.Exists(Path.Combine(root, "portable"))) return; // a portable copy never claims links

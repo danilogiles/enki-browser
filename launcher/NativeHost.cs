@@ -3,7 +3,7 @@
 // names, with the calling extension's origin as its first argument, and they exchange JSON over
 // stdin and stdout, each message prefixed with its length. Only Enki Shield may call it (the
 // manifest's allowed_origins), and all it can ask for is what the tray notification already
-// offers (check now, and restart into a downloaded update), plus, since 0.8.5, whether Enki
+// offers (check now, and restart into a downloaded update), plus, since 0.8.6, whether Enki
 // Browser is the default browser (a registry read on this computer) and opening the Settings page
 // where the user makes it so (DefaultBrowser.cs). Nothing it does goes over the network but the
 // update check.

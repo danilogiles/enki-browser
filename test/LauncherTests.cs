@@ -1,4 +1,4 @@
-// Unit tests for the launcher's 0.8.5 pieces: argument passthrough (Args.cs), the browser
+// Unit tests for the launcher's 0.8.6 pieces: argument passthrough (Args.cs), the browser
 // registration (DefaultBrowser.cs) against a throwaway registry key, and the import dialog
 // defaults (Migration.cs). Compiled and run by test/launcher-unit.mjs: with the .NET Framework
 // csc on Windows, with Mono's mcs elsewhere (Mono keeps a file-backed registry, so the registry
@@ -129,18 +129,18 @@ static class LauncherTests
     {
         var s = Args.Parse(windowsLine, Argv(windowsLine).Skip(1).ToArray());
         stubHead = s.Head;
-        string launcherLine = "\"C:\\Program Files\\Enki Browser\\app\\0.8.5\\EnkiBrowserLauncher.exe\" " + Args.Compose(s.Head, s.Raw);
+        string launcherLine = "\"C:\\Program Files\\Enki Browser\\app\\0.8.6\\EnkiBrowserLauncher.exe\" " + Args.Compose(s.Head, s.Raw);
         var l = Args.Parse(launcherLine, Argv(launcherLine).Skip(1).ToArray());
         launcherHead = l.Head;
         var flags = new List<string>
         {
             "--user-data-dir=C:\\Users\\Ana Maria\\AppData\\Local\\Enki Browser\\User Data",
-            "--load-extension=C:\\Program Files\\Enki Browser\\app\\0.8.5\\extensions\\enki,C:\\x\\shield",
+            "--load-extension=C:\\Program Files\\Enki Browser\\app\\0.8.6\\extensions\\enki,C:\\x\\shield",
             "--no-default-browser-check",
             "--restore-last-session",
         };
         flags.AddRange(l.Head.Where(a => !a.StartsWith("--enki-")));
-        return "\"C:\\Program Files\\Enki Browser\\app\\0.8.5\\chromium\\chrome.exe\" " + Args.Compose(flags, l.Raw);
+        return "\"C:\\Program Files\\Enki Browser\\app\\0.8.6\\chromium\\chrome.exe\" " + Args.Compose(flags, l.Raw);
     }
 
     static void ArgsTests()
@@ -206,7 +206,7 @@ static class LauncherTests
             Check("restart to update drops --single-argument and restores the session once", restart.SequenceEqual(new[] { "--incognito", "--restore-last-session" }), string.Join(" ", restart));
         }
         {
-            string line = "\"C:\\Program Files\\Enki Browser\\app\\0.8.5\\chromium\\chrome.exe\" " + Args.Compose(new[] { "--user-data-dir=C:\\a b\\User Data", "--x=\"q\"", "C:\\dir\\" }, null);
+            string line = "\"C:\\Program Files\\Enki Browser\\app\\0.8.6\\chromium\\chrome.exe\" " + Args.Compose(new[] { "--user-data-dir=C:\\a b\\User Data", "--x=\"q\"", "C:\\dir\\" }, null);
             var back = Argv(line).Skip(1).ToList();
             Check("switches with spaces, quotes and trailing backslashes survive quoting", back.SequenceEqual(new[] { "--user-data-dir=C:\\a b\\User Data", "--x=\"q\"", "C:\\dir\\" }), string.Join(" | ", back));
         }
