@@ -27,7 +27,6 @@ static class Widevine
 {
     /// Google's component id for the Widevine CDM (the same Chrome asks for).
     const string AppId = "oimompecagnajdejgnnjijobebaeigek";
-    const string DefaultService = "https://update.googleapis.com/service/update2/json";
     /// Marks a module this launcher installed and keeps up to date; a copy someone put there by hand has none.
     const string Managed = ".enki-managed";
     static readonly TimeSpan UpdateEvery = TimeSpan.FromDays(1);
@@ -203,7 +202,12 @@ static class Widevine
                 }
             },
         });
-        string service = Environment.GetEnvironmentVariable("ENKI_WIDEVINE_SERVICE") ?? DefaultService; // tests serve their own
+        // Google's service, over HTTPS. Only a test build (ENKI_TEST, never a release) reads the override.
+#if ENKI_TEST
+        string service = WidevineTrust.Service(Environment.GetEnvironmentVariable("ENKI_WIDEVINE_SERVICE"), true);
+#else
+        string service = WidevineTrust.DefaultService;
+#endif
         string text;
         using (var web = Updater.Client())
         {
@@ -231,8 +235,9 @@ static class Widevine
             foreach (Dictionary<string, object> u in (object[])((Dictionary<string, object>)check["urls"])["url"])
             {
                 string codebase = (string)u["codebase"];
-                // HTTPS only: the hash already proves the bytes, but nothing needs to travel in the clear.
-                if (codebase.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || service != DefaultService) p.Urls.Add(codebase + (string)package["name"]);
+                // HTTPS only (a test build may also use its local stand-in): the hash already proves
+                // the bytes, but nothing needs to travel in the clear.
+                if (WidevineTrust.DownloadAllowed(codebase, WidevineTrust.TestBuild)) p.Urls.Add(codebase + (string)package["name"]);
             }
         }
         catch { throw new Exception("unexpected answer from Google's update service"); }
@@ -255,13 +260,13 @@ static class Widevine
     }
 
     /// A valid Authenticode signature (WinVerifyTrust, chain to a trusted root, not revoked as far as
-    /// Windows can tell offline) whose signer is Google LLC.
+    /// Windows can tell offline) whose signer's Organization is exactly Google LLC (WidevineTrust).
     public static bool SignedByGoogle(string file, out string signer)
     {
         signer = "unsigned";
         try { signer = new X509Certificate(X509Certificate.CreateFromSignedFile(file)).Subject; }
         catch { return false; }
-        if (!signer.Contains("O=Google LLC")) return false;
+        if (!WidevineTrust.SignedByPublisher(signer)) return false;
         return WinTrust.Verify(file);
     }
 

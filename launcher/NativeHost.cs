@@ -6,8 +6,9 @@
 // offers (check now, and restart into a downloaded update), plus, since 0.8.6, whether Enki
 // Browser is the default browser (a registry read on this computer) and opening the Settings page
 // where the user makes it so (DefaultBrowser.cs), and protected video (Widevine.cs): its state,
-// and turning it on (a download from Google, only on the user's click) or off. Nothing else it
-// does goes over the network but the update check.
+// and turning it on or off. Only two things it does go over the network: the update check, and,
+// once the user turned protected video on (opt-in, never by default), the Widevine module's download
+// from Google and its daily check for a newer one (Widevine.cs: HTTPS, Google's SHA-256, Google's signature).
 //
 // The manifest names the launcher of the version that started the browser, so it is written at
 // every start; the registry entry pointing at it lives under HKCU\Software\Chromium, where Chromium

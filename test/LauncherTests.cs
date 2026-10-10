@@ -33,6 +33,7 @@ static class LauncherTests
         ArgsTests();
         RegistryTests();
         MigrationTests();
+        WidevineTrustTests();
         Console.WriteLine();
         Console.WriteLine(passed + "/" + (passed + failed) + " checks passed");
         return failed == 0 ? 0 : 1;
@@ -407,5 +408,50 @@ static class LauncherTests
             try { Directory.Delete(userData, true); } catch { }
             try { Directory.Delete(root, true); } catch { }
         }
+    }
+
+    // ------------------------------------------------------------------ protected video (WidevineTrust.cs)
+
+    static void WidevineTrustTests()
+    {
+        const string google = "CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US";
+        Check("Widevine: Google's real signer subject is accepted", WidevineTrust.SignedByPublisher(google));
+        Check("Widevine: O in any position, quoted, is accepted", WidevineTrust.SignedByPublisher("C=US, O=\"Google LLC\", CN=Google LLC"));
+        var spoofs = new Dictionary<string, string>
+        {
+            { "O=Google LLC Evil", "CN=Evil, O=Google LLC Evil, C=US" },
+            { "O=Google LLCX", "CN=Evil, O=Google LLCX" },
+            { "O=google llc (case)", "CN=Evil, O=google llc" },
+            { "O=Evil Google LLC", "CN=Evil, O=Evil Google LLC" },
+            { "OU=Google LLC", "CN=Evil, OU=Google LLC, O=Evil Inc" },
+            { "OU containing O=Google LLC", "CN=Evil, OU=\"x, O=Google LLC\", O=Evil Inc" },
+            { "CN containing O=Google LLC", "CN=\"O=Google LLC\", O=Evil Inc" },
+            { "CN containing it, no O", "CN=O=Google LLC" },
+            { "escaped comma in CN", "CN=Evil\\, O=Google LLC, O=Evil Inc" },
+            { "quoted O with more text", "CN=Evil, O=\"Google LLC, Evil\"" },
+            { "two O fields", "CN=Evil, O=Evil Inc, O=Google LLC" },
+            { "multi-valued RDN with a second O", "CN=Evil + O=Evil Inc, O=Google LLC" },
+            { "no O at all", "CN=Google LLC, C=US" },
+            { "unterminated quote", "CN=Evil, O=\"Google LLC" },
+            { "empty", "" },
+            { "null", null },
+        };
+        foreach (var s in spoofs) Check("Widevine: refuses signer " + s.Key, !WidevineTrust.SignedByPublisher(s.Value), s.Value ?? "null");
+
+        const string local = "http://127.0.0.1:5555/service";
+        Check("Widevine: a release build always asks Google over HTTPS", WidevineTrust.Service(local, false) == WidevineTrust.DefaultService
+            && WidevineTrust.Service("http://evil.example/service", false) == WidevineTrust.DefaultService);
+        Check("Widevine: a test build may use its local stand-in", WidevineTrust.Service(local, true) == local);
+        Check("Widevine: a test build may use any HTTPS service", WidevineTrust.Service("https://test.example/s", true) == "https://test.example/s");
+        Check("Widevine: a test build without the override asks Google", WidevineTrust.Service(null, true) == WidevineTrust.DefaultService);
+        bool threw = false;
+        try { WidevineTrust.Service("http://evil.example/service", true); } catch { threw = true; }
+        Check("Widevine: even a test build refuses plain HTTP to another computer", threw);
+        Check("Widevine: release downloads are HTTPS only", WidevineTrust.DownloadAllowed("https://dl.google.com/x/", false)
+            && !WidevineTrust.DownloadAllowed("http://dl.google.com/x/", false) && !WidevineTrust.DownloadAllowed("http://127.0.0.1:5555/pkg/", false)
+            && !WidevineTrust.DownloadAllowed("ftp://dl.google.com/x/", false) && !WidevineTrust.DownloadAllowed("not a url", false));
+        Check("Widevine: test downloads: HTTPS, or HTTP to this computer only", WidevineTrust.DownloadAllowed("http://127.0.0.1:5555/pkg/", true)
+            && !WidevineTrust.DownloadAllowed("http://dl.google.com/x/", true));
+        Check("Widevine: these unit tests run a release build of WidevineTrust", !WidevineTrust.TestBuild);
     }
 }
