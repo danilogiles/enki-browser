@@ -1,6 +1,6 @@
 // Enki Shields' global settings, opened from the panel's "Global settings".
 import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
-import { DOWNLOAD, check, compare, native, restart, status } from "./updates.js";
+import { DOWNLOAD, check, compare, native, restart, restartWithFallback, status } from "./updates.js";
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
 import { showWidevine } from "./widevine.js";
 
@@ -82,6 +82,7 @@ downloadUpdate.href = DOWNLOAD;
 function showUpdates(s, checked) {
   $("version").textContent = s.running ? `Enki Browser ${s.running}` : "Enki Browser";
   restartUpdate.hidden = true;
+  $("restart-help").hidden = true;
   downloadUpdate.hidden = true;
   if (s.updater && s.ready) {
     updateState.textContent = `Enki Browser ${s.ready} is downloaded and verified. Restart to use it; every window and tab comes back.`;
@@ -132,11 +133,7 @@ if (location.hash === "#check-updates") {
   checkUpdates.focus();
   checkUpdates.click();
 }
-restartUpdate.onclick = async () => {
-  restartUpdate.disabled = true;
-  updateState.textContent = "Restarting…";
-  await restart();
-};
+restartUpdate.onclick = () => restartWithFallback({ button: restartUpdate, state: updateState, help: $("restart-help") });
 
 // Re-open the first-run guide (welcome.html). Does not clear the once-only flag;
 // finishing or skipping still sends nothing out.

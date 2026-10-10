@@ -184,7 +184,15 @@ try {
   check("the running browser keeps its own version's files", chromes().length > 0 && chromes().every((p) => p.includes("\\app\\0.0.1\\")), `${chromes().length} processes in app\\0.0.1`);
   check("nothing existing was renamed, moved or rewritten", sha(launcher1) === before.hash && statSync(launcher1).mtimeMs === before.mtime && sha(stub) === before.stub);
 
-  await closeBrowser(browser);
+  // "Restart to update" in the same page: the update was installed by the native host, not by the
+  // launcher watching this browser, which 0.8.5 and 0.8.6 did not notice, so the click did nothing
+  // and the page stayed on "Restarting…".
+  await settings.click("#restart-update");
+  for (let i = 0; i < 120 && !(chromes().length > 0 && chromes().every((p) => p.includes("\\app\\0.0.2\\"))); i++) await sleep(500);
+  check("Shields' Restart to update restarts the browser into the update it installed",
+    chromes().length > 0 && chromes().every((p) => p.includes("\\app\\0.0.2\\")), lastLog());
+  browser = await connect(9451).catch(() => undefined);
+  if (browser) await closeBrowser(browser);
   browser = undefined;
   run(["--remote-debugging-port=9452", "about:blank"], { ENKI_BROWSER_NO_UPDATE: "1" });
   browser = await connect(9452);

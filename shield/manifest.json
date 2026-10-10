@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Enki Shield",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Enki Browser's Shields: what was blocked on each site, per-site switches, and a warning before known phishing sites. Everything is checked and kept on this device.",
   "minimum_chrome_version": "120",
   "background": { "service_worker": "background.js", "type": "module" },

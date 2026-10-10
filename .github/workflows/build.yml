@@ -42,6 +42,7 @@ jobs:
       # import defaults, compiled with the same csc as the build; the one-time default browser page.
       - run: node test/launcher-unit.mjs
       - run: node test/shield-welcome.mjs
+      - run: node test/restart-fallback.mjs
       - run: node build/build.mjs
         env:
           ENKI_SIGN_COMMAND: ${{ secrets.ENKI_SIGN_COMMAND }}
