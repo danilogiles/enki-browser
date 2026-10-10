@@ -65,11 +65,16 @@ static class Watcher
         {
             string installed = File.ReadAllText(Path.Combine(root, "current")).Trim();
             Version v;
-            if (Version.TryParse(installed, out v) && v > running
-                && File.Exists(Path.Combine(root, "app", installed, "EnkiBrowserLauncher.exe")))
+            if (!Version.TryParse(installed, out v))
+                Updater.Log(root, "restart: keeping " + running + "; current file is not a version (\"" + installed + "\")");
+            else if (v <= running)
+                Updater.Log(root, "restart: keeping " + running + "; no newer version installed (current is " + installed + ")");
+            else if (!File.Exists(Path.Combine(root, "app", installed, "EnkiBrowserLauncher.exe")))
+                Updater.Log(root, "restart: keeping " + running + "; " + installed + " is not fully installed");
+            else
                 return installed;
         }
-        catch { }
+        catch (Exception e) { Updater.Log(root, "restart: keeping " + running + "; could not read current: " + e.Message); }
         return null;
     }
 
