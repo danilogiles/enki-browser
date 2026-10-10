@@ -90,8 +90,8 @@ static class NativeHost
             else if (type == "restart")
             {
                 // The running browser's own launcher restarts it, as the tray's "Restart and update" does.
-                Watcher.RequestRestart(root);
-                reply = new Dictionary<string, object> { { "restarting", true } };
+                // false: no launcher is watching this browser, so nothing will restart it; the page says so.
+                reply = new Dictionary<string, object> { { "restarting", Watcher.RequestRestart(root) } };
             }
             else reply = Status(root, appDir, null);
         }
