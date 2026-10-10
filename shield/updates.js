@@ -65,3 +65,34 @@ export async function check() {
 export function restart() {
   return native({ type: "restart" });
 }
+
+export const RESTART_FALLBACK_MS = 10000;
+export const RESTART_HELP = "Didn't restart? Close every Enki window and reopen it.";
+
+/**
+ * "Restart to update", clicked. The browser closing takes this page with it; if it is still here
+ * after `ms` (or the launcher says nothing is watching), "Restarting…" gives way to a grey helper
+ * line under the button and the button comes back as "Try again", instead of hanging (0.8.5/0.8.6).
+ * `els`: { button, state, help }. Returns a promise for the shown outcome (tests).
+ */
+export function restartWithFallback(els, ask = restart, ms = RESTART_FALLBACK_MS, timer = setTimeout) {
+  const { button, state, help } = els;
+  button.disabled = true;
+  help.hidden = true;
+  state.textContent = "Restarting…";
+  return new Promise((resolve) => {
+    let done = false;
+    const fallback = () => {
+      if (done) return;
+      done = true;
+      state.textContent = "";
+      help.textContent = RESTART_HELP;
+      help.hidden = false;
+      button.textContent = "Try again";
+      button.disabled = false;
+      resolve("fallback");
+    };
+    timer(fallback, ms);
+    Promise.resolve(ask()).then((reply) => { if (!reply?.restarting) fallback(); }, fallback);
+  });
+}

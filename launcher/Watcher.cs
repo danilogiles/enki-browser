@@ -41,13 +41,36 @@ static class Watcher
 
     /// `EnkiBrowser.exe --enki-restart-to-update`: asks the running watcher to restart into the
     /// installed update, as clicking its notification does.
-    public static void RequestRestart(string root)
+    /// Returns false when no launcher is watching (the browser was not started through it).
+    public static bool RequestRestart(string root)
     {
         EventWaitHandle signal;
         if (EventWaitHandle.TryOpenExisting("EnkiBrowserRestart-" + Id(root), out signal))
+        {
             using (signal) signal.Set();
-        else
-            Updater.Log(root, "restart requested, but no running Enki Browser is watching for updates");
+            return true;
+        }
+        Updater.Log(root, "restart requested, but no running Enki Browser is watching for updates");
+        return false;
+    }
+
+    /// The installed version newer than `running`, read from `current` now. The watcher used to
+    /// know only what its own 15-minute check had seen, so an update installed by "Check for
+    /// updates" in Shields' settings (NativeHost, another process) or by another window's launcher
+    /// was invisible to it: "Restart to update" was refused as "no update is installed yet" and
+    /// the page stayed on "Restarting…" (0.8.5, 0.8.6).
+    internal static string InstalledUpdate(string root, Version running)
+    {
+        try
+        {
+            string installed = File.ReadAllText(Path.Combine(root, "current")).Trim();
+            Version v;
+            if (Version.TryParse(installed, out v) && v > running
+                && File.Exists(Path.Combine(root, "app", installed, "EnkiBrowserLauncher.exe")))
+                return installed;
+        }
+        catch { }
+        return null;
     }
 
     /// Runs until the browser started from `appDir` has closed. `switches` are the command-line
@@ -119,13 +142,10 @@ static class Watcher
                     try
                     {
                         Updater.CheckAndStage(root, appDir, force);
+                        ready = InstalledUpdate(root, running);
                         // The protected-video module, if the user turned it on: about once a day (Widevine.cs).
+                        // After the update is noted, so its failure cannot hide one.
                         Widevine.UpdateIfDue(root, appDir, userData);
-                        string installed = File.ReadAllText(Path.Combine(root, "current")).Trim();
-                        Version v;
-                        if (Version.TryParse(installed, out v) && v > running
-                            && File.Exists(Path.Combine(root, "app", installed, "EnkiBrowserLauncher.exe")))
-                            ready = installed;
                     }
                     catch (Exception e) { Updater.Log(root, "watch: " + e.Message); }
                     finally { Interlocked.Exchange(ref checking, 0); }
@@ -164,6 +184,7 @@ static class Watcher
         void RestartNow()
         {
             if (Restart) return;
+            if (ready == null) ready = InstalledUpdate(root, running);
             if (ready == null) { Updater.Log(root, "restart requested, but no update is installed yet"); return; }
             Updater.Log(root, "restarting into " + ready);
             if (tray != null) tray.Visible = false;
