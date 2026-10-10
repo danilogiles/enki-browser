@@ -3,6 +3,8 @@
 // Chrome installed on this machine (GitHub's Windows runners have one), so the module carries
 // Google's real signature; nothing of Google's is in the repository.
 //
+// Runs a test build of the launcher (ENKI_TEST) in a copy of out/EnkiBrowser; see below.
+//
 // Checks: a package whose hash differs from the service's answer is refused; a module not signed by
 // Google is refused; the genuine one installs into <User Data>\WidevineCdm\<version>; turning it off
 // removes it; and in the browser, "Turn on" → "Download from Google" → restart makes the browser
@@ -69,8 +71,25 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-const install = path.join(root, "out", "EnkiBrowser");
+// A release launcher only ever asks Google, over HTTPS (launcher/WidevineTrust.cs). The stand-in
+// needs a test launcher: a copy of the built install whose EnkiBrowserLauncher.exe is recompiled
+// with ENKI_TEST, which reads ENKI_WIDEVINE_SERVICE (HTTPS, or HTTP to this computer only). out/
+// itself is left as built, so nothing compiled for tests can reach a release artifact.
+const built = path.join(root, "out", "EnkiBrowser");
+const install = path.join(tmp, "EnkiBrowser");
+cpSync(built, install, { recursive: true });
 const appDir = path.join(install, "app", readFileSync(path.join(install, "current"), "utf8").trim());
+{
+  const windir = process.env.WINDIR ?? "C:\\Windows";
+  const csc = ["Framework64", "Framework"].map((f) => path.join(windir, "Microsoft.NET", f, "v4.0.30319", "csc.exe")).find(existsSync);
+  if (!csc) throw new Error("The .NET Framework C# compiler (csc.exe) was not found.");
+  // The update key is left empty: the test launcher can never accept an update (Updater fails closed).
+  const buildInfo = path.join(tmp, "BuildInfo.g.cs");
+  writeFileSync(buildInfo, 'static class UpdateKey { public const string Modulus = ""; public const string Exponent = ""; }\n');
+  const src = ["Launcher.cs", "Updater.cs", "NativeHost.cs", "Widevine.cs", "WidevineTrust.cs", "Migration.cs", "Watcher.cs", "ShellIdentity.cs", "Args.cs", "Common.cs", "Install.cs", "DefaultBrowser.cs"].map((f) => path.join(root, "launcher", f));
+  const refs = ["System.Windows.Forms.dll", "System.Drawing.dll", "System.Core.dll", "Microsoft.CSharp.dll", "System.Web.Extensions.dll", "System.IO.Compression.dll", "System.IO.Compression.FileSystem.dll"];
+  execFileSync(csc, ["/nologo", "/target:winexe", "/platform:x64", "/define:ENKI_TEST", ...refs.map((r) => `/r:${r}`), `/out:${path.join(appDir, "EnkiBrowserLauncher.exe")}`, ...src, buildInfo], { stdio: "inherit" });
+}
 const shieldId = JSON.parse(readFileSync(path.join(appDir, "version.json"), "utf8")).shieldExtensionId;
 const env = (userData) => ({ ...process.env, ENKI_BROWSER_USER_DATA: userData, ENKI_WIDEVINE_SERVICE: `${base}/service` });
 
