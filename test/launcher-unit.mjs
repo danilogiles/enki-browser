@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sources = [
   path.join(root, "test", "LauncherTests.cs"),
-  ...["Args.cs", "Common.cs", "DefaultBrowser.cs", "Migration.cs"].map((f) => path.join(root, "launcher", f)),
+  ...["Args.cs", "Common.cs", "DefaultBrowser.cs", "Migration.cs", "WidevineTrust.cs"].map((f) => path.join(root, "launcher", f)),
 ];
 const work = mkdtempSync(path.join(os.tmpdir(), "enki-launcher-unit-"));
 const exe = path.join(work, "LauncherTests.exe");
@@ -43,7 +43,7 @@ try {
     const src = (f) => path.join(root, "launcher", f);
     const programs = {
       stub: ["Stub.cs", "Args.cs", "Common.cs", "Install.cs", "DefaultBrowser.cs"].map(src),
-      launcher: ["Launcher.cs", "Updater.cs", "NativeHost.cs", "Migration.cs", "Watcher.cs", "ShellIdentity.cs", "Args.cs", "Common.cs", "Install.cs", "DefaultBrowser.cs"].map(src),
+      launcher: ["Launcher.cs", "Updater.cs", "NativeHost.cs", "Widevine.cs", "WidevineTrust.cs", "Migration.cs", "Watcher.cs", "ShellIdentity.cs", "Args.cs", "Common.cs", "Install.cs", "DefaultBrowser.cs"].map(src),
       setup: [path.join(root, "installer", "Setup.cs"), ...["Common.cs", "Install.cs", "DefaultBrowser.cs"].map(src)],
     };
     const programRefs = ["System.Windows.Forms.dll", "System.Drawing.dll", "Microsoft.CSharp.dll", "System.IO.Compression.dll", "System.IO.Compression.FileSystem.dll", ...refs];
