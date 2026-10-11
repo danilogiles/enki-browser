@@ -182,8 +182,8 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
   already sent, in *Ask* or *Act* mode — or, with Alt+Enter or the globe, searches DuckDuckGo.
   Typing an address just opens it. It speaks Portuguese, Spanish or English, following the browser.
   It is also the first tab when the browser opens.
-- **The address bar asks Enki:** a search opens a tab with Enki's answer, from the web and with
-  its sources; tables of numbers come as charts.
+- **Enki's answer page:** a question opens a tab with Enki's answer, from the web and with its
+  sources; tables of numbers come as charts. The address bar itself searches DuckDuckGo.
 - **A sober look:** neutral grey window chrome, light or dark following the operating system;
   Enki Home and the panel use the same quiet palette, and the panel lets you pick your own colours.
   Profiles from 0.3–0.5, which kept the old navy theme, are moved to it once (a backup of
@@ -203,7 +203,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 | Shields button | Right of the address bar: how many trackers and ads were blocked on the site and which, Shields down for one site, blocking level, scripts, cookies and "forget me when I close this site" | Enki Shield (`shield/`) |
 | Burn and shred | **Burn all data** (like DuckDuckGo's Fire Button) closes every tab and deletes history, cookies, site data, cache, download history and autofill, keeping passwords and bookmarks; **Shred this site** (like Brave's) does it for one site; optional burn every time the browser closes | Shields panel and its settings |
 | Malware sites | Blocked by uBlock's *Badware risks* and the URLhaus *Malicious URL Blocklist* | uBlock Origin Lite |
-| Address bar search | Enki: a search opens Enki's answer page, which searches the web and cites its sources. DuckDuckGo, Google, Bing and others are one click away in Settings → Search engine (suggestions while typing come from DuckDuckGo) | `config/initial_preferences.json` |
+| Address bar search | DuckDuckGo, with no suggestions while typing (nothing leaves until you press Enter). Google, Bing and others are one click away in Settings → Search engine | `config/initial_preferences.json` |
 | Connections | `http://` upgraded to `https://`, with a warning where a site has no HTTPS | same |
 | Third-party cookies | Blocked | same |
 | Startup | Your tabs come back, as you left them; a new tab is Enki Home. Off when *burn every time the browser closes* is on | `config/initial_preferences.json`; the launcher, for profiles made before 0.8.1 |
@@ -257,7 +257,7 @@ The build compiles Enki from `extension/`; to reuse one already built: `ENKI_DIS
 checks what a user would observe, not what the config says:
 
 - Chromium 153 starts; Enki runs with its fixed id; the blocker runs
-- Enki is the default search engine in `chrome://settings/search`, and the URL it builds opens Enki's answer page
+- DuckDuckGo is the default search engine in `chrome://settings/search`, and Enki's answer page (`?q=`) opens
 - `http://example.com` ends up on `https://`
 - ad and tracker scripts never load: refused, or replaced by uBlock's harmless stub
 - the same canvas drawing reads back differently on each load
@@ -282,6 +282,11 @@ a real task inside Enki Browser (navigate to Wikipedia, read the page, answer).
 
 Honest list; each is on the roadmap.
 
+- **Profiles created by 0.7.2–0.8.8 search with the Enki panel from the address bar.** That default
+  could not answer in Incognito windows, where a search ended on a "blocked" page. New profiles use
+  DuckDuckGo. An existing profile keeps its default (Chromium protects it, so Enki Browser does not
+  rewrite it): open `chrome://settings/searchEngines`, click ⋮ next to DuckDuckGo, then
+  *Make default* — the same steps as *Switch back to DuckDuckGo* in Shields' settings.
 - **Phishing protection is list-based.** Enki Shield blocks what public lists know about, updated
   twice a day; Google's Safe Browsing also uses signals no public list has, so a brand-new phishing
   site can reach you before it is listed. Be careful with links from email and messages.
