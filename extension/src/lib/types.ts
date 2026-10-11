@@ -47,6 +47,8 @@ export type StreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "thinking_delta"; text: string }
   | { type: "tool_call"; call: ToolCallPart }
+  /** A web source the provider's own search used (e.g. url_citation annotations). */
+  | { type: "source"; url: string; title?: string }
   | { type: "usage"; inputTokens: number; outputTokens: number }
   | { type: "done"; stopReason: StopReason };
 

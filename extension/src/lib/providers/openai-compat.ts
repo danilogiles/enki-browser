@@ -171,6 +171,10 @@ export class OpenAICompatProvider implements ChatProvider {
         if (typeof reasoning === "string" && reasoning) {
           yield { type: "thinking_delta", text: reasoning };
         }
+        for (const a of delta.annotations ?? []) {
+          const c = a?.url_citation;
+          if (a?.type === "url_citation" && typeof c?.url === "string") yield { type: "source", url: c.url, title: c.title };
+        }
         for (const tc of delta.tool_calls ?? []) {
           const idx = tc.index ?? 0;
           const cur = calls.get(idx) ?? { id: "", name: "", args: "" };
@@ -234,6 +238,8 @@ type OpenAIChunk = {
       content?: string | null;
       reasoning_content?: string;
       reasoning?: string;
+      /** OpenAI / OpenRouter web search citations. */
+      annotations?: Array<{ type?: string; url_citation?: { url?: string; title?: string } }>;
       tool_calls?: Array<{
         index?: number;
         id?: string;
