@@ -19,6 +19,7 @@ import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
+import { getSearchEngine, onSearchEngineChange, setSearchEngine, type SearchEngine } from "../lib/search";
 
 type Props = {
   settings: Settings;
@@ -131,6 +132,8 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
         </button>
         <span className="font-semibold">Settings</span>
       </header>
+
+      <SearchEngineControl />
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
@@ -631,6 +634,52 @@ function CustomColors({ selected, value, onChange }: { selected: boolean; value:
       <button type="button" onClick={() => onChange(DEFAULT_CUSTOM_THEME)} className="mt-2 text-xs text-zinc-400 underline hover:text-zinc-200">
         {selected ? "Reset to the sober dark start" : "Use your own colors"}
       </button>
+    </div>
+  );
+}
+
+/**
+ * "Search engine: Enki AI | DuckDuckGo" (0.8.9). Same control as Shields' settings; both write
+ * lib/search.ts's setting, which applies at once (no Save, no restart). Unset reads as DuckDuckGo.
+ */
+function SearchEngineControl() {
+  const [engine, setEngine] = useState<SearchEngine | undefined>();
+  const [toast, setToast] = useState(false);
+  useEffect(() => {
+    void getSearchEngine().then(setEngine);
+    return onSearchEngineChange(setEngine);
+  }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(false), 2000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  const choose = async (v: SearchEngine) => {
+    if (v === (engine ?? "ddg")) return;
+    await setSearchEngine(v);
+    setEngine(v);
+    setToast(true);
+  };
+  const current = engine ?? "ddg";
+  return (
+    <div className="relative flex items-center gap-3 border-b border-ink-700 px-4 py-3 text-sm">
+      <div className="flex-1">
+        <div className="text-zinc-200">Search engine</div>
+        <div className="text-xs text-zinc-500">Tip: start with @enki or @ddg to choose for one search</div>
+      </div>
+      <div role="radiogroup" aria-label="Search engine" className="flex rounded-lg border border-ink-700 p-0.5">
+        {([["enki", "Enki AI"], ["ddg", "DuckDuckGo"]] as const).map(([v, label]) => (
+          <button key={v} type="button" role="radio" aria-checked={current === v} onClick={() => void choose(v)}
+            className={`rounded-md px-3 py-1 text-xs ${current === v ? "bg-enki-500 font-semibold text-ink-950" : "text-zinc-400 hover:text-zinc-100"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {toast && (
+        <div role="status" className="absolute right-4 top-full z-10 mt-1 rounded-md border border-ink-700 bg-ink-800 px-3 py-1.5 text-xs text-zinc-100 shadow">
+          Search engine changed
+        </div>
+      )}
     </div>
   );
 }

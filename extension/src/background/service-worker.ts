@@ -3,6 +3,8 @@
  * (which stays alive while open); the worker only wires up how the panel gets opened.
  */
 
+import { handleExternalMessage } from "../lib/search";
+
 const PANEL_PATH = "src/sidepanel/index.html";
 const hasSidePanel = typeof chrome.sidePanel !== "undefined";
 
@@ -29,6 +31,13 @@ async function openPanel(windowId: number | undefined): Promise<void> {
   }
   await chrome.windows.create({ url, type: "popup", width: 440, height: 760 });
 }
+
+// Enki Shield's "Search engine" switch reads and writes Enki's setting through here. Only Shield's
+// id is accepted, and only the two search-engine messages (lib/search.ts).
+chrome.runtime.onMessageExternal?.addListener((msg, sender, sendResponse) => {
+  handleExternalMessage(msg, sender).then(sendResponse, () => sendResponse({ ok: false, error: "failed" }));
+  return true;
+});
 
 chrome.runtime.onInstalled.addListener(enablePanelOnActionClick);
 chrome.runtime.onStartup.addListener(enablePanelOnActionClick);
