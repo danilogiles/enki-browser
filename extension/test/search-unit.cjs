@@ -102,6 +102,22 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     }
     assert.equal(io.engine, 'ddg'); assert.equal(io.pending, true); assert.equal(io.just, 0);
   });
+  await check('non-Shield senders cannot enable Enki, clear pending, or set the one-shot flag', async () => {
+    const io = { engine: 'ddg', pending: true, just: 0, writes: [],
+      get: async () => io.engine, setEngine: async (v) => { io.writes.push(v); io.engine = v; }, getPending: async () => io.pending,
+      setPending: async (v) => { io.writes.push('pending:' + v); io.pending = v; }, setJustSetUp: async () => { io.just++; } };
+    const senders = [
+      { id: 'abcdefghijklmnopabcdefghijklmnop' },                       // another extension
+      { id: S.SHIELD_EXTENSION_ID.toUpperCase() },                       // look-alike id
+      { url: 'https://evil.example/', origin: 'https://evil.example' },  // web origin, no id
+      { origin: 'https://evil.example', id: undefined },
+      {}, null, undefined,
+    ];
+    for (const sender of senders) for (const msg of [{ type: 'enki:getSearchEngine', incognitoAllowed: true }, { type: 'enki:setSearchEngine', value: 'enki' }]) {
+      assert.deepEqual(await S.handleExternalMessage(msg, sender, io), { ok: false, error: 'forbidden' }, JSON.stringify([sender, msg]));
+    }
+    assert.equal(io.engine, 'ddg'); assert.equal(io.pending, true); assert.equal(io.just, 0); assert.deepEqual(io.writes, []);
+  });
   await check('search.html one-shot "AI search is set up": shown once, then cleared', async () => {
     let v = true; const io = { get: async () => v, clear: async () => { v = undefined; } };
     assert.equal(await S.takeJustSetUp(io), true);
