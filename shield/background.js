@@ -3,6 +3,20 @@ import "./burn.js";
 import "./menu.js";
 import { welcomeOnce } from "./default-browser.js";
 import { native } from "./updates.js";
+import { INCOGNITO } from "./sites.js";
+import { enforceIncognito, listenExternal, reminderDue } from "./search-engine.js";
+
+// Address-bar AI search (search.html): Enki may ask whether Shield runs in Incognito, and the
+// choice falls back to DuckDuckGo whenever it does not.
+if (!INCOGNITO) {
+  listenExternal();
+  void enforceIncognito().catch((e) => console.warn(`[shield] search check: ${e.message}`));
+  // 24 h after choosing Enki AI, if the address bar never reached search.html: open Shields'
+  // settings once, where the reminder card for "Make Enki your default search" shows.
+  chrome.alarms.onAlarm.addListener(async (a) => {
+    if (a.name === "search-reminder" && (await reminderDue())) await chrome.tabs.create({ url: chrome.runtime.getURL("options.html#search") });
+  });
+}
 // Enki Shield: warns before a known phishing site opens.
 //
 // Privacy is the point of doing this locally. Google Safe Browsing (which ungoogled-chromium
@@ -148,8 +162,16 @@ function pathHit(list, url) {
   return false;
 }
 
-async function allowed(host) {
+// "Continue anyway" hosts. In Incognito they stay in this worker's memory (no site names in storage).
+const privateAllowed = [];
+async function allowedHosts() {
+  if (INCOGNITO) return privateAllowed;
   const { "shield:allowed": hosts = [] } = await chrome.storage.session.get("shield:allowed");
+  return hosts;
+}
+
+async function allowed(host) {
+  const hosts = await allowedHosts();
   return hosts.includes(host);
 }
 
@@ -186,9 +208,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type === "shield:allow" && typeof msg.host === "string") {
       // The user chose to continue: this host only, this browser session only. An allow rule of
       // higher priority lets it through the block rule; both vanish when the browser closes.
-      const { "shield:allowed": hosts = [] } = await chrome.storage.session.get("shield:allowed");
+      const hosts = await allowedHosts();
       if (!hosts.includes(msg.host)) hosts.push(msg.host);
-      await chrome.storage.session.set({ "shield:allowed": hosts });
+      if (!INCOGNITO) await chrome.storage.session.set({ "shield:allowed": hosts });
       const id = 1000 + hosts.indexOf(msg.host);
       await chrome.declarativeNetRequest.updateSessionRules({
         removeRuleIds: [id],

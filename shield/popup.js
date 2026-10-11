@@ -1,5 +1,5 @@
 // The Shields panel: the button right of the address bar, as Brave's lion is.
-import { BADGE, LEVELS, blocker, blockerId, forgetList, setForget, setSite, sites } from "./sites.js";
+import { BADGE, INCOGNITO, LEVELS, blocker, blockerId, forgetList, setForget, setSite, sites } from "./sites.js";
 
 const $ = (id) => document.getElementById(id);
 const DOCS = "https://github.com/danilogiles/enki-browser/blob/main/";
@@ -44,7 +44,9 @@ async function render() {
   select.disabled = !known;
 
   // What was blocked on this tab since the page loaded.
-  const record = ((await chrome.storage.session.get("shields:tabs"))["shields:tabs"] ?? {})[tab.id];
+  const record = INCOGNITO
+    ? await chrome.runtime.sendMessage({ type: "shields:tab", tabId: tab.id })
+    : ((await chrome.storage.session.get("shields:tabs"))["shields:tabs"] ?? {})[tab.id];
   const count = record?.host === host ? record.count : 0;
   $("count").textContent = String(count);
   $("count-label").textContent = count === 1 ? "tracker, ad, or more blocked" : "trackers, ads, and more blocked";

@@ -34,11 +34,77 @@
     .modal .buttons .pill { padding: 10px; }
     .modal .hint { color: var(--muted); font-size: 11.5px; text-align: center; margin: 10px 0 0; }
     kbd { font: 11px ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
+    /* Search (mocks 0.8.9-search/v2: 05 checklist, 07 reminder, 08/08b paused, 09 selector states). */
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .seg button { background: none; border: 0; padding: 7px 18px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+    .seg button[aria-checked="true"] { background: var(--accent); color: #06131c; font-weight: 600; }
+    .seg.dis { opacity: .45; } .seg.dis button { cursor: default; }
+    #search-card .ln { font-size: 12px; margin: 8px 0 0; }
+    #search-card .lab { font-weight: 600; margin: 12px 0 8px; }
+    #search-card .notice { border: 1px solid #2e4a5a; border-radius: 12px; padding: 14px 16px; margin: 12px 0 4px; }
+    #search-card .notice h3 { font-size: 14px; margin: 0 0 4px; }
+    #search-card .acts { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    #search-card .steps-box { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
+    .cl { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 8px; }
+    .it { display: flex; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+    .it.done { border-color: #1f4a3a; }
+    .ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #5f6468; flex: none; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+    .it.done .ck { background: #22c55e; border-color: #22c55e; color: #06131c; }
+    .it h3 { font-size: 14px; margin: 0 0 3px; } .it .bd { flex: 1; min-width: 0; }
+    .it .tag { font-size: 12px; font-weight: 600; color: #22c55e; margin-left: 8px; }
+    .it:not(.done) .tag { display: none; }
+    .it ol { margin: 6px 0 0 18px; padding: 0; font-size: 13px; line-height: 1.75; }
+    .it .url { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
+    .it .url input { flex: 1; height: 30px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 12px ui-monospace, monospace; padding: 0 10px; }
+    #search-card code { font: 12px ui-monospace, monospace; background: #2a2c2c; padding: 1px 5px; border-radius: 5px; }
+    #search-card [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <h1>Enki Shields</h1>
   <p class="state">Defaults for every site. Change one site from the Shields button next to the address bar.</p>
+  <h2>Search</h2>
+  <div class="card" id="search-card" style="padding:4px 18px 14px">
+    <div id="search-paused" class="notice" hidden>
+      <h3>AI search is paused: Enki Shield isn't allowed in Incognito.</h3>
+      <div class="acts">
+        <button id="search-resume" type="button" class="pill" style="flex:0 0 auto;padding:6px 14px">Turn it back on</button>
+        <button id="search-switch" type="button" class="pill" style="flex:0 0 auto;padding:6px 14px" aria-expanded="false">Switch back to DuckDuckGo ▾</button>
+      </div>
+      <div id="search-switch-help" class="steps-box" hidden>Open <code>chrome://settings/searchEngines</code>, click ⋮ next to DuckDuckGo, then Make default</div>
+    </div>
+    <div id="search-reminder" class="notice" hidden>
+      <h3>AI search isn't set up yet</h3>
+      <span class="fixed">Make Enki your default search to ask from the address bar.</span>
+      <div class="acts">
+        <button id="reminder-show" type="button" class="pill" style="flex:0 0 auto;padding:6px 14px">Show me how</button>
+        <button id="reminder-ddg" type="button" class="pill" style="flex:0 0 auto;padding:6px 14px">Use DuckDuckGo</button>
+      </div>
+    </div>
+    <div class="lab" id="search-label">Search engine</div>
+    <div id="search-seg" class="seg" role="radiogroup" aria-labelledby="search-label">
+      <button type="button" role="radio" data-engine="enki" aria-checked="false">Enki AI</button>
+      <button type="button" role="radio" data-engine="ddg" aria-checked="true">DuckDuckGo</button>
+    </div>
+    <p id="search-finish" class="ln" hidden><button id="search-finish-link" type="button" class="link" style="padding:0;font-size:12px" aria-expanded="false"></button></p>
+    <p id="search-changed" class="ln fixed" role="status" aria-live="polite" hidden>Search engine changed</p>
+    <p id="search-state" class="ln fixed" role="status" aria-live="polite" hidden></p>
+    <div id="search-checklist" class="cl" hidden>
+      <div id="check-incognito" class="it"><span class="ck" aria-hidden="true">✓</span><div class="bd">
+        <h3>Allow Enki Shield in Incognito<span class="tag">Done</span></h3>
+        <span class="fixed">So private windows always search with DuckDuckGo.</span>
+        <div class="acts" style="margin-top:8px"><button id="open-incognito" type="button" class="pill" style="flex:0 0 auto;padding:4px 12px">Open Shield details</button></div>
+      </div></div>
+      <div id="check-default" class="it"><span class="ck" aria-hidden="true">✓</span><div class="bd">
+        <h3>Make Enki your default search<span class="tag">Done</span></h3>
+        <p class="steps-line" style="margin:6px 0 0;font-size:13px;line-height:1.9">Open <code>chrome://settings/searchEngines</code> › Add (Site search) › Name: Enki, Shortcut: enki, URL:</p>
+        <div class="url"><input id="search-url" readonly aria-label="Search engine URL"><button id="copy-search-url" type="button" class="pill" style="flex:0 0 auto;padding:4px 12px">Copy</button></div>
+        <p style="margin:0 0 4px;font-size:13px;line-height:1.9">› Add, then ⋮ next to Enki › Make default</p>
+        <span class="fixed">Checks itself after your first search.</span>
+      </div></div>
+    </div>
+    <p id="search-tip" class="ln" hidden>Tip: start with @enki or @ddg to choose for one search</p>
+  </div>
   <h2>Everywhere</h2>
   <div class="card">
     <label class="row"><span class="grow">Block trackers &amp; ads</span><select id="level" aria-label="Default blocking level"></select></label>

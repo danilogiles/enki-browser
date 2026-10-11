@@ -49,7 +49,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
 // When the browser opens with "burn when the browser closes" on, wipe what the last session left
 // (the service worker's first run in a session: session storage starts empty).
-chrome.storage.session.get("shields:session").then(async (v) => {
+// Not from the Incognito instance (split): opening a private window is not a new browser session.
+if (!chrome.extension.inIncognitoContext) chrome.storage.session.get("shields:session").then(async (v) => {
   if (v["shields:session"]) return;
   await chrome.storage.session.set({ "shields:session": Date.now() });
   if ((await chrome.storage.local.get(AUTO_BURN))[AUTO_BURN] === true) {

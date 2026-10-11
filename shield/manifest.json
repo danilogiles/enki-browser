@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Enki Shield",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Enki Browser's Shields: what was blocked on each site, per-site switches, and a warning before known phishing sites. Everything is checked and kept on this device.",
   "minimum_chrome_version": "120",
   "background": { "service_worker": "background.js", "type": "module" },
@@ -11,6 +11,7 @@
     "default_icon": { "16": "icons/shield16.png", "32": "icons/shield32.png" }
   },
   "icons": { "16": "icons/shield16.png", "32": "icons/shield32.png", "48": "icons/shield48.png", "128": "icons/shield128.png" },
+  "incognito": "split",
   "options_page": "options.html",
   "permissions": ["declarativeNetRequest", "webNavigation", "webRequest", "tabs", "storage", "alarms", "contentSettings", "browsingData", "nativeMessaging", "contextMenus"],
   "host_permissions": ["<all_urls>"],

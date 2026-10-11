@@ -146,3 +146,82 @@ $("show-guide").onclick = () => {
 // Protected video (widevine.js).
 await showWidevine($, native, restart);
 document.documentElement.dataset.widevine = "ready"; // tests wait for this before reading or clicking
+
+// Search engine for the address bar (search.html). Enki owns the choice; Shield gates it on
+// "Allow in Incognito", since the address bar cannot be switched back by code.
+// States follow Ink's mocks (0.8.9-search/v2): (a) setup n of 2, (b) Enki AI on + tip, (c) disabled.
+await (async () => {
+  const { CHOSEN_AT, PAUSED, REMINDED, SETUP_DONE, enforceIncognito, getEngine, markChosen, reminderDue, setEngine } = await import("./search-engine.js");
+  const seg = $("search-seg");
+  const radios = [...seg.querySelectorAll("button")];
+  const url = chrome.runtime.getURL("search.html") + "?q=%s";
+  $("search-url").value = url;
+  $("copy-search-url").onclick = async () => { await navigator.clipboard.writeText(url); $("copy-search-url").textContent = "Copied"; };
+  $("open-incognito").onclick = () => chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+  let openList = false;
+  let wantEnki = false; // chosen on this page; Enki keeps the real intent
+  let changedTimer = null;
+  let wasActive = null;
+  const changed = () => {
+    $("search-changed").hidden = false;
+    clearTimeout(changedTimer);
+    changedTimer = setTimeout(() => { $("search-changed").hidden = true; }, 2000);
+  };
+  $("search-finish-link").onclick = () => { openList = !openList; void show(); };
+  $("search-resume").onclick = () => void choose("enki").then(() => $("open-incognito").click());
+  $("search-switch").onclick = async () => {
+    const help = $("search-switch-help");
+    help.hidden = !help.hidden;
+    $("search-switch").setAttribute("aria-expanded", String(!help.hidden));
+    $("search-switch").textContent = `Switch back to DuckDuckGo ${help.hidden ? "▾" : "▴"}`;
+  };
+  $("reminder-show").onclick = () => { openList = true; $("search-reminder").hidden = true; void show(); };
+  $("reminder-ddg").onclick = async () => { $("search-reminder").hidden = true; await choose("ddg"); };
+
+  async function choose(engine) {
+    // Enki owns the intent and the choice: it turns Enki AI on once both steps are done.
+    if (engine === "enki") { openList = wantEnki = true; await setEngine("enki").catch(() => {}); await markChosen(); }
+    else {
+      openList = wantEnki = false;
+      const before = await getEngine();
+      await setEngine("ddg").catch(() => {});
+      await chrome.storage.local.remove([PAUSED, CHOSEN_AT]);
+      if (before === "enki") changed();
+    }
+    await show();
+  }
+  for (const r of radios) r.onclick = () => { if (!seg.classList.contains("dis")) void choose(r.dataset.engine); };
+
+  async function show() {
+    await enforceIncognito().catch(() => {});
+    const engine = await getEngine();
+    const incognito = await chrome.extension.isAllowedIncognitoAccess();
+    const local = await chrome.storage.local.get([PAUSED, SETUP_DONE]);
+    const setupDone = local[SETUP_DONE] === true;
+    const done = Number(incognito) + Number(setupDone);
+    const active = engine === "enki" && done === 2;
+    if (wasActive === false && active) changed();
+    wasActive = active;
+    const off = engine === null;
+    seg.classList.toggle("dis", off);
+    for (const r of radios) { r.disabled = off; r.setAttribute("aria-checked", String(r.dataset.engine === (active ? "enki" : "ddg"))); }
+    $("search-state").hidden = !off;
+    $("search-state").textContent = "Turn on Enki to use AI search";
+    const inSetup = !off && done < 2 && (wantEnki || engine === "enki" || local[PAUSED] === true);
+    $("search-finish").hidden = !inSetup;
+    $("search-finish-link").textContent = `Finish setup (${done} of 2 done) ${openList ? "▾" : "›"}`;
+    $("search-finish-link").setAttribute("aria-expanded", String(openList));
+    $("search-checklist").hidden = !(inSetup && openList);
+    $("check-incognito").classList.toggle("done", incognito);
+    $("check-default").classList.toggle("done", setupDone);
+    $("search-tip").hidden = !active;
+    $("search-paused").hidden = !(local[PAUSED] === true && engine === "ddg");
+    if (inSetup && await reminderDue()) {
+      $("search-reminder").hidden = false; // shown once
+      await chrome.storage.local.set({ [REMINDED]: true });
+    }
+    document.documentElement.dataset.search = "ready";
+  }
+  window.addEventListener("focus", () => void show());
+  await show();
+})();

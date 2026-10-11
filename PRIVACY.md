@@ -25,6 +25,7 @@ included (`extension/`).
 | Pages Enki reads for you (`read_url`) | The website itself | When Enki reads a source | Like opening the page yourself, without your cookies for that request |
 | Requests to apps you connect (Jira, Linear, Notion, Sentry, GitHub, or other MCP servers) | That app | Only after you connect it in Settings → Connections, and only when Enki uses it for your request | Disconnect any app at any time; changes in an app wait for your confirmation unless you allow that tool |
 | Your address bar typing, for suggestions | DuckDuckGo's suggestion service | While you type in the address bar | Change or turn off suggestions in the browser's settings |
+| Your address bar search, when Enki AI is your search engine | Nothing by itself: Enki Shield's search page (`search.html`) runs on this device, reads only the search words, and only after you press Enter. It then opens DuckDuckGo with just the words (`?q=`), or Enki's answer page, which sends them to your AI provider as above. In Incognito it always opens DuckDuckGo | Choose *Enki AI* or *DuckDuckGo* in Shields' settings, or start a search with `@ddg` or `@enki` for that search only |
 | Nothing from voice input. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
 | Update checks | GitHub (the browser's release page) | About every two hours while the browser is open, and when you click *Check for updates* (in Enki's Settings › About, the Shields popup, the Shields button's right-click menu or Shields' settings; on Windows). On macOS and Linux, only when you click it: one request for the latest release's number | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
 | Protected video (Widevine), only if you turn it on (Windows) | Google (`update.googleapis.com` and Google's download servers) | When you click *Download from Google* in Shields' settings, then about once a day to keep it current. The request names the module, your Windows version and Enki Browser's Chromium version; no cookies, nothing about you or the sites you visit | *Turn off* in Shields' settings removes the module and stops the requests. Google's terms apply to the module |
@@ -43,6 +44,7 @@ third-party cookies, known trackers and ads, and the local network address WebRT
 | Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by your account: by Windows (in the portable version too), by the login keychain on macOS, by the system keyring on Linux |
 | Your voice, when you use Enki's microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
+| Shields' records in Incognito windows (what was blocked, per-site switches, "continue anyway" sites) | memory of Shield's Incognito half, until the last private window closes | Never written to storage or disk |
 | History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker; macOS: FileVault, in System Settings → Privacy & Security) to protect them if someone gets your disk |
 
 Whether Enki Browser is your default browser (Windows) is read from the registry on your computer,
@@ -65,6 +67,22 @@ ungoogled-chromium removes Google's background services: no sign-in, sync, Safe 
 lookups, crash reports, usage statistics or field trials are sent to Google. If you choose
 Google as a search engine or Gemini as Enki's provider, those requests go to Google like any
 site you use.
+
+## What Chromium itself does
+
+Some requests come from Chromium's own pages, not from Enki or Shield:
+
+- Opening `chrome://settings/searchEngines` makes Chromium fetch the icons of its built-in search
+  engines, from `bing.com` and `yahoo.com` among others. Those sites see your IP address and that
+  the page was opened; nothing you search for is sent. Enki never opens that page for you; we plan
+  to remove these requests in Enki Browser's own Chromium build.
+
+Known issue (until that build): to use Enki AI from the address bar, Enki Shield must be allowed
+in Incognito, because Chromium's default search engine cannot be changed by an extension. If you
+turn *Allow in Incognito* off later, Enki switches its choice back to DuckDuckGo and Shields'
+settings show *AI search is paused*; the address bar keeps pointing at Shield's search page until
+you choose *Turn it back on* or make DuckDuckGo the default again in
+`chrome://settings/searchEngines` (⋮ next to DuckDuckGo, then *Make default*).
 
 ## Children
 
