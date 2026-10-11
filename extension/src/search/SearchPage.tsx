@@ -46,7 +46,7 @@ export function SearchPage() {
       location.replace(ddgUrl(q));
       return;
     }
-    document.title = q;
+    document.title = `${q} - Enki`;
     abort.current?.abort();
     const ctl = new AbortController();
     abort.current = ctl;
@@ -95,7 +95,7 @@ export function SearchPage() {
           <a href={settingsUrl()} onClick={(e) => { e.preventDefault(); void chrome.tabs.create({ url: settingsUrl() }); }}>Change search engine</a>
         </nav>
       </header>
-      <main className="ans" aria-live="polite">
+      <main className={state.phase === "error" ? "ans err" : "ans"} aria-live="polite">
         <Markdown remarkPlugins={[remarkGfm]} {...safeMarkdownProps}>{state.text}</Markdown>
         {state.phase === "streaming" && <span className="cur" aria-hidden />}
         {state.phase === "error" && <ErrorNotice error={state.error ?? describeProviderError("")} query={state.query ?? ""} rerun={(q) => void run(q)} />}
@@ -130,13 +130,13 @@ function ErrorNotice({ error, query, rerun }: { error: ProviderErrorView; query:
   const a = searchErrorActions(query, { assign: (u) => location.assign(u), rerun });
   return (
     <div className="notice" role="alert">
-      <p>
+      <p className="er-text">
         {error.text}
         {error.kind === "auth" && (
           <> <a href={settingsUrl()} onClick={(e) => { e.preventDefault(); void chrome.tabs.create({ url: settingsUrl() }); }}>Open Settings</a></>
         )}
-        {error.code && <span className="code"> HTTP {error.code}</span>}
       </p>
+      {error.code && <p className="code">HTTP {error.code}</p>}
       <div className="actions">
         <button type="button" className="btn primary" onClick={a.searchDdg}>Search on DuckDuckGo</button>
         <button type="button" className="btn" onClick={a.tryAgain}>Try again</button>
