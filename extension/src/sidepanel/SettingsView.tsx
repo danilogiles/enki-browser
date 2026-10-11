@@ -19,7 +19,7 @@ import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
-import { getSearchEngine, onSearchEngineChange, setSearchEngine, type SearchEngine } from "../lib/search";
+import { chooseEnkiEngine, getSearchEngine, onSearchEngineChange, setSearchEngine, SHIELD_EXTENSIONS_PAGE, type EnkiChoiceResult, type SearchEngine } from "../lib/search";
 
 type Props = {
   settings: Settings;
@@ -645,6 +645,7 @@ function CustomColors({ selected, value, onChange }: { selected: boolean; value:
 function SearchEngineControl() {
   const [engine, setEngine] = useState<SearchEngine | undefined>();
   const [toast, setToast] = useState(false);
+  const [blocked, setBlocked] = useState<Exclude<EnkiChoiceResult, "enabled"> | null>(null);
   useEffect(() => {
     void getSearchEngine().then(setEngine);
     return onSearchEngineChange(setEngine);
@@ -656,13 +657,20 @@ function SearchEngineControl() {
   }, [toast]);
   const choose = async (v: SearchEngine) => {
     if (v === (engine ?? "ddg")) return;
-    await setSearchEngine(v);
+    if (v === "enki") {
+      const r = await chooseEnkiEngine({ send: (id, msg) => chrome.runtime.sendMessage(id, msg), set: setSearchEngine });
+      if (r !== "enabled") { setToast(false); setBlocked(r); return; }
+    } else {
+      await setSearchEngine(v);
+    }
+    setBlocked(null);
     setEngine(v);
     setToast(true);
   };
   const current = engine ?? "ddg";
   return (
-    <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3 text-sm">
+    <div className="border-b border-ink-700 px-4 py-3 text-sm">
+    <div className="flex items-center gap-3">
       <div className="flex-1">
         <div className="text-zinc-200">Search engine</div>
         <div className="text-xs text-zinc-500">Tip: start with @enki or @ddg to choose for one search</div>
@@ -678,6 +686,20 @@ function SearchEngineControl() {
       </div>
         <span role="status" aria-live="polite" className="h-4 text-xs text-enki-400">{toast ? "Search engine changed" : ""}</span>
       </div>
+    </div>
+    {blocked === "no-shield" && <p role="alert" className="mt-2 text-xs text-amber-400">Turn on Enki Shield to use AI search</p>}
+    {blocked === "needs-incognito" && (
+      <ol role="alert" className="mt-2 space-y-2 rounded-md border border-ink-700 bg-ink-800/60 p-3 text-xs">
+        <li>
+          <div className="text-zinc-200">1. Allow in Incognito for Enki Shield</div>
+          <div className="text-zinc-500">So private windows always search with DuckDuckGo</div>
+          <button type="button" onClick={() => void chrome.tabs.create({ url: SHIELD_EXTENSIONS_PAGE })}
+            className="mt-1 rounded-md border border-ink-700 px-2 py-1 text-enki-400 hover:bg-ink-800">Open Enki Shield settings</button>
+        </li>
+        {/* Placeholder: Blink/Ink finalize this step's wording and action. */}
+        <li className="text-zinc-200">2. Make Enki your default search</li>
+      </ol>
+    )}
     </div>
   );
 }

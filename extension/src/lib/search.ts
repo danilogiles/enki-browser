@@ -58,11 +58,6 @@ export function buildSearchRequest(model: string, query: string, maxTokens: numb
   };
 }
 
-/** Auth or rate-limit failures send the user to DuckDuckGo instead of a dead end. */
-export function isFallbackError(message: string): boolean {
-  return /\b(401|403|429)\b|unauthori[sz]ed|invalid.*key|api key|rate.?limit|quota|too many requests/i.test(message);
-}
-
 /** Links in answers: http(s)/mailto only. Anything else (javascript:, data:, chrome:) is dropped. */
 export function safeHref(href: string | undefined | null): string | undefined {
   if (!href) return undefined;
@@ -170,3 +165,28 @@ export function describeProviderError(raw: string): ProviderErrorView {
     return { kind: "network", text: "Couldn't reach your AI provider. Check your connection." };
   return { kind: "other", code, text: "Something went wrong with your AI provider." };
 }
+
+export type EnkiChoiceResult = "enabled" | "needs-incognito" | "no-shield";
+
+/**
+ * Choosing "Enki AI" in the panel. Private windows must keep searching with DuckDuckGo, and that is
+ * Shield's job there, so Enki AI is only switched on once Shield confirms it may run in incognito.
+ * Otherwise the setting stays DuckDuckGo. (Shield's own switch has already checked this.)
+ */
+export async function chooseEnkiEngine(io: {
+  send: (extensionId: string, msg: unknown) => Promise<unknown>;
+  set: (v: SearchEngine) => Promise<void>;
+}): Promise<EnkiChoiceResult> {
+  let reply: unknown;
+  try {
+    reply = await io.send(SHIELD_EXTENSION_ID, { type: "shield:incognitoAllowed" });
+  } catch {
+    return "no-shield";
+  }
+  if (!reply || typeof reply !== "object" || typeof (reply as { allowed?: unknown }).allowed !== "boolean") return "no-shield";
+  if ((reply as { allowed: boolean }).allowed !== true) return "needs-incognito";
+  await io.set("enki");
+  return "enabled";
+}
+
+export const SHIELD_EXTENSIONS_PAGE = `chrome://extensions/?id=${SHIELD_EXTENSION_ID}`;
