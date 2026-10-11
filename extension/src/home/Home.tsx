@@ -278,6 +278,7 @@ export function Home() {
               <li key={s.text} className="flex">
                 <button
                   type="button"
+                  title={s.text}
                   onClick={() => { setMode(s.mode); askEnki(s.text, s.mode); }}
                   className="group flex w-full items-start gap-[10px] rounded-2xl border border-fg/[0.07] bg-fg/[0.03] px-[14px] py-3 text-left text-sm text-mist/85 transition hover:border-sky/30 hover:bg-fg/[0.06] hover:text-mist"
                 >
