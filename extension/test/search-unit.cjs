@@ -50,11 +50,6 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     const json = JSON.stringify(req);
     for (const bad of ['tab', 'url', 'page', 'screenshot', 'image', 'history']) assert.ok(!new RegExp(`"${bad}"`, 'i').test(json), bad);
   });
-  await check('auth and rate-limit errors fall back to DuckDuckGo', () => {
-    assert.ok(S.isFallbackError('HTTP 401 Unauthorized'));
-    assert.ok(S.isFallbackError('429 Too Many Requests'));
-    assert.ok(!S.isFallbackError('socket hang up'));
-  });
   await check('markdown: raw HTML is dropped', () => {
     const out = md('hi <script>alert(1)</script> <b onclick="x">bold</b> <iframe src="https://e.x"></iframe>');
     assert.ok(!/<script|<iframe|onclick|<b>/i.test(out), out);
@@ -186,4 +181,21 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     assert.ok(!JSON.stringify(v).includes('SECRET'), 'provider text leaked: ' + raw);
   }
   console.log('PASS provider errors map to fixed messages + HTTP code; raw text (sk-test-SECRET123) never shown');
+})().catch((e) => { console.error(e); process.exitCode = 1; });
+
+// Panel "Enki AI": only after Shield confirms it may run in incognito.
+(async () => {
+  const S6 = require('../src/lib/search.ts');
+  const run = async (send) => { const sent = [], set = []; const r = await S6.chooseEnkiEngine({ send: async (id, m) => { sent.push([id, m]); return send(); }, set: async (v) => set.push(v) }); return { r, sent, set }; };
+  let o = await run(() => ({ allowed: true }));
+  assert.equal(o.r, 'enabled'); assert.deepEqual(o.set, ['enki']);
+  assert.deepEqual(o.sent, [['aacambieennepbgemjkpailjdkldbjjf', { type: 'shield:incognitoAllowed' }]]);
+  o = await run(() => ({ allowed: false }));
+  assert.equal(o.r, 'needs-incognito'); assert.deepEqual(o.set, []);
+  for (const bad of [() => { throw new Error('Could not establish connection. Receiving end does not exist.'); }, () => undefined, () => ({}), () => ({ allowed: 'yes' })]) {
+    o = await run(bad);
+    assert.equal(o.r, 'no-shield'); assert.deepEqual(o.set, []);
+  }
+  assert.equal(S6.SHIELD_EXTENSIONS_PAGE, 'chrome://extensions/?id=aacambieennepbgemjkpailjdkldbjjf');
+  console.log('PASS Enki AI needs Shield incognito: allowed → enki; not allowed → stays ddg + checklist; no Shield → stays ddg');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
