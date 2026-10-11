@@ -1,4 +1,4 @@
-import { forgetList } from "./sites.js";
+import { INCOGNITO, forgetList } from "./sites.js";
 
 // Enki Shields, the background half: what was blocked on each tab, and "forget me when I close
 // this site". The panel (popup.js) reads what is recorded here and owns the per-site switches.
@@ -21,7 +21,8 @@ let showBadge = true;
 let saving = null;
 
 const ready = (async () => {
-  tabs = (await chrome.storage.session.get(TABS))[TABS] ?? {};
+  // In Incognito the record names private sites: memory only (Cloak's rule), never storage.
+  tabs = INCOGNITO ? {} : (await chrome.storage.session.get(TABS))[TABS] ?? {};
   showBadge = (await chrome.storage.local.get(BADGE))[BADGE] !== false;
 })();
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -32,7 +33,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 function save() {
-  if (saving) return;
+  if (saving || INCOGNITO) return;
   saving = setTimeout(() => { saving = null; chrome.storage.session.set({ [TABS]: tabs }); }, 250);
 }
 
@@ -89,4 +90,11 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   await chrome.browsingData.remove({ origins }, {
     cookies: true, localStorage: true, indexedDB: true, cacheStorage: true, serviceWorkers: true, fileSystems: true,
   }).catch(() => {});
+});
+
+// The panel reads the record from storage; in Incognito it asks this worker instead.
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg?.type !== "shields:tab" || sender.id !== chrome.runtime.id) return false;
+  ready.then(() => reply(tabs[msg.tabId] ?? null));
+  return true;
 });
