@@ -284,8 +284,8 @@ Honest list; each is on the roadmap.
 
 - **Profiles created by Enki 0.7.2–0.8.7 send address bar searches to your AI provider.** In those
   profiles, a search typed in the address bar opens the Enki panel, which sends it to the AI provider
-  you set up there. In Incognito windows the same search showed a "This page has been blocked" page
-  instead of results. New profiles (0.8.8 and later) search with DuckDuckGo. An existing profile
+  you set up there. In Incognito windows the same search shows a "This page has been blocked" page
+  instead of results until you switch back. New profiles (0.8.8 and later) search with DuckDuckGo. An existing profile
   keeps its default (Chromium protects it, so Enki Browser does not rewrite it): follow the steps on
   the card in the Enki panel, *Switch back to DuckDuckGo* — open `chrome://settings/searchEngines`,
   click ⋮ next to DuckDuckGo, then *Make default*.
