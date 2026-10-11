@@ -21,3 +21,10 @@ export function incognitoRedirect(search: string, inIncognito: boolean): string 
   const q = new URLSearchParams(search).get("q")?.trim();
   return q ? ddgUrl(q) : null;
 }
+
+/** The card is only for searches typed in the address bar. Anything Enki opens itself with ?q=
+ *  marks it with from=home (or another from=) so a question asked on purpose isn't told otherwise. */
+export function showLegacyCard(search: string): boolean {
+  const p = new URLSearchParams(search);
+  return !!p.get("q")?.trim() && !p.has("from");
+}

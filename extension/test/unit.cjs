@@ -56,6 +56,15 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
   assert.ok(report.includes('"messages": 4'));
 });
 
+check('legacy card shows only for address bar searches, not from=home', () => {
+  const { showLegacyCard } = require('../src/lib/legacy-search.ts');
+  assert.equal(showLegacyCard('?q=weather'), true);
+  assert.equal(showLegacyCard('?q=weather&from=home'), false);
+  assert.equal(showLegacyCard('?from=home&q=weather'), false);
+  assert.equal(showLegacyCard('?view=settings'), false);
+  assert.equal(showLegacyCard('?q=%20'), false);
+});
+
 check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or storage', () => {
   const { incognitoRedirect } = require('../src/lib/legacy-search.ts');
   assert.equal(incognitoRedirect('?q=weather%20toronto', true), 'https://duckduckgo.com/?q=weather%20toronto');
