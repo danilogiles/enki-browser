@@ -167,26 +167,42 @@ export function describeProviderError(raw: string): ProviderErrorView {
 }
 
 export type EnkiChoiceResult = "enabled" | "needs-incognito" | "no-shield";
+export type ShieldStatus = { allowed: boolean; searchSetupDone: boolean };
+
+/**
+ * Asks Shield whether it may run in incognito and whether Enki is the default search. Only those
+ * two booleans are read; a missing searchSetupDone counts as false; anything else (no reply, an
+ * error, a non-boolean) means Shield is not there.
+ */
+export async function queryShieldStatus(send: (extensionId: string, msg: unknown) => Promise<unknown>): Promise<ShieldStatus | null> {
+  let reply: unknown;
+  try {
+    reply = await send(SHIELD_EXTENSION_ID, { type: "shield:incognitoAllowed" });
+  } catch {
+    return null;
+  }
+  if (!reply || typeof reply !== "object") return null;
+  const { allowed, searchSetupDone } = reply as { allowed?: unknown; searchSetupDone?: unknown };
+  if (typeof allowed !== "boolean") return null;
+  if (searchSetupDone !== undefined && typeof searchSetupDone !== "boolean") return null;
+  return { allowed, searchSetupDone: searchSetupDone ?? false };
+}
 
 /**
  * Choosing "Enki AI" in the panel. Private windows must keep searching with DuckDuckGo, and that is
- * Shield's job there, so Enki AI is only switched on once Shield confirms it may run in incognito.
- * Otherwise the setting stays DuckDuckGo. (Shield's own switch has already checked this.)
+ * Shield's job there, so Enki AI is only saved once Shield confirms it may run in incognito.
+ * Default-search setup is guidance only and never blocks saving. (Shield's own switch has already
+ * checked this.)
  */
 export async function chooseEnkiEngine(io: {
   send: (extensionId: string, msg: unknown) => Promise<unknown>;
   set: (v: SearchEngine) => Promise<void>;
-}): Promise<EnkiChoiceResult> {
-  let reply: unknown;
-  try {
-    reply = await io.send(SHIELD_EXTENSION_ID, { type: "shield:incognitoAllowed" });
-  } catch {
-    return "no-shield";
-  }
-  if (!reply || typeof reply !== "object" || typeof (reply as { allowed?: unknown }).allowed !== "boolean") return "no-shield";
-  if ((reply as { allowed: boolean }).allowed !== true) return "needs-incognito";
+}): Promise<{ result: EnkiChoiceResult; status: ShieldStatus | null }> {
+  const status = await queryShieldStatus(io.send);
+  if (!status) return { result: "no-shield", status };
+  if (!status.allowed) return { result: "needs-incognito", status };
   await io.set("enki");
-  return "enabled";
+  return { result: "enabled", status };
 }
 
 export const SHIELD_EXTENSIONS_PAGE = `chrome://extensions/?id=${SHIELD_EXTENSION_ID}`;
