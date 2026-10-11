@@ -65,13 +65,15 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     assert.match(out, /rel="noopener noreferrer"/);
     assert.match(out, /Image: pixel/);
   });
-  await check('Shield messages: wrong sender rejected, bad values rejected, get/set work', async () => {
-    let stored;
-    const io = { get: async () => stored, set: async (v) => { stored = v; } };
+  await check('Shield messages: wrong sender rejected, bad values/fields rejected, get/set work; first search finishes pending setup', async () => {
+    const mk = (engine, pending) => { const io = { engine, pending, just: 0,
+      get: async () => io.engine, setEngine: async (v) => { io.engine = v; }, getPending: async () => io.pending,
+      setPending: async (v) => { io.pending = v; }, setJustSetUp: async () => { io.just++; } }; return io; };
     const shield = { id: S.SHIELD_EXTENSION_ID };
+    let io = mk(undefined, false);
     assert.deepEqual(await S.handleExternalMessage({ type: 'enki:setSearchEngine', value: 'enki' }, { id: 'evil' }, io), { ok: false, error: 'forbidden' });
-    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine' }, {}, io), { ok: false, error: 'forbidden' });
-    assert.equal(stored, undefined);
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine', incognitoAllowed: true }, {}, io), { ok: false, error: 'forbidden' });
+    assert.equal(io.engine, undefined);
     for (const value of ['ENKI', 'google', '', null, ['enki'], { toString: () => 'enki' }])
       assert.deepEqual(await S.handleExternalMessage({ type: 'enki:setSearchEngine', value }, shield, io), { ok: false, error: 'invalid value' });
     assert.deepEqual(await S.handleExternalMessage({ type: 'other' }, shield, io), { ok: false, error: 'unknown message' });
@@ -79,6 +81,32 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine' }, shield, io), { ok: true, value: null });
     assert.deepEqual(await S.handleExternalMessage({ type: 'enki:setSearchEngine', value: 'enki' }, shield, io), { ok: true });
     assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine' }, shield, io), { ok: true, value: 'enki' });
+    // pending + incognitoAllowed:true -> enki, pending cleared, one-shot set
+    io = mk('ddg', true);
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine', incognitoAllowed: true }, shield, io), { ok: true, value: 'enki' });
+    assert.equal(io.engine, 'enki'); assert.equal(io.pending, false); assert.equal(io.just, 1);
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine', incognitoAllowed: true }, shield, io), { ok: true, value: 'enki' });
+    assert.equal(io.just, 1, 'one-shot set only once');
+    // no pending -> no change
+    io = mk('ddg', false);
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine', incognitoAllowed: true }, shield, io), { ok: true, value: 'ddg' });
+    assert.equal(io.engine, 'ddg'); assert.equal(io.just, 0);
+    // allowed false -> no change
+    io = mk('ddg', true);
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine', incognitoAllowed: false }, shield, io), { ok: true, value: 'ddg' });
+    assert.equal(io.pending, true); assert.equal(io.just, 0);
+    // bad field / non-boolean rejected, nothing changes
+    for (const m of [{ type: 'enki:getSearchEngine', incognitoAllowed: 'true' }, { type: 'enki:getSearchEngine', incognitoAllowed: 1 },
+      { type: 'enki:getSearchEngine', incognitoAllowed: true, q: 'x' }, { type: 'enki:getSearchEngine', engine: 'enki' }]) {
+      assert.deepEqual(await S.handleExternalMessage(m, shield, io), { ok: false, error: 'invalid message' }, JSON.stringify(m));
+    }
+    assert.equal(io.engine, 'ddg'); assert.equal(io.pending, true); assert.equal(io.just, 0);
+  });
+  await check('search.html one-shot "AI search is set up": shown once, then cleared', async () => {
+    let v = true; const io = { get: async () => v, clear: async () => { v = undefined; } };
+    assert.equal(await S.takeJustSetUp(io), true);
+    assert.equal(await S.takeJustSetUp(io), false);
+    assert.equal(await S.takeJustSetUp({ get: async () => 'true', clear: async () => { throw new Error('should not clear'); } }), false);
   });
   await check('setting helpers use one storage key and notify on change', async () => {
     const store = {}; const listeners = [];
@@ -183,27 +211,51 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
   console.log('PASS provider errors map to fixed messages + HTTP code; raw text (sk-test-SECRET123) never shown');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
 
-// Panel "Enki AI": only after Shield confirms incognito; default-search setup is guidance only.
+// Panel "Enki AI": saved only after both setup steps; until then a pending intent flag, engine stays ddg.
 (async () => {
   const S6 = require('../src/lib/search.ts');
-  const run = async (send) => { const sent = [], set = []; const r = await S6.chooseEnkiEngine({ send: async (id, m) => { sent.push([id, m]); return send(); }, set: async (v) => set.push(v) }); return { ...r, sent, set }; };
-  let o = await run(() => ({ allowed: true, searchSetupDone: true }));
-  assert.equal(o.result, 'enabled'); assert.deepEqual(o.set, ['enki']); assert.deepEqual(o.status, { allowed: true, searchSetupDone: true });
-  assert.deepEqual(o.sent, [['aacambieennepbgemjkpailjdkldbjjf', { type: 'shield:incognitoAllowed' }]]);
-  o = await run(() => ({ allowed: true, searchSetupDone: false }));
-  assert.equal(o.result, 'enabled', 'setup step 2 never blocks saving'); assert.deepEqual(o.set, ['enki']); assert.equal(o.status.searchSetupDone, false);
-  o = await run(() => ({ allowed: true }));
-  assert.equal(o.result, 'enabled'); assert.equal(o.status.searchSetupDone, false, 'missing searchSetupDone = false');
-  o = await run(() => ({ allowed: false, searchSetupDone: true }));
-  assert.equal(o.result, 'needs-incognito'); assert.deepEqual(o.set, []); assert.deepEqual(o.status, { allowed: false, searchSetupDone: true });
-  for (const bad of [() => { throw new Error('Receiving end does not exist.'); }, () => undefined, () => ({}), () => ({ allowed: 'yes' }), () => ({ allowed: true, searchSetupDone: 'yes' }), () => ({ allowed: 1, searchSetupDone: true })]) {
-    o = await run(bad);
-    assert.equal(o.result, 'no-shield'); assert.deepEqual(o.set, []); assert.equal(o.status, null);
+  const mkIO = (pending = false, reply) => {
+    const io = { engine: [], pendingLog: [], pending, sent: [],
+      setEngine: async (v) => io.engine.push(v), getPending: async () => io.pending,
+      setPending: async (v) => { io.pending = v; io.pendingLog.push(v); },
+      send: async (id, m) => { io.sent.push([id, m]); return typeof reply === 'function' ? reply() : reply; } };
+    return io;
+  };
+  // both done -> enki now
+  let io = mkIO(false, { allowed: true, searchSetupDone: true });
+  let r = await S6.chooseEnkiEngine(io);
+  assert.equal(r.result, 'enabled'); assert.deepEqual(io.engine, ['enki']); assert.equal(io.pending, false);
+  assert.deepEqual(io.sent, [['aacambieennepbgemjkpailjdkldbjjf', { type: 'shield:incognitoAllowed' }]]);
+  // allowed only / nothing done -> pending, engine stays ddg
+  for (const reply of [{ allowed: true, searchSetupDone: false }, { allowed: true }, { allowed: false, searchSetupDone: true }, { allowed: false, searchSetupDone: false }]) {
+    io = mkIO(false, reply); r = await S6.chooseEnkiEngine(io);
+    assert.equal(r.result, 'pending', JSON.stringify(reply)); assert.ok(!io.engine.includes('enki')); assert.equal(io.pending, true);
   }
+  // Shield missing or malformed -> no-shield, no flag, no enki
+  for (const bad of [() => { throw new Error('Receiving end does not exist.'); }, () => undefined, () => ({}), () => ({ allowed: 'yes' }), () => ({ allowed: true, searchSetupDone: 'yes' })]) {
+    io = mkIO(false, bad); r = await S6.chooseEnkiEngine(io);
+    assert.equal(r.result, 'no-shield'); assert.deepEqual(io.engine, []); assert.equal(io.pending, false); assert.equal(r.status, null);
+  }
+  // reconcile: pending + both done -> enki, flag cleared
+  io = mkIO(true); assert.equal(await S6.reconcileSearchSetup({ allowed: true, searchSetupDone: true }, 'ddg', io), 'enabled');
+  assert.deepEqual(io.engine, ['enki']); assert.equal(io.pending, false);
+  // reconcile: not pending -> nothing, even if both done
+  io = mkIO(false); assert.equal(await S6.reconcileSearchSetup({ allowed: true, searchSetupDone: true }, 'ddg', io), 'unchanged'); assert.deepEqual(io.engine, []);
+  // reconcile: pending, one step missing -> stays
+  io = mkIO(true); assert.equal(await S6.reconcileSearchSetup({ allowed: true, searchSetupDone: false }, 'ddg', io), 'unchanged'); assert.deepEqual(io.engine, []); assert.equal(io.pending, true);
+  // paused: on enki and incognito access removed (or Shield gone) -> ddg + pending
+  for (const st of [{ allowed: false, searchSetupDone: true }, null]) {
+    io = mkIO(false); assert.equal(await S6.reconcileSearchSetup(st, 'enki', io), 'paused');
+    assert.deepEqual(io.engine, ['ddg']); assert.equal(io.pending, true);
+  }
+  io = mkIO(false); assert.equal(await S6.reconcileSearchSetup({ allowed: true, searchSetupDone: false }, 'enki', io), 'unchanged', 'setup step 2 never pauses an active Enki');
+  // DuckDuckGo clears the flag
+  io = mkIO(true); await S6.chooseDdgEngine(io); assert.deepEqual(io.engine, ['ddg']); assert.equal(io.pending, false);
+  assert.equal(S6.SETUP_PENDING_KEY, 'enki:searchSetupPending');
   const extra = await S6.queryShieldStatus(async () => ({ allowed: true, searchSetupDone: true, enginePref: 'x' }));
   assert.deepEqual(extra, { allowed: true, searchSetupDone: true }, 'only the two booleans are read');
   assert.equal(S6.SHIELD_SEARCH_URL, 'chrome-extension://aacambieennepbgemjkpailjdkldbjjf/search.html?q=%s');
   assert.equal(S6.SEARCH_ENGINES_PAGE, 'chrome://settings/searchEngines');
   assert.equal(S6.SHIELD_EXTENSIONS_PAGE, 'chrome://extensions/?id=aacambieennepbgemjkpailjdkldbjjf');
-  console.log('PASS Shield reply {allowed, searchSetupDone}: saves enki only when allowed; setup never blocks; bad replies = no Shield');
+  console.log('PASS Enki AI only after both steps: pending flag, reconcile enables/pauses, DuckDuckGo clears; bad replies = no Shield');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

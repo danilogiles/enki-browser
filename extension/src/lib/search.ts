@@ -91,24 +91,6 @@ export function onSearchEngineChange(cb: (v: SearchEngine | undefined) => void):
   return () => chrome.storage.onChanged.removeListener(listener);
 }
 
-export type ExternalReply = { ok: true; value?: SearchEngine | null } | { ok: false; error: string };
-
-/** Shield's switch talks to Enki through chrome.runtime.onMessageExternal. Only Shield, only these two messages. */
-export async function handleExternalMessage(
-  msg: unknown,
-  sender: { id?: string },
-  io: { get: () => Promise<SearchEngine | undefined>; set: (v: SearchEngine) => Promise<void> } = { get: getSearchEngine, set: setSearchEngine },
-): Promise<ExternalReply> {
-  if (sender?.id !== SHIELD_EXTENSION_ID) return { ok: false, error: "forbidden" };
-  const m = msg as { type?: unknown; value?: unknown } | null;
-  if (m?.type === "enki:getSearchEngine") return { ok: true, value: (await io.get()) ?? null };
-  if (m?.type === "enki:setSearchEngine") {
-    if (!isSearchEngine(m.value)) return { ok: false, error: "invalid value" };
-    await io.set(m.value);
-    return { ok: true };
-  }
-  return { ok: false, error: "unknown message" };
-}
 
 /** Whether a model is set up, from stored settings as they are (no decryption needed to tell). */
 export function storedHasModel(raw: Partial<Settings> | undefined): boolean {
@@ -188,21 +170,69 @@ export async function queryShieldStatus(send: (extensionId: string, msg: unknown
   return { allowed, searchSetupDone: searchSetupDone ?? false };
 }
 
+/** The user asked for Enki AI but setup is not finished. An intent flag only: no query data. */
+export const SETUP_PENDING_KEY = "enki:searchSetupPending";
+
+export type SetupIO = {
+  setEngine: (v: SearchEngine) => Promise<void>;
+  getPending: () => Promise<boolean>;
+  setPending: (v: boolean) => Promise<void>;
+};
+
+export const storageSetupIO: SetupIO = {
+  setEngine: setSearchEngine,
+  getPending: async () => (await chrome.storage.local.get(SETUP_PENDING_KEY))[SETUP_PENDING_KEY] === true,
+  setPending: async (v) => { if (v) await chrome.storage.local.set({ [SETUP_PENDING_KEY]: true }); else await chrome.storage.local.remove(SETUP_PENDING_KEY); },
+};
+
+export const setupComplete = (s: ShieldStatus | null | undefined): boolean => !!s && s.allowed && s.searchSetupDone;
+
 /**
- * Choosing "Enki AI" in the panel. Private windows must keep searching with DuckDuckGo, and that is
- * Shield's job there, so Enki AI is only saved once Shield confirms it may run in incognito.
- * Default-search setup is guidance only and never blocks saving. (Shield's own switch has already
- * checked this.)
+ * The selector shows what the address bar really does: "enki" is saved only once Shield confirms
+ * both incognito access and the default-search setup. Until then the choice is remembered as
+ * pending and the engine stays DuckDuckGo.
  */
-export async function chooseEnkiEngine(io: {
-  send: (extensionId: string, msg: unknown) => Promise<unknown>;
-  set: (v: SearchEngine) => Promise<void>;
-}): Promise<{ result: EnkiChoiceResult; status: ShieldStatus | null }> {
+export async function chooseEnkiEngine(io: SetupIO & { send: (extensionId: string, msg: unknown) => Promise<unknown> }): Promise<{ result: "enabled" | "pending" | "no-shield"; status: ShieldStatus | null }> {
   const status = await queryShieldStatus(io.send);
   if (!status) return { result: "no-shield", status };
-  if (!status.allowed) return { result: "needs-incognito", status };
-  await io.set("enki");
-  return { result: "enabled", status };
+  if (setupComplete(status)) {
+    await io.setEngine("enki");
+    await io.setPending(false);
+    return { result: "enabled", status };
+  }
+  await io.setPending(true);
+  await io.setEngine("ddg");
+  return { result: "pending", status };
+}
+
+/** Picking DuckDuckGo drops any pending Enki request. */
+export async function chooseDdgEngine(io: SetupIO): Promise<void> {
+  await io.setEngine("ddg");
+  await io.setPending(false);
+}
+
+/**
+ * Run on every fresh Shield reply (Settings opened or refocused). Finishes a pending request once
+ * both steps are done, and pauses Enki AI (back to DuckDuckGo, request kept pending) when incognito
+ * access was taken away or Shield stopped answering.
+ */
+export async function reconcileSearchSetup(
+  status: ShieldStatus | null,
+  engine: SearchEngine | undefined,
+  io: SetupIO,
+): Promise<"enabled" | "paused" | "unchanged"> {
+  if (engine === "enki") {
+    if (status && status.allowed) return "unchanged";
+    await io.setEngine("ddg");
+    await io.setPending(true);
+    return "paused";
+  }
+  if (setupComplete(status) && (await io.getPending())) {
+    await io.setEngine("enki");
+    await io.setPending(false);
+    return "enabled";
+  }
+  return "unchanged";
 }
 
 export const SHIELD_EXTENSIONS_PAGE = `chrome://extensions/?id=${SHIELD_EXTENSION_ID}`;
@@ -210,3 +240,54 @@ export const SHIELD_EXTENSIONS_PAGE = `chrome://extensions/?id=${SHIELD_EXTENSIO
 /** The search URL people add in chrome://settings/searchEngines: Shield's page, which hands off to Enki. */
 export const SHIELD_SEARCH_URL = `chrome-extension://${SHIELD_EXTENSION_ID}/search.html?q=%s`;
 export const SEARCH_ENGINES_PAGE = "chrome://settings/searchEngines";
+
+/** One-shot: set when Shield's first search finished the setup; search.html shows a note once. */
+export const JUST_SET_UP_KEY = "enki:searchJustSetUp";
+
+export type ExternalReply = { ok: true; value?: SearchEngine | null } | { ok: false; error: string };
+export type ExternalIO = SetupIO & {
+  get: () => Promise<SearchEngine | undefined>;
+  setJustSetUp: () => Promise<void>;
+};
+
+export const storageExternalIO: ExternalIO = {
+  ...storageSetupIO,
+  get: getSearchEngine,
+  setJustSetUp: async () => { await chrome.storage.local.set({ [JUST_SET_UP_KEY]: true }); },
+};
+
+/**
+ * Shield talks to Enki through chrome.runtime.onMessageExternal. Only Shield, only two messages:
+ * - {type:"enki:getSearchEngine", incognitoAllowed?: boolean}: the current engine. When Shield
+ *   reports incognito access and Enki AI is pending, the first search finishes the setup.
+ * - {type:"enki:setSearchEngine", value:"enki"|"ddg"}: Shield's own switch (already checked).
+ */
+export async function handleExternalMessage(msg: unknown, sender: { id?: string }, io: ExternalIO = storageExternalIO): Promise<ExternalReply> {
+  if (sender?.id !== SHIELD_EXTENSION_ID) return { ok: false, error: "forbidden" };
+  if (!msg || typeof msg !== "object" || Array.isArray(msg)) return { ok: false, error: "unknown message" };
+  const m = msg as Record<string, unknown>;
+  if (m.type === "enki:getSearchEngine") {
+    const extra = Object.keys(m).filter((k) => k !== "type" && k !== "incognitoAllowed");
+    if (extra.length || ("incognitoAllowed" in m && typeof m.incognitoAllowed !== "boolean")) return { ok: false, error: "invalid message" };
+    if (m.incognitoAllowed === true && (await io.getPending())) {
+      await io.setEngine("enki");
+      await io.setPending(false);
+      await io.setJustSetUp();
+      return { ok: true, value: "enki" };
+    }
+    return { ok: true, value: (await io.get()) ?? null };
+  }
+  if (m.type === "enki:setSearchEngine") {
+    if (!isSearchEngine(m.value)) return { ok: false, error: "invalid value" };
+    await io.setEngine(m.value);
+    return { ok: true };
+  }
+  return { ok: false, error: "unknown message" };
+}
+
+/** search.html, routed to Enki: true once after setup finished, then cleared. */
+export async function takeJustSetUp(io: { get: () => Promise<unknown>; clear: () => Promise<void> }): Promise<boolean> {
+  if ((await io.get()) !== true) return false;
+  await io.clear();
+  return true;
+}

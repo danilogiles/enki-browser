@@ -19,7 +19,7 @@ import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
-import { chooseEnkiEngine, getSearchEngine, onSearchEngineChange, setSearchEngine, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
+import { chooseDdgEngine, chooseEnkiEngine, getSearchEngine, onSearchEngineChange, reconcileSearchSetup, SETUP_PENDING_KEY, storageSetupIO, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
 
 type Props = {
   settings: Settings;
@@ -648,24 +648,37 @@ function SearchEngineControl() {
   const [changed, setChanged] = useState(false);
   /** undefined: not asked yet; null: Shield off or not answering. */
   const [status, setStatus] = useState<ShieldStatus | null | undefined>(undefined);
-  /** The user asked for Enki AI at least once here, so unfinished setup is worth pointing at. */
-  const [tried, setTried] = useState(false);
+  /** Enki AI was requested and waits for both setup steps (enki:searchSetupPending). */
+  const [pending, setPending] = useState(false);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const send = (id: string, msg: unknown) => chrome.runtime.sendMessage(id, msg);
   useEffect(() => {
     void getSearchEngine().then(setEngine);
-    return onSearchEngineChange(setEngine);
+    void storageSetupIO.getPending().then((p) => { setPending(p); setOpen(p); });
+    const offEngine = onSearchEngineChange(setEngine);
+    const onPending = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "local" && SETUP_PENDING_KEY in changes) setPending(changes[SETUP_PENDING_KEY].newValue === true);
+    };
+    chrome.storage.onChanged.addListener(onPending);
+    return () => { offEngine(); chrome.storage.onChanged.removeListener(onPending); };
   }, []);
-  // Ask Shield again when Settings opens and whenever the panel comes back into focus (the user
-  // may just have allowed incognito or made Enki the default in another tab).
+  // Ask Shield again when Settings opens and whenever the panel comes back into focus, then
+  // finish a pending request (both steps done) or pause Enki AI (incognito access removed).
   useEffect(() => {
-    const refresh = () => void queryShieldStatus(send).then(setStatus);
-    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
-    refresh();
-    window.addEventListener("focus", refresh);
+    const refresh = async () => {
+      const st = await queryShieldStatus(send);
+      setStatus(st);
+      const r = await reconcileSearchSetup(st, await getSearchEngine(), storageSetupIO);
+      if (r === "enabled") { setEngine("enki"); setPending(false); setOpen(false); setChanged(true); }
+      if (r === "paused") { setEngine("ddg"); setPending(true); setOpen(true); setChanged(false); }
+    };
+    const onFocus = () => void refresh();
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    void refresh();
+    window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
-    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", onVisible); };
+    return () => { window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
   useEffect(() => {
     if (!changed) return;
@@ -682,24 +695,24 @@ function SearchEngineControl() {
   const current = engine ?? "ddg";
   const shieldOff = status === null;
   const choose = async (v: SearchEngine) => {
-    if (v === current) return;
     if (v === "enki") {
-      if (shieldOff) return;
-      setTried(true);
-      const r = await chooseEnkiEngine({ send, set: setSearchEngine });
+      if (shieldOff || current === "enki") return;
+      const r = await chooseEnkiEngine({ ...storageSetupIO, send });
       setStatus(r.status);
-      const incomplete = !!r.status && !(r.status.allowed && r.status.searchSetupDone);
-      setOpen(incomplete);
-      if (r.result !== "enabled") { setChanged(false); return; }
-    } else {
-      await setSearchEngine(v);
-      setOpen(false);
+      if (r.result === "enabled") { setEngine("enki"); setPending(false); setOpen(false); setChanged(true); }
+      else if (r.result === "pending") { setPending(true); setOpen(true); setChanged(false); }
+      return;
     }
-    setEngine(v);
-    setChanged(true);
+    if (current === "ddg" && !pending) return;
+    await chooseDdgEngine(storageSetupIO);
+    const wasEnki = current === "enki";
+    setEngine("ddg");
+    setPending(false);
+    setOpen(false);
+    setChanged(wasEnki);
   };
   const doneCount = status ? Number(status.allowed) + Number(status.searchSetupDone) : 0;
-  const showSetup = !!status && doneCount < 2 && (tried || current === "enki");
+  const showSetup = !!status && pending && current !== "enki";
   const seg = (v: SearchEngine, label: string) => (
     <button key={v} type="button" role="radio" aria-checked={current === v} disabled={v === "enki" && shieldOff} onClick={() => void choose(v)}
       className={`h-8 px-4 text-[13px] ${current === v ? "bg-[#38bdf8] font-semibold text-[#06131c]" : "text-zinc-400 hover:text-zinc-100 disabled:hover:text-zinc-400"}`}>
