@@ -144,3 +144,29 @@ export async function earlyRoute(env: {
   if (route === "ddg") env.replace(ddgUrl(query));
   return { route, query, force };
 }
+
+/** The two buttons on a failed answer: DuckDuckGo (only q, a normal navigation) or the same query again. */
+export function searchErrorActions(query: string, io: { assign: (url: string) => void; rerun: (query: string) => void }) {
+  return {
+    ddgHref: ddgUrl(query),
+    searchDdg: () => io.assign(ddgUrl(query)),
+    tryAgain: () => io.rerun(query),
+  };
+}
+
+export type ProviderErrorView = { kind: "limit" | "auth" | "network" | "other"; text: string; code?: string };
+
+/**
+ * What the error notice shows. Never the provider's own text: error bodies can echo keys, URLs or
+ * the prompt. Only a fixed sentence and, when present, the bare HTTP status code.
+ */
+export function describeProviderError(raw: string): ProviderErrorView {
+  const code = /\b([45]\d\d)\b/.exec(raw)?.[1];
+  if (code === "429" || /rate.?limit|quota|too many requests/i.test(raw))
+    return { kind: "limit", code, text: "Your AI provider's limit was reached. Try again later or search on DuckDuckGo." };
+  if (code === "401" || code === "403" || /unauthori[sz]ed|forbidden|invalid.*key|api key/i.test(raw))
+    return { kind: "auth", code, text: "Your API key was rejected. Check it in Settings." };
+  if (/failed to fetch|networkerror|network error|econnrefused|timed? ?out|load failed/i.test(raw))
+    return { kind: "network", text: "Couldn't reach your AI provider. Check your connection." };
+  return { kind: "other", code, text: "Something went wrong with your AI provider." };
+}

@@ -151,3 +151,39 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
   assert.ok(!/act|evil|tools=1/.test(JSON.stringify(req.messages)));
   console.log('PASS search.html reads only q; mode/model/tools/provider params are ignored');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
+
+// Error notice: "Search on DuckDuckGo" goes to DDG with only q; "Try again" re-runs the same query.
+(async () => {
+  const S4 = require('../src/lib/search.ts');
+  const assigned = [], reruns = [];
+  const a = S4.searchErrorActions('noise & cancelling?', { assign: (u) => assigned.push(u), rerun: (q) => reruns.push(q) });
+  a.searchDdg();
+  assert.equal(assigned.length, 1);
+  const u = new URL(assigned[0]);
+  assert.equal(u.origin + u.pathname, 'https://duckduckgo.com/');
+  assert.deepEqual([...u.searchParams.keys()], ['q']);
+  assert.equal(u.searchParams.get('q'), 'noise & cancelling?');
+  assert.equal(a.ddgHref, assigned[0]);
+  a.tryAgain(); a.tryAgain();
+  assert.deepEqual(reruns, ['noise & cancelling?', 'noise & cancelling?']);
+  assert.equal(assigned.length, 1, 'Try again does not navigate');
+  console.log('PASS error actions: DuckDuckGo button carries only q; Try again re-runs the same query');
+})().catch((e) => { console.error(e); process.exitCode = 1; });
+
+// Error notice wording is fixed; the provider's body (which may echo a key) never reaches the page.
+(async () => {
+  const S5 = require('../src/lib/search.ts');
+  const cases = [
+    ['HTTP 429: {"error":"rate limited for key sk-test-SECRET123"}', 'limit', '429', /limit was reached/],
+    ['HTTP 401 Unauthorized: invalid key sk-test-SECRET123', 'auth', '401', /API key was rejected/],
+    ['403 forbidden sk-test-SECRET123', 'auth', '403', /API key was rejected/],
+    ['TypeError: Failed to fetch https://SECRET123.example', 'network', undefined, /Couldn't reach/],
+    ['HTTP 500 boom sk-test-SECRET123 at https://x', 'other', '500', /Something went wrong/],
+  ];
+  for (const [raw, kind, code, re] of cases) {
+    const v = S5.describeProviderError(raw);
+    assert.equal(v.kind, kind, raw); assert.equal(v.code, code, raw); assert.match(v.text, re);
+    assert.ok(!JSON.stringify(v).includes('SECRET'), 'provider text leaked: ' + raw);
+  }
+  console.log('PASS provider errors map to fixed messages + HTTP code; raw text (sk-test-SECRET123) never shown');
+})().catch((e) => { console.error(e); process.exitCode = 1; });
