@@ -5,7 +5,7 @@ import logo from "../assets/logo.svg";
 import { createProvider } from "../lib/providers";
 import { loadSettings, presetOf, type Settings } from "../lib/settings";
 import { safeMarkdownProps } from "../lib/safe-markdown";
-import { buildSearchRequest, ddgUrl, decideRoute, getSearchEngine, describeProviderError, parseQuery, searchErrorActions, type ProviderErrorView } from "../lib/search";
+import { buildSearchRequest, ddgUrl, decideRoute, getSearchEngine, describeProviderError, parseQuery, searchErrorActions, takeJustSetUp, JUST_SET_UP_KEY, type ProviderErrorView } from "../lib/search";
 
 type Source = { url: string; title?: string };
 type State = { phase: "idle" | "streaming" | "done" | "error"; text: string; sources: Source[]; error?: ProviderErrorView; query?: string };
@@ -29,6 +29,17 @@ export function SearchPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [state, setState] = useState<State>({ phase: "idle", text: "", sources: [] });
   const abort = useRef<AbortController | null>(null);
+  const [justSetUp, setJustSetUp] = useState(false);
+  useEffect(() => {
+    void takeJustSetUp({
+      get: async () => (await chrome.storage.local.get(JUST_SET_UP_KEY))[JUST_SET_UP_KEY],
+      clear: () => chrome.storage.local.remove(JUST_SET_UP_KEY),
+    }).then((shown) => {
+      if (!shown) return;
+      setJustSetUp(true);
+      setTimeout(() => setJustSetUp(false), 3000);
+    });
+  }, []);
 
   const run = async (raw: string) => {
     const { query: q, force } = parseQuery(raw);
@@ -95,6 +106,7 @@ export function SearchPage() {
           <a href={settingsUrl()} onClick={(e) => { e.preventDefault(); void chrome.tabs.create({ url: settingsUrl() }); }}>Change search engine</a>
         </nav>
       </header>
+      {justSetUp && <div role="status" className="setup-toast">AI search is set up</div>}
       <main className={state.phase === "error" ? "ans err" : "ans"} aria-live="polite">
         <Markdown remarkPlugins={[remarkGfm]} {...safeMarkdownProps}>{state.text}</Markdown>
         {state.phase === "streaming" && <span className="cur" aria-hidden />}
