@@ -1,0 +1,18 @@
+{
+  "name": "enki-deliver-tabs-mcp",
+  "version": "0.9.0-dev",
+  "private": true,
+  "description": "MCP server that lets an AI agent send a bundle of links to Enki Browser, which asks the user before opening anything.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "enki-deliver-tabs-mcp": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
