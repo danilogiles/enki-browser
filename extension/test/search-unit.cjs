@@ -183,21 +183,27 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
   console.log('PASS provider errors map to fixed messages + HTTP code; raw text (sk-test-SECRET123) never shown');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
 
-// Panel "Enki AI": only after Shield confirms it may run in incognito.
+// Panel "Enki AI": only after Shield confirms incognito; default-search setup is guidance only.
 (async () => {
   const S6 = require('../src/lib/search.ts');
-  const run = async (send) => { const sent = [], set = []; const r = await S6.chooseEnkiEngine({ send: async (id, m) => { sent.push([id, m]); return send(); }, set: async (v) => set.push(v) }); return { r, sent, set }; };
-  let o = await run(() => ({ allowed: true }));
-  assert.equal(o.r, 'enabled'); assert.deepEqual(o.set, ['enki']);
+  const run = async (send) => { const sent = [], set = []; const r = await S6.chooseEnkiEngine({ send: async (id, m) => { sent.push([id, m]); return send(); }, set: async (v) => set.push(v) }); return { ...r, sent, set }; };
+  let o = await run(() => ({ allowed: true, searchSetupDone: true }));
+  assert.equal(o.result, 'enabled'); assert.deepEqual(o.set, ['enki']); assert.deepEqual(o.status, { allowed: true, searchSetupDone: true });
   assert.deepEqual(o.sent, [['aacambieennepbgemjkpailjdkldbjjf', { type: 'shield:incognitoAllowed' }]]);
-  o = await run(() => ({ allowed: false }));
-  assert.equal(o.r, 'needs-incognito'); assert.deepEqual(o.set, []);
-  for (const bad of [() => { throw new Error('Could not establish connection. Receiving end does not exist.'); }, () => undefined, () => ({}), () => ({ allowed: 'yes' })]) {
+  o = await run(() => ({ allowed: true, searchSetupDone: false }));
+  assert.equal(o.result, 'enabled', 'setup step 2 never blocks saving'); assert.deepEqual(o.set, ['enki']); assert.equal(o.status.searchSetupDone, false);
+  o = await run(() => ({ allowed: true }));
+  assert.equal(o.result, 'enabled'); assert.equal(o.status.searchSetupDone, false, 'missing searchSetupDone = false');
+  o = await run(() => ({ allowed: false, searchSetupDone: true }));
+  assert.equal(o.result, 'needs-incognito'); assert.deepEqual(o.set, []); assert.deepEqual(o.status, { allowed: false, searchSetupDone: true });
+  for (const bad of [() => { throw new Error('Receiving end does not exist.'); }, () => undefined, () => ({}), () => ({ allowed: 'yes' }), () => ({ allowed: true, searchSetupDone: 'yes' }), () => ({ allowed: 1, searchSetupDone: true })]) {
     o = await run(bad);
-    assert.equal(o.r, 'no-shield'); assert.deepEqual(o.set, []);
+    assert.equal(o.result, 'no-shield'); assert.deepEqual(o.set, []); assert.equal(o.status, null);
   }
+  const extra = await S6.queryShieldStatus(async () => ({ allowed: true, searchSetupDone: true, enginePref: 'x' }));
+  assert.deepEqual(extra, { allowed: true, searchSetupDone: true }, 'only the two booleans are read');
   assert.equal(S6.SHIELD_SEARCH_URL, 'chrome-extension://aacambieennepbgemjkpailjdkldbjjf/search.html?q=%s');
   assert.equal(S6.SEARCH_ENGINES_PAGE, 'chrome://settings/searchEngines');
   assert.equal(S6.SHIELD_EXTENSIONS_PAGE, 'chrome://extensions/?id=aacambieennepbgemjkpailjdkldbjjf');
-  console.log('PASS Enki AI needs Shield incognito: allowed → enki; not allowed → stays ddg + checklist; no Shield → stays ddg');
+  console.log('PASS Shield reply {allowed, searchSetupDone}: saves enki only when allowed; setup never blocks; bad replies = no Shield');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
