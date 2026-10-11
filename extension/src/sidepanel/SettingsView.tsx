@@ -19,7 +19,7 @@ import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
-import { chooseEnkiEngine, getSearchEngine, onSearchEngineChange, setSearchEngine, SHIELD_EXTENSIONS_PAGE, type EnkiChoiceResult, type SearchEngine } from "../lib/search";
+import { chooseEnkiEngine, getSearchEngine, onSearchEngineChange, setSearchEngine, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, type EnkiChoiceResult, type SearchEngine } from "../lib/search";
 
 type Props = {
   settings: Settings;
@@ -645,6 +645,14 @@ function CustomColors({ selected, value, onChange }: { selected: boolean; value:
 function SearchEngineControl() {
   const [engine, setEngine] = useState<SearchEngine | undefined>();
   const [toast, setToast] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(SHIELD_SEARCH_URL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard refused: the URL is shown below to copy by hand */ }
+  };
   const [blocked, setBlocked] = useState<Exclude<EnkiChoiceResult, "enabled"> | null>(null);
   useEffect(() => {
     void getSearchEngine().then(setEngine);
@@ -696,8 +704,18 @@ function SearchEngineControl() {
           <button type="button" onClick={() => void chrome.tabs.create({ url: SHIELD_EXTENSIONS_PAGE })}
             className="mt-1 rounded-md border border-ink-700 px-2 py-1 text-enki-400 hover:bg-ink-800">Open Enki Shield settings</button>
         </li>
-        {/* Placeholder: Blink/Ink finalize this step's wording and action. */}
-        <li className="text-zinc-200">2. Make Enki your default search</li>
+        <li>
+          <div className="text-zinc-200">2. Make Enki your default search</div>
+          <div className="text-zinc-500">
+            Open chrome://settings/searchEngines › Add (Site search) › Name: Enki, Shortcut: enki, URL:{" "}
+            <button type="button" onClick={() => void copyUrl()} title={SHIELD_SEARCH_URL}
+              className="rounded border border-ink-700 px-1.5 text-enki-400 hover:bg-ink-800">{copied ? "Copied" : "Copy"}</button>{" "}
+            › Add, then ⋮ next to Enki › Make default
+          </div>
+          <code className="mt-1 block break-all text-[11px] text-zinc-400">{SHIELD_SEARCH_URL}</code>
+          <button type="button" onClick={() => void chrome.tabs.create({ url: SEARCH_ENGINES_PAGE })}
+            className="mt-1 rounded-md border border-ink-700 px-2 py-1 text-enki-400 hover:bg-ink-800">Open search engine settings</button>
+        </li>
       </ol>
     )}
     </div>

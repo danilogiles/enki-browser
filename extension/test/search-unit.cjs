@@ -196,6 +196,8 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     o = await run(bad);
     assert.equal(o.r, 'no-shield'); assert.deepEqual(o.set, []);
   }
+  assert.equal(S6.SHIELD_SEARCH_URL, 'chrome-extension://aacambieennepbgemjkpailjdkldbjjf/search.html?q=%s');
+  assert.equal(S6.SEARCH_ENGINES_PAGE, 'chrome://settings/searchEngines');
   assert.equal(S6.SHIELD_EXTENSIONS_PAGE, 'chrome://extensions/?id=aacambieennepbgemjkpailjdkldbjjf');
   console.log('PASS Enki AI needs Shield incognito: allowed → enki; not allowed → stays ddg + checklist; no Shield → stays ddg');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
