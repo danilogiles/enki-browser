@@ -5,10 +5,10 @@ import logo from "../assets/logo.svg";
 import { createProvider } from "../lib/providers";
 import { loadSettings, presetOf, type Settings } from "../lib/settings";
 import { safeMarkdownProps } from "../lib/safe-markdown";
-import { buildSearchRequest, ddgUrl, decideRoute, getSearchEngine, isFallbackError, parseQuery } from "../lib/search";
+import { buildSearchRequest, ddgUrl, decideRoute, getSearchEngine, describeProviderError, parseQuery, searchErrorActions, type ProviderErrorView } from "../lib/search";
 
 type Source = { url: string; title?: string };
-type State = { phase: "idle" | "streaming" | "done" | "error"; text: string; sources: Source[]; error?: string };
+type State = { phase: "idle" | "streaming" | "done" | "error"; text: string; sources: Source[]; error?: ProviderErrorView; query?: string };
 
 export function hasModel(s: Settings): boolean {
   const model = (s.askModel || s.model).trim();
@@ -50,7 +50,7 @@ export function SearchPage() {
     abort.current?.abort();
     const ctl = new AbortController();
     abort.current = ctl;
-    setState({ phase: "streaming", text: "", sources: [] });
+    setState({ phase: "streaming", text: "", sources: [], query: q });
     try {
       const req = buildSearchRequest(s.askModel || s.model, q, s.maxOutputTokens, ctl.signal);
       for await (const ev of createProvider(s).stream(req)) {
@@ -62,7 +62,7 @@ export function SearchPage() {
     } catch (e) {
       if (ctl.signal.aborted) return;
       const message = e instanceof Error ? e.message : String(e);
-      setState((p) => ({ ...p, phase: "error", error: isFallbackError(message) ? "Your AI provider refused the request (key or rate limit)." : "Your AI provider could not answer." }));
+      setState((p) => ({ ...p, phase: "error", error: describeProviderError(message) }));
     }
   };
 
@@ -89,7 +89,7 @@ export function SearchPage() {
         <form onSubmit={submit} className="qform">
           <input className="q" aria-label="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
         </form>
-        <span className="chip">{providerName(settings)} · Ask</span>
+        <span className="chip" title={settings.askModel || settings.model}>{providerName(settings)} · Ask</span>
         <nav className="links">
           <a href={ddg} rel="noopener noreferrer">Search on DuckDuckGo</a>
           <a href={settingsUrl()} onClick={(e) => { e.preventDefault(); void chrome.tabs.create({ url: settingsUrl() }); }}>Change search engine</a>
@@ -98,11 +98,7 @@ export function SearchPage() {
       <main className="ans" aria-live="polite">
         <Markdown remarkPlugins={[remarkGfm]} {...safeMarkdownProps}>{state.text}</Markdown>
         {state.phase === "streaming" && <span className="cur" aria-hidden />}
-        {state.phase === "error" && (
-          <p className="notice" role="alert">
-            {state.error} <a href={ddg} rel="noopener noreferrer">Search on DuckDuckGo instead</a>
-          </p>
-        )}
+        {state.phase === "error" && <ErrorNotice error={state.error ?? describeProviderError("")} query={state.query ?? ""} rerun={(q) => void run(q)} />}
       </main>
       <footer className="foot">
         {state.sources.length ? (
@@ -127,4 +123,24 @@ export function SearchPage() {
 
 function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+}
+
+/** Fixed wording only: the provider's raw error text is never put on the page. */
+function ErrorNotice({ error, query, rerun }: { error: ProviderErrorView; query: string; rerun: (q: string) => void }) {
+  const a = searchErrorActions(query, { assign: (u) => location.assign(u), rerun });
+  return (
+    <div className="notice" role="alert">
+      <p>
+        {error.text}
+        {error.kind === "auth" && (
+          <> <a href={settingsUrl()} onClick={(e) => { e.preventDefault(); void chrome.tabs.create({ url: settingsUrl() }); }}>Open Settings</a></>
+        )}
+        {error.code && <span className="code"> HTTP {error.code}</span>}
+      </p>
+      <div className="actions">
+        <button type="button" className="btn primary" onClick={a.searchDdg}>Search on DuckDuckGo</button>
+        <button type="button" className="btn" onClick={a.tryAgain}>Try again</button>
+      </div>
+    </div>
+  );
 }

@@ -662,11 +662,12 @@ function SearchEngineControl() {
   };
   const current = engine ?? "ddg";
   return (
-    <div className="relative flex items-center gap-3 border-b border-ink-700 px-4 py-3 text-sm">
+    <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3 text-sm">
       <div className="flex-1">
         <div className="text-zinc-200">Search engine</div>
         <div className="text-xs text-zinc-500">Tip: start with @enki or @ddg to choose for one search</div>
       </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
       <div role="radiogroup" aria-label="Search engine" className="flex rounded-lg border border-ink-700 p-0.5">
         {([["enki", "Enki AI"], ["ddg", "DuckDuckGo"]] as const).map(([v, label]) => (
           <button key={v} type="button" role="radio" aria-checked={current === v} onClick={() => void choose(v)}
@@ -675,11 +676,8 @@ function SearchEngineControl() {
           </button>
         ))}
       </div>
-      {toast && (
-        <div role="status" className="absolute right-4 top-full z-10 mt-1 rounded-md border border-ink-700 bg-ink-800 px-3 py-1.5 text-xs text-zinc-100 shadow">
-          Search engine changed
-        </div>
-      )}
+        <span role="status" aria-live="polite" className="h-4 text-xs text-enki-400">{toast ? "Search engine changed" : ""}</span>
+      </div>
     </div>
   );
 }
