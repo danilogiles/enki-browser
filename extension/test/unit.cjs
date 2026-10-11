@@ -56,6 +56,18 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
   assert.ok(report.includes('"messages": 4'));
 });
 
+check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or storage', () => {
+  const { incognitoRedirect } = require('../src/lib/legacy-search.ts');
+  assert.equal(incognitoRedirect('?q=weather%20toronto', true), 'https://duckduckgo.com/?q=weather%20toronto');
+  assert.equal(incognitoRedirect('?q=a%26b&x=1', true), 'https://duckduckgo.com/?q=a%26b');
+  assert.equal(incognitoRedirect('?q=weather', false), null);
+  assert.equal(incognitoRedirect('?q=%20', true), null);
+  const main = fs.readFileSync(require('node:path').join(__dirname, '../src/sidepanel/main.tsx'), 'utf8');
+  const guard = main.indexOf('incognitoRedirect(location.search, chrome.extension.inIncognitoContext)');
+  assert.ok(guard > 0 && guard < main.indexOf('createRoot(document'), 'redirect runs before the app renders');
+  assert.match(main, /if \(away\) location\.replace\(away\);\s*else createRoot/);
+});
+
 (async () => {
   const events = [];
   let executions = 0;
