@@ -273,18 +273,18 @@ export function Home() {
           </form>
           <p className="rise mt-3 text-xs text-muted/80" style={{ animationDelay: "120ms" }}>{t.keys}</p>
 
-          <ul className="rise mt-8 grid w-full gap-2 sm:grid-cols-2" style={{ animationDelay: "160ms" }}>
+          <ul className="rise mt-8 grid w-full grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-2" style={{ animationDelay: "160ms" }}>
             {t.suggestions.map((s) => (
-              <li key={s.text}>
+              <li key={s.text} className="flex">
                 <button
                   type="button"
                   onClick={() => { setMode(s.mode); askEnki(s.text, s.mode); }}
-                  className="group flex w-full items-start gap-2.5 rounded-2xl border border-fg/[0.07] bg-fg/[0.03] px-4 py-3 text-left text-sm text-mist/85 transition hover:border-sky/30 hover:bg-fg/[0.06] hover:text-mist"
+                  className="group flex w-full items-start gap-[10px] rounded-2xl border border-fg/[0.07] bg-fg/[0.03] px-[14px] py-3 text-left text-sm text-mist/85 transition hover:border-sky/30 hover:bg-fg/[0.06] hover:text-mist"
                 >
                   {s.mode === "act"
-                    ? <MousePointerClick size={16} className="mt-0.5 shrink-0 text-sky/80" aria-hidden />
-                    : <MessageCircle size={16} className="mt-0.5 shrink-0 text-sky/80" aria-hidden />}
-                  <span>{s.text}</span>
+                    ? <MousePointerClick size={16} className="mt-[2px] shrink-0 text-sky/80" aria-hidden />
+                    : <MessageCircle size={16} className="mt-[2px] shrink-0 text-sky/80" aria-hidden />}
+                  <span className="line-clamp-2 overflow-hidden leading-5">{s.text}</span>
                 </button>
               </li>
             ))}
