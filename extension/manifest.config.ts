@@ -56,6 +56,11 @@ export default defineManifest({
     "webNavigation",
   ],
   host_permissions: ["<all_urls>"],
+  // AI search (0.8.9): Enki Shield's search page hands an "Ask Enki" query over to search.html.
+  // Only Shield may open it; no web origin can.
+  web_accessible_resources: [
+    { resources: ["search.html"], matches: [], extension_ids: ["aacambieennepbgemjkpailjdkldbjjf"] },
+  ],
   // On-device voice runs Whisper in WebAssembly (lib/voice); nothing else changes from the default.
   content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';" },
 });
