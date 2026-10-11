@@ -190,3 +190,7 @@ export async function chooseEnkiEngine(io: {
 }
 
 export const SHIELD_EXTENSIONS_PAGE = `chrome://extensions/?id=${SHIELD_EXTENSION_ID}`;
+
+/** The search URL people add in chrome://settings/searchEngines: Shield's page, which hands off to Enki. */
+export const SHIELD_SEARCH_URL = `chrome-extension://${SHIELD_EXTENSION_ID}/search.html?q=%s`;
+export const SEARCH_ENGINES_PAGE = "chrome://settings/searchEngines";
