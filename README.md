@@ -282,11 +282,13 @@ a real task inside Enki Browser (navigate to Wikipedia, read the page, answer).
 
 Honest list; each is on the roadmap.
 
-- **Profiles created by 0.7.2–0.8.8 search with the Enki panel from the address bar.** That default
-  could not answer in Incognito windows, where a search ended on a "blocked" page. New profiles use
-  DuckDuckGo. An existing profile keeps its default (Chromium protects it, so Enki Browser does not
-  rewrite it): open `chrome://settings/searchEngines`, click ⋮ next to DuckDuckGo, then
-  *Make default* — the same steps as *Switch back to DuckDuckGo* in Shields' settings.
+- **Profiles created by Enki 0.7.2–0.8.7 send address bar searches to your AI provider.** In those
+  profiles, a search typed in the address bar opens the Enki panel, which sends it to the AI provider
+  you set up there. In Incognito windows the same search showed a "This page has been blocked" page
+  instead of results. New profiles (0.8.8 and later) search with DuckDuckGo. An existing profile
+  keeps its default (Chromium protects it, so Enki Browser does not rewrite it): follow the steps on
+  the card in the Enki panel, *Switch back to DuckDuckGo* — open `chrome://settings/searchEngines`,
+  click ⋮ next to DuckDuckGo, then *Make default*.
 - **Phishing protection is list-based.** Enki Shield blocks what public lists know about, updated
   twice a day; Google's Safe Browsing also uses signals no public list has, so a brand-new phishing
   site can reach you before it is listed. Be careful with links from email and messages.
