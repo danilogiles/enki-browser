@@ -34,6 +34,7 @@ static class LauncherTests
         RegistryTests();
         MigrationTests();
         WidevineTrustTests();
+        UpdateManifestTests();
         Console.WriteLine();
         Console.WriteLine(passed + "/" + (passed + failed) + " checks passed");
         return failed == 0 ? 0 : 1;
@@ -408,6 +409,19 @@ static class LauncherTests
             try { Directory.Delete(userData, true); } catch { }
             try { Directory.Delete(root, true); } catch { }
         }
+    }
+
+    // ------------------------------------------------------------------ update manifests (UpdateManifest.cs)
+    static void UpdateManifestTests()
+    {
+        Version v; string url, sha;
+        Func<string, string> refused = json => { try { UpdateManifest.Parse(json, out v, out url, out sha); return null; } catch (Exception e) { return e.Message; } };
+        const string tail = "\"version\": \"9.9.9\", \"url\": \"https://example.test/x\", \"sha256\": \"00\"";
+        Check("update: a win-x64 manifest is accepted", refused("{" + tail + ", \"platform\": \"win-x64\"}") == null);
+        Check("update: a manifest without platform (older releases) is still accepted", refused("{" + tail + "}") == null);
+        string linux = refused("{\"version\": \"9.9.9\", \"platform\": \"linux-x64\", \"url\": \"https://example.test/enki-browser-9.9.9-linux-x64.tar.gz\", \"sha256\": \"00\"}");
+        Check("update: Linux's update-linux.json (same signing key) is refused on Windows", linux != null && linux.Contains("linux-x64"), linux ?? "accepted");
+        Check("update: an empty or non-string platform is refused", refused("{" + tail + ", \"platform\": \"\"}") != null && refused("{" + tail + ", \"platform\": null}") != null);
     }
 
     // ------------------------------------------------------------------ protected video (WidevineTrust.cs)

@@ -3,9 +3,10 @@
 //   UPDATE_SIGNING_KEY="<PEM>" node build/sign-update.mjs out/EnkiBrowser-X-windows-x64.zip <download url>
 //   UPDATE_SIGNING_KEY="<PEM>" node build/sign-update.mjs out/enki-browser-X-linux-x64.tar.gz <download url>
 //
-// The Windows zip gets update.json (read by launcher/Updater.cs, unchanged); the Linux tarball gets
-// update-linux.json with "platform": "linux-x64" (read by packaging/linux/enki-update, which
-// refuses a manifest for any other platform). Both are signed with the same key.
+// The Windows zip gets update.json with "platform": "win-x64" (read by launcher/Updater.cs); the
+// Linux tarball gets update-linux.json with "platform": "linux-x64" (read by
+// packaging/linux/enki-update). Both are signed with the same key, so each updater refuses a
+// manifest naming another platform.
 //
 // The launcher accepts an update only if update.json verifies against the public key compiled
 // into it, and only installs the zip whose SHA-256 this manifest names. In CI the private key is
@@ -30,7 +31,7 @@ if (!version) throw new Error(`Cannot read a version from ${path.basename(zip)}`
 const name = linux ? "update-linux.json" : "update.json";
 const sha256 = createHash("sha256").update(readFileSync(zip)).digest("hex");
 
-const fields = linux ? { version, platform: "linux-x64", url, sha256 } : { version, url, sha256 };
+const fields = { version, platform: linux ? "linux-x64" : "win-x64", url, sha256 };
 const manifest = Buffer.from(JSON.stringify({ ...fields, published: new Date().toISOString() }, null, 2) + "\n");
 const signature = sign("sha256", manifest, key);
 // Refuse to publish a signature the paired public key would reject (wrong secret, wrong key file).

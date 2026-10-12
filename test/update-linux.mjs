@@ -155,6 +155,20 @@ fresh();
 r = updater("ci.json");
 check("enki-update accepts the manifest sign-update.mjs signed", r.status === 0 && staged() === "0.0.2", r.stderr.trim());
 
+// ---- the same key signs Windows' update.json; enki-update must refuse it
+const winZip = path.join(signDir, "EnkiBrowser-0.0.2-windows-x64.zip");
+cpSync(path.join(feed, good2), winZip);
+execFileSync(process.execPath, [path.join(root, "build", "sign-update.mjs"), winZip, url(good2)], {
+  env: { ...process.env, UPDATE_SIGNING_KEY_FILE: keyFile, UPDATE_PUBLIC_KEY_FILE: pub }, stdio: "ignore",
+});
+const winSigned = JSON.parse(readFileSync(path.join(signDir, "update.json"), "utf8"));
+cpSync(path.join(signDir, "update.json"), path.join(feed, "winci.json"));
+cpSync(path.join(signDir, "update.json.sig"), path.join(feed, "winci.json.sig"));
+fresh();
+r = updater("winci.json");
+check("refuses the Windows update.json sign-update.mjs signed with the same key (platform win-x64)",
+  winSigned.platform === "win-x64" && r.status !== 0 && /not linux-x64/.test(r.stderr) && staged() === null && version(install) === "0.0.1", r.stderr.trim());
+
 server.kill();
 rmSync(tmp, { recursive: true, force: true });
 const failed = results.filter((ok) => !ok).length;

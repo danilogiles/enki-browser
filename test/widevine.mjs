@@ -86,7 +86,7 @@ const appDir = path.join(install, "app", readFileSync(path.join(install, "curren
   // The update key is left empty: the test launcher can never accept an update (Updater fails closed).
   const buildInfo = path.join(tmp, "BuildInfo.g.cs");
   writeFileSync(buildInfo, 'static class UpdateKey { public const string Modulus = ""; public const string Exponent = ""; }\n');
-  const src = ["Launcher.cs", "Updater.cs", "NativeHost.cs", "Widevine.cs", "WidevineTrust.cs", "Migration.cs", "Watcher.cs", "ShellIdentity.cs", "Args.cs", "Common.cs", "Install.cs", "DefaultBrowser.cs"].map((f) => path.join(root, "launcher", f));
+  const src = ["Launcher.cs", "Updater.cs", "UpdateManifest.cs", "NativeHost.cs", "Widevine.cs", "WidevineTrust.cs", "Migration.cs", "Watcher.cs", "ShellIdentity.cs", "Args.cs", "Common.cs", "Install.cs", "DefaultBrowser.cs"].map((f) => path.join(root, "launcher", f));
   const refs = ["System.Windows.Forms.dll", "System.Drawing.dll", "System.Core.dll", "Microsoft.CSharp.dll", "System.Web.Extensions.dll", "System.IO.Compression.dll", "System.IO.Compression.FileSystem.dll"];
   execFileSync(csc, ["/nologo", "/target:winexe", "/platform:x64", "/define:ENKI_TEST", ...refs.map((r) => `/r:${r}`), `/out:${path.join(appDir, "EnkiBrowserLauncher.exe")}`, ...src, buildInfo], { stdio: "inherit" });
 }
