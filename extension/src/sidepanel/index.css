@@ -6,6 +6,11 @@
   outline-offset: 2px;
 }
 
+/* Charts and mind maps (Visuals.tsx): the tab panel and foldable nodes show the same ring. */
+.enki-tabpanel:focus-visible { outline: 2px solid var(--color-enki-400); outline-offset: 2px; }
+.enki-node { outline: none; }
+.enki-node:focus-visible rect { stroke: var(--color-enki-400); stroke-width: 2.5px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
