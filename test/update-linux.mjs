@@ -7,7 +7,7 @@
 //   node test/update-linux.mjs
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { symlinkSync, chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,10 +41,11 @@ function release(dir, version) {
 }
 const feed = path.join(tmp, "feed");
 mkdirSync(feed);
-function tarball(version, { name = `enki-browser-${version}-linux-x64.tar.gz`, inner = version, extra } = {}) {
+function tarball(version, { name = `enki-browser-${version}-linux-x64.tar.gz`, inner = version, extra, inside } = {}) {
   const work = path.join(tmp, `pack-${name}`);
   release(path.join(work, "enki-browser"), inner);
   if (extra) extra(work);
+  if (inside) inside(path.join(work, "enki-browser"));
   execFileSync("tar", ["-czf", path.join(feed, name), "-C", work, ...(extra ? ["."] : ["enki-browser"])]);
   return name;
 }
@@ -69,7 +70,7 @@ const install = path.join(home, ".local", "opt", "enki-browser");
 const ran = path.join(tmp, "ran.log");
 const env = (feedFile, extra = {}) => ({
   ...process.env, HOME: home, XDG_STATE_HOME: path.join(home, "state"), XDG_CONFIG_HOME: path.join(home, "config"),
-  XDG_CACHE_HOME: path.join(home, "cache"), ENKI_BROWSER_UPDATE_FEED: url(feedFile), ENKI_TEST_RAN: ran, ...extra,
+  XDG_CACHE_HOME: path.join(home, "cache"), ENKI_BROWSER_UPDATE_FEED: url(feedFile), ENKI_TEST: "1", ENKI_TEST_RAN: ran, ...extra,
 });
 const updater = (feedFile, extra) => spawnSync(path.join(install, "enki-update"), ["check", "--force"], { env: env(feedFile, extra), encoding: "utf8" });
 const version = (dir) => existsSync(path.join(dir, "version.json")) ? JSON.parse(readFileSync(path.join(dir, "version.json"), "utf8")).enkiBrowser : null;
@@ -88,6 +89,9 @@ const refusals = [
   ["a tarball whose hash differs from the signed one", () => manifest("hash.json", { version: "0.0.2", platform: "linux-x64", url: url(good2), sha256: "0".repeat(64) }), "hash.json", /does not match the signed manifest/],
   ["a signed tarball holding another version", () => { const t = tarball("0.0.3", { name: "liar.tar.gz", inner: "0.0.2" }); manifest("liar.json", { version: "0.0.3", platform: "linux-x64", url: url(t), sha256: sha(path.join(feed, t)) }); }, "liar.json", /does not contain version 0.0.3/],
   ["a signed tarball with entries outside enki-browser/", () => { const t = tarball("0.0.2", { name: "slip.tar.gz", extra: (w) => writeFileSync(path.join(w, "evil.sh"), "x") }); manifest("slip.json", { version: "0.0.2", platform: "linux-x64", url: url(t), sha256: sha(path.join(feed, t)) }); }, "slip.json", /outside enki-browser/],
+  ["a signed tarball with a symlink to ~/.bashrc", () => { const t = tarball("0.0.2", { name: "bashrc.tar.gz", inside: (d) => symlinkSync(path.join(home, ".bashrc"), path.join(d, "bashrc")) }); manifest("bashrc.json", { version: "0.0.2", platform: "linux-x64", url: url(t), sha256: sha(path.join(feed, t)) }); }, "bashrc.json", /link to .*\.bashrc/],
+  ["a signed tarball with a link that climbs out with ..", () => { const t = tarball("0.0.2", { name: "climb.tar.gz", inside: (d) => symlinkSync("../../.bashrc", path.join(d, "climb")) }); manifest("climb.json", { version: "0.0.2", platform: "linux-x64", url: url(t), sha256: sha(path.join(feed, t)) }); }, "climb.json", /link to '\.\.\/\.\.\/\.bashrc'/],
+  ["a signed manifest pointing at a plain-http download", () => manifest("plain.json", { version: "0.0.2", platform: "linux-x64", url: `http://example.org/${good2}`, sha256: sha(path.join(feed, good2)) }), "plain.json", /malformed/],
 ];
 for (const [name, setup, file, expect] of refusals) {
   fresh(); setup();
@@ -98,6 +102,12 @@ fresh();
 manifest("old.json", { version: "0.0.1", platform: "linux-x64", url: url(good2), sha256: sha(path.join(feed, good2)) });
 let r = updater("old.json");
 check("never installs a version that is not newer (no downgrade, no reinstall)", r.status === 0 && /up to date/.test(r.stdout) && staged() === null, r.stdout.trim());
+
+// ---- the feed can only be changed by the test suite
+fresh();
+manifest("update-linux.json", { version: "0.0.2", platform: "linux-x64", url: url(good2), sha256: sha(path.join(feed, good2)) });
+r = updater("update-linux.json", { ENKI_TEST: "", ENKI_BROWSER_UPDATE_FEED: url("update-linux.json"), XDG_STATE_HOME: path.join(home, "state"), https_proxy: "http://127.0.0.1:9", HTTPS_PROXY: "http://127.0.0.1:9" });
+check("without ENKI_TEST the feed override is ignored and GitHub is used", staged() === null && /ignoring ENKI_BROWSER_UPDATE_FEED/.test(readFileSync(path.join(home, "state", "enki-browser", "update", "update.log"), "utf8")), (r.stderr || "").trim());
 
 // ---- off switches
 manifest("update-linux.json", { version: "0.0.2", platform: "linux-x64", url: url(good2), sha256: sha(path.join(feed, good2)) });
