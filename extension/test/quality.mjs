@@ -202,6 +202,23 @@ try {
     return { width: bitmap.width, height: bitmap.height };
   }), () => null);
   check("Copy image puts the chart on the clipboard as a PNG", !!copied && copied.width === 1280 && copied.height > 100);
+  // Keyboard and screen readers (the WAI-ARIA tabs pattern): arrows and Home/End move between the
+  // chart tabs, only the selected one is in the Tab order, each tab controls the chart panel, the
+  // chart has a text summary with its values, and mind map branches fold from the keyboard.
+  await panel.focus("figure.enki-visual [role=tab][aria-selected=true]");
+  await panel.keyboard.press("ArrowRight");
+  const afterRight = await panel.evaluate(() => [document.activeElement?.textContent, document.querySelector("figure.enki-visual [role=tab][aria-selected=true]")?.textContent]);
+  check("Right arrow selects and focuses the next chart tab", afterRight[0] === "Line" && afterRight[1] === "Line");
+  await panel.keyboard.press("End");
+  check("End goes to the last chart tab", await panel.evaluate(() => document.activeElement?.textContent) === "Table");
+  await panel.keyboard.press("Home");
+  const tabs = await panel.evaluate(() => [...document.querySelectorAll("figure.enki-visual [role=tab]")].map((t) => ({ text: t.textContent, tabindex: t.getAttribute("tabindex"), controls: document.getElementById(t.getAttribute("aria-controls") ?? "")?.getAttribute("role") })));
+  check("only the selected tab is in the Tab order, and every tab controls the chart panel", tabs.filter((t) => t.tabindex === "0").map((t) => t.text).join() === "Bar" && tabs.every((t) => t.controls === "tabpanel"));
+  check("the chart has a text alternative with its values", /Bar chart\. Votes: Ana 1,200,000; Bruno 1,140,000\./.test(await panel.locator("figure.enki-visual [role=tabpanel] .sr-only").textContent() ?? ""));
+  const branch = panel.locator("svg[aria-label^='Mind map'] [role=button][aria-label='Product']");
+  await branch.focus(); await panel.keyboard.press("Enter");
+  check("a mind map branch folds from the keyboard", await branch.getAttribute("aria-expanded") === "false" && await panel.locator("svg[aria-label^='Mind map'] rect").count() === 4);
+  await panel.keyboard.press("Enter");
   check("the mind map has every node", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
 
   // The web: a page that builds its content with JavaScript is rendered in a background tab,

@@ -7,7 +7,7 @@
  * a ```mindmap block (an indented list) draws a map. Everything is drawn here, without a charting
  * library: the panel is small and these four shapes are all it needs.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 
 import { Check, Download, ImageDown } from "lucide-react";
@@ -38,6 +38,20 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
   const [active, setActive] = useState(0);
   const shown: DataSet = mixed ? { ...data, series: [data.series[active]] } : data;
   const names: Record<Kind, string> = { bar: "Bar", line: "Line", pie: "Pie", table: "Table" };
+  // The WAI-ARIA tabs pattern: one tab in the Tab order, arrows (and Home/End) move between them,
+  // and each tab names the panel it controls.
+  const base = useId();
+  const tabId = (k: Kind) => `${base}-tab-${k}`;
+  const panelId = `${base}-panel`;
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const i = kinds.indexOf(kind);
+    const next = e.key === "ArrowRight" ? kinds[(i + 1) % kinds.length] : e.key === "ArrowLeft" ? kinds[(i - 1 + kinds.length) % kinds.length]
+      : e.key === "Home" ? kinds[0] : e.key === "End" ? kinds[kinds.length - 1] : null;
+    if (!next) return;
+    e.preventDefault();
+    setKind(next);
+    document.getElementById(tabId(next))?.focus();
+  };
   return (
     <figure className="enki-visual my-2 rounded-xl border border-ink-700 bg-ink-900/60 p-2.5">
       <div className="mb-2 flex items-center gap-2">
@@ -45,17 +59,22 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
         <ExportButtons data={data} shown={shown} kind={kind} />
         <div role="tablist" aria-label="Chart type" className="flex gap-0.5 rounded-lg bg-ink-800 p-0.5">
           {kinds.map((k) => (
-            <button key={k} role="tab" aria-selected={kind === k} onClick={() => setKind(k)}
+            <button key={k} id={tabId(k)} role="tab" aria-selected={kind === k} aria-controls={panelId} tabIndex={kind === k ? 0 : -1}
+              onClick={() => setKind(k)} onKeyDown={onTabKey}
               className={`rounded-md px-2 py-0.5 text-[11px] ${kind === k ? "bg-ink-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>
               {names[k]}
             </button>
           ))}
         </div>
       </div>
-      {kind === "bar" && <Bars data={shown} first={mixed ? active : 0} />}
-      {kind === "line" && <Lines data={shown} first={mixed ? active : 0} />}
-      {kind === "pie" && <Pie data={pieFits(shown) ? shown : data} />}
-      {kind === "table" && (table ?? <PlainTable data={data} />)}
+      <div role="tabpanel" id={panelId} aria-labelledby={tabId(kind)}>
+        {/* What a screen reader says for a picture: every value, as the Table tab would show it. */}
+        {kind !== "table" && <p className="sr-only">{summary(kind === "pie" ? { ...data, series: [data.series[0]] } : data, names[kind])}</p>}
+        {kind === "bar" && <Bars data={shown} first={mixed ? active : 0} />}
+        {kind === "line" && <Lines data={shown} first={mixed ? active : 0} />}
+        {kind === "pie" && <Pie data={pieFits(shown) ? shown : data} />}
+        {kind === "table" && (table ?? <PlainTable data={data} />)}
+      </div>
       {data.series.length > 1 && kind !== "table" && (
         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-zinc-400">
           {data.series.map((s, i) => mixed ? (
@@ -70,6 +89,12 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
       )}
     </figure>
   );
+}
+
+/** "Bar chart. Votes: Ana 1,200,000; Bruno 1,140,000. %: Ana 51.2; Bruno 48.8." */
+function summary(data: DataSet, kind: string): string {
+  const series = data.series.map((s) => `${data.series.length > 1 || data.labelName ? `${s.name}: ` : ""}${data.labels.map((l, i) => `${l} ${fmt(s.data[i])}`).join("; ")}.`);
+  return `${data.title ? `${data.title}. ` : ""}${kind} chart. ${series.join(" ")}`;
 }
 
 /**
@@ -273,14 +298,20 @@ export function MindMap({ root }: { root: MapNode }) {
   const color = (n: { depth: number; branch: number }) => (n.depth === 0 ? "var(--color-zinc-200)" : PALETTE[n.branch % PALETTE.length]);
   return (
     <figure className="enki-visual my-2 overflow-x-auto rounded-xl border border-ink-700 bg-ink-900/60 p-2">
-      <svg width={layout.width} height={layout.height} role="img" aria-label={`Mind map: ${root.label}`} className="block">
+      {/* A group, not an image: its folding nodes are buttons a keyboard and a screen reader can reach. */}
+      <svg width={layout.width} height={layout.height} role="group" aria-label={`Mind map: ${root.label}`} className="block">
         {layout.nodes.filter((n) => n.parent).map((n) => {
           const p = layout.byId.get(n.parent!)!;
           const x1 = p.x + p.w, x2 = n.x, mid = (x1 + x2) / 2;
           return <path key={`l${n.id}`} d={`M${x1},${p.y} C${mid},${p.y} ${mid},${n.y} ${x2},${n.y}`} fill="none" stroke={color(n)} strokeOpacity="0.6" strokeWidth="1.5" />;
         })}
         {layout.nodes.map((n) => (
-          <g key={n.id} transform={`translate(${n.x},${n.y})`} className={n.kids ? "cursor-pointer" : ""} onClick={() => n.kids && toggle(n.id)}>
+          <g key={n.id} transform={`translate(${n.x},${n.y})`} className={n.kids ? "cursor-pointer outline-none [&:focus-visible>rect]:stroke-[2.5]" : ""}
+            onClick={() => n.kids && toggle(n.id)}
+            {...(n.kids ? {
+              role: "button", tabIndex: 0, "aria-expanded": !closed.has(n.id), "aria-label": n.label,
+              onKeyDown: (e: KeyboardEvent<SVGGElement>) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(n.id); } },
+            } : {})}>
             <rect x={0} y={-10} width={n.w} height={20} rx={10} fill="var(--color-ink-800)" stroke={color(n)} strokeWidth={n.depth === 0 ? 2 : 1} />
             <text x={9} y={4} fontSize="11" fill="var(--color-zinc-100)" fontWeight={n.depth === 0 ? 600 : 400}>
               {n.label.length * 6.2 + 18 > n.w ? `${n.label.slice(0, Math.floor((n.w - 22) / 6.2))}…` : n.label}
