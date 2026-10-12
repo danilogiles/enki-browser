@@ -11,6 +11,7 @@ export const SITES = "shields:sites";   // { [host]: { scripts?: "block", cookie
 export const FORGET = "shields:forget"; // [host]
 export const BADGE = "shields:badge";
 export const AUTO_BURN = "shields:auto-burn";
+export const DOWN = "shields:down";     // [host] with Shields down (mirrors uBlock's mode 0 for the site)
 
 export const LEVELS = [
   { level: 1, label: "Basic", hint: "Only the most common ads and trackers; fewest site breakages." },
@@ -76,4 +77,17 @@ export async function setForget(host, on) {
   const list = (await forgetList()).filter((h) => h !== host);
   if (on) list.push(host);
   await chrome.storage.local.set({ [FORGET]: await seal(list) });
+}
+
+// Sites with Shields down, as the panel's main switch set them. uBlock keeps its own mode per
+// site; this copy is for what Enki Shield itself does (removing tracking parameters, params.js),
+// which must stop on the same sites. Sealed like the lists above: it names sites.
+export async function downList() {
+  return readSealed(DOWN, []);
+}
+
+export async function setDown(host, down) {
+  const list = (await downList()).filter((h) => h !== host);
+  if (down) list.push(host);
+  await chrome.storage.local.set({ [DOWN]: await seal(list) });
 }
