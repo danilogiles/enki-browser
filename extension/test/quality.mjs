@@ -264,7 +264,10 @@ try {
   await panel.click("button:has-text('Save task')");
   await panel.click("button[title='Back']");
   await newChat();
+  // The whole name still shows the /suggestion, and Enter there picks it; a second Enter sends.
   await panel.fill("textarea", "/repeat-the-weekly");
+  check("a task saved from the chat is suggested by /name", (await panel.locator("[role=listbox] >> text=/repeat-the-weekly").count()) === 1);
+  await panel.press("textarea", "Enter");
   await panel.press("textarea", "Enter");
   await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
   check("a task saved from the chat runs with /name", (await panel.textContent("body")).includes("Repeat the weekly words"));
