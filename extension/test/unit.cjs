@@ -21,6 +21,17 @@ const call = { type: 'tool_call', id: 'c1', name: 'click', input: { ref: 'ref_1'
 let checks = 0;
 function check(name, fn) { fn(); checks++; console.log('PASS', name); }
 
+check('#52: manifest permissions match the reviewed set and are all inventoried', () => {
+  const src = fs.readFileSync(require('node:path').join(__dirname, '../manifest.config.ts'), 'utf8');
+  const doc = fs.readFileSync(require('node:path').join(__dirname, '../../docs/ACT-PERMISSIONS.md'), 'utf8');
+  const list = (key) => { const m = src.match(new RegExp(key + ':\\s*\\[([^\\]]*)\\]')); return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : []; };
+  const perms = list('permissions'), hosts = list('host_permissions');
+  assert.deepEqual(perms.slice().sort(), ['activeTab', 'debugger', 'scripting', 'sidePanel', 'storage', 'tabs', 'webNavigation']);
+  assert.deepEqual(hosts, ['<all_urls>']);
+  assert.ok(!/optional_permissions/.test(src));
+  for (const p of [...perms, ...hosts]) assert.ok(doc.includes('`' + p + '`') || doc.includes(p), 'undocumented permission ' + p);
+});
+
 check('summary stays within budget and keeps complete tool exchanges', () => {
   const h = [];
   for (let i = 0; i < 30; i++) h.push(user('request ' + i + 'x'.repeat(3000)), { role: 'assistant', parts: [{ ...call, id: 'c' + i }] },
