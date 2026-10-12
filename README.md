@@ -182,6 +182,8 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
   already sent, in *Ask* or *Act* mode — or, with Alt+Enter or the globe, searches DuckDuckGo.
   Typing an address just opens it. It speaks Portuguese, Spanish or English, following the browser.
   It is also the first tab when the browser opens.
+- **The side panel** speaks the browser's language too, Portuguese, Spanish or English: the request
+  box, the menu, the approval before a sensitive action, and the messages. Settings is English for now.
 - **The address bar asks Enki:** a search opens a tab with Enki's answer, from the web and with
   its sources; tables of numbers come as charts.
 - **A sober look:** neutral grey window chrome, light or dark following the operating system;

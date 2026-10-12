@@ -330,5 +330,31 @@ try {
   check("the answer page has no Act mode (acting would navigate the answer away)", await answer.locator("button[title^='Act:']").count() === 0);
   check("the answer page leaves the panel's open chat alone", await panel.evaluate(async () => (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"]) === openBefore);
   await answer.close();
+
+  // The panel in the browser's language (#32): Portuguese and Spanish, the same title-based
+  // selectors with their words. A second browser, since the language is fixed when it starts.
+  for (const [locale, words] of [
+    ["pt-BR", { placeholder: "Pergunte qualquer coisa…", act: "Agir:", more: "Mais", newChat: "Nova conversa", gotIt: "Entendi" }],
+    ["es", { placeholder: "Pregunta lo que quieras…", act: "Actuar:", more: "Más", newChat: "Nueva conversación", gotIt: "Entendido" }],
+  ]) {
+    const other = await chromium.launchPersistentContext(await mkdtemp(path.join(os.tmpdir(), "enki-quality-lang-")), {
+      headless: false, locale, args: [`--lang=${locale}`, `--disable-extensions-except=${dist}`, `--load-extension=${dist}`], viewport: { width: 420, height: 850 },
+    });
+    try {
+      const page = await other.newPage();
+      await page.goto(`chrome-extension://${id}/src/sidepanel/index.html`);
+      // A fresh profile with no provider opens Settings; give it the mock one, terms not yet accepted.
+      await page.evaluate(async () => chrome.storage.local.set({ "enki:settings": { preset: "custom", baseUrl: "http://127.0.0.1:8787/v1", apiKey: "test",
+        model: "mock-echo", vision: false, attachScreenshot: false, maxSteps: 10, theme: "dark", customInstructions: "", saveConversations: true }, "enki:mode": "ask" }));
+      await page.reload();
+      await page.waitForSelector("textarea");
+      const placeholder = await page.getAttribute("textarea", "placeholder");
+      check(`${locale}: the composer asks in that language (${placeholder})`, placeholder === words.placeholder);
+      check(`${locale}: the mode buttons are named in that language`, await page.locator(`button[title^='${words.act}']`).count() === 1);
+      check(`${locale}: the terms notice is in that language`, await page.locator(`[role=note] button:has-text('${words.gotIt}')`).count() === 1);
+      await page.click(`button[aria-label='${words.more}']`);
+      check(`${locale}: the More menu is in that language`, await page.locator(`[role=menuitem][title='${words.newChat}']`).count() === 1);
+    } finally { await other.close(); }
+  }
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

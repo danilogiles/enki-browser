@@ -6,6 +6,7 @@ import logo from "../assets/logo.svg";
 import type { Mode } from "../lib/agent/prompt";
 import type { Segment, UiMessage } from "./types";
 import { visualComponents } from "./Visuals";
+import { t } from "./strings";
 
 /**
  * The conversation, kept clean: each reply shows its answer, with the work behind it — the steps,
@@ -26,10 +27,7 @@ type Props = {
   progress: Progress | null;
 };
 
-const SUGGESTIONS: Record<Mode, string[]> = {
-  ask: ["Summarize this page", "What is this page about?", "Find the key numbers here"],
-  act: ["Search this site for…", "Fill in the form with…", "Open the pricing page"],
-};
+const SUGGESTIONS: Record<Mode, string[]> = { ask: t.suggestAsk, act: t.suggestAct };
 
 export function Chat({ messages, approval, mode, onSuggest, onRetry, showSteps, showRunDetails, progress }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -42,7 +40,7 @@ export function Chat({ messages, approval, mode, onSuggest, onRetry, showSteps, 
       <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
         <img src={logo} alt="" className="h-10 w-10 opacity-90" />
         <div className="text-sm text-zinc-400">
-          {mode === "ask" ? "Ask anything about the page you're on." : "Tell Enki what to do, and it navigates, clicks and types for you."}
+          {mode === "ask" ? t.emptyAsk : t.emptyAct}
         </div>
         <div className="flex flex-wrap justify-center gap-1.5">
           {SUGGESTIONS[mode].map((s) => (
@@ -85,7 +83,7 @@ function MessageView({ message, approval, onRetry, showSteps, showRunDetails, pr
       <div className="flex justify-end">
         <div className="max-w-[88%] rounded-2xl bg-ink-800 px-3.5 py-2 text-sm text-zinc-100">
           {message.screenshot && (
-            <img src={message.screenshot} alt="Screenshot attached" className="mb-2 max-h-28 rounded-md border border-ink-700 object-cover" />
+            <img src={message.screenshot} alt={t.screenshotAttached} className="mb-2 max-h-28 rounded-md border border-ink-700 object-cover" />
           )}
           <div className="whitespace-pre-wrap">{message.text}</div>
         </div>
@@ -122,7 +120,7 @@ function MessageView({ message, approval, onRetry, showSteps, showRunDetails, pr
             <div className="flex justify-end">
               <button type="button" onClick={onRetry}
                 className="inline-flex items-center gap-1 rounded-md bg-red-500/20 px-2.5 py-1 font-medium text-red-100 transition hover:bg-red-500/30">
-                <RotateCw size={11} /> Try again
+                <RotateCw size={11} /> {t.tryAgain}
               </button>
             </div>
           )}
@@ -138,13 +136,13 @@ function WorkingLine({ progress }: { progress: Progress | null }) {
   return (
     <div className="flex items-center gap-2 text-xs text-zinc-500">
       <Loader2 size={12} className="animate-spin" />
-      <span className="truncate">{progress ? describe(progress) : "Working…"}</span>
+      <span className="truncate">{progress ? describe(progress) : t.working}</span>
     </div>
   );
 }
 
 function describe(p: Progress): string {
-  return `${p.message}${p.step > 0 ? ` · step ${p.step}` : ""} · ${p.elapsed}s`;
+  return `${p.message}${p.step > 0 ? ` · ${t.step(p.step)}` : ""} · ${p.elapsed}s`;
 }
 
 /** The steps a reply took, folded behind an arrow; expanded while the user wants to watch. */
@@ -157,10 +155,10 @@ function Steps({ tools, thinking, working, progress }: {
   const [open, setOpen] = useState(false);
   const failed = tools.filter((t) => t.status === "error").length;
   const label = working
-    ? progress ? describe(progress) : "Working…"
+    ? progress ? describe(progress) : t.working
     : tools.length
-      ? `${tools.length} ${tools.length === 1 ? "step" : "steps"}${failed ? ` · ${failed} failed` : ""}`
-      : "Reasoning";
+      ? `${t.steps(tools.length)}${failed ? ` · ${t.failed(failed)}` : ""}`
+      : t.reasoning;
   return (
     <div className="text-xs text-zinc-500">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
@@ -181,7 +179,7 @@ function Steps({ tools, thinking, working, progress }: {
 /** The outcome after a reply, folded: what finished, what failed, and any notice. */
 function RunDetails({ message }: { message: UiMessage }) {
   const s = message.summary;
-  const outcome = !s ? "Details" : s.outcome === "finished" ? "Done" : s.outcome === "needs_input" ? "Needs your input" : "Could not complete";
+  const outcome = !s ? t.details : s.outcome === "finished" ? t.done : s.outcome === "needs_input" ? t.needsInput : t.notCompleted;
   return (
     <details className="group text-xs text-zinc-500">
       <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md py-0.5 pr-1 transition hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
@@ -189,8 +187,8 @@ function RunDetails({ message }: { message: UiMessage }) {
         {outcome}
       </summary>
       <div className="mt-1.5 flex flex-col gap-1 border-l border-ink-700 pl-3">
-        {s && <div>{s.succeeded} tool results successful · {s.failed} failed</div>}
-        {s && s.succeeded > 0 && <div>Tool results confirm execution; check the page to verify the intended outcome.</div>}
+        {s && <div>{t.toolResults(s.succeeded, s.failed)}</div>}
+        {s && s.succeeded > 0 && <div>{t.toolResultsNote}</div>}
         {message.note && <div>{message.note}</div>}
       </div>
     </details>
@@ -223,11 +221,11 @@ function ApprovalCard({ label, onDecide }: { label: string; onDecide: (ok: boole
     <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
       <div className="mb-2 flex items-start gap-2 text-amber-100">
         <ShieldAlert size={14} className="mt-0.5 shrink-0 text-amber-400" />
-        <span>Enki wants to <strong>{label}</strong>. This may be hard to undo. Allow?</span>
+        <span>{t.approvalBefore}<strong>{label}</strong>{t.approvalAfter}</span>
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={() => onDecide(true)} className="rounded-md bg-zinc-100 px-3 py-1 font-medium text-ink-950 transition hover:bg-zinc-300">Allow</button>
-        <button type="button" onClick={() => onDecide(false)} className="rounded-md border border-ink-700 px-3 py-1 text-zinc-200 transition hover:bg-ink-800">Deny</button>
+        <button type="button" onClick={() => onDecide(true)} className="rounded-md bg-zinc-100 px-3 py-1 font-medium text-ink-950 transition hover:bg-zinc-300">{t.allow}</button>
+        <button type="button" onClick={() => onDecide(false)} className="rounded-md border border-ink-700 px-3 py-1 text-zinc-200 transition hover:bg-ink-800">{t.deny}</button>
       </div>
     </div>
   );
