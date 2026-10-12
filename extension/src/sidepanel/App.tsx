@@ -23,6 +23,7 @@ import { diagnosticReport } from "../lib/diagnostics";
 import { connectorTools, loadConnections, onConnectionsChange, type Connection } from "../lib/connectors";
 import { expand, loadTasks, suggestions, type SavedTask } from "../lib/shortcuts";
 import { legalLinks, TERMS_VERSION } from "../lib/legal";
+import { EN, t as tr } from "./strings";
 
 const MODE_KEY = "enki:mode";
 
@@ -162,7 +163,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       lastSavedAt.current = snapshot.savedAt;
       void saveChat(id, snapshot)
         .then(() => listChats().then(setChats))
-        .catch(() => setBanner("Could not save this conversation. Browser storage may be full."));
+        .catch(() => setBanner(tr.notSaved));
     };
     // Avoid serializing storage writes for every streamed token. Tool boundaries save immediately.
     const last = messages[messages.length - 1];
@@ -306,9 +307,12 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         case "thinking":
           patchLast((m) => ({ ...m, thinking: (m.thinking ?? "") + e.delta }));
           break;
-        case "notice":
-          patchLast((m) => ({ ...m, note: m.note ? `${m.note} ${e.message}` : e.message }));
+        case "notice": {
+          // The loop words its notices in English; show the panel's language where there is one.
+          const notice = e.message === EN.sameFailure ? tr.sameFailure : e.message;
+          patchLast((m) => ({ ...m, note: m.note ? `${m.note} ${notice}` : notice }));
           break;
+        }
         case "retract_text":
           patchSegments((segs) => {
             const i = segs.map((s) => s.kind).lastIndexOf("text");
@@ -363,15 +367,15 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
             note:
               m.note ??
               (e.reason === "max_steps"
-                ? "Stopped: reached the step limit. Send another message to continue."
+                ? tr.stoppedSteps
                 : e.reason === "aborted"
-                  ? "Stopped."
+                  ? tr.stopped
                   : e.reason === "refusal"
-                    ? "The model declined to continue with this request."
+                    ? tr.refused
                     : e.reason === "empty"
-                      ? "The model returned an empty reply twice. Try again, rephrase, or pick another model in Settings."
+                      ? tr.emptyTwice
                       : e.reason === "max_tokens"
-                        ? "The reply was cut off at the token limit."
+                        ? tr.cutOff
                         : undefined),
           }));
           break;
@@ -416,7 +420,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     // One turn at a time per conversation — see turnlock.ts. Without this, a question typed here
     // while the other document is still answering would run a second turn over the same history.
     if (!(await acquireTurn(chatId))) {
-      setBanner("Enki is still answering this conversation in its other window. Wait for it to finish, or start a new chat.");
+      setBanner(tr.otherWindow);
       return;
     }
     const controller = new AbortController();
@@ -431,7 +435,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     try {
       executor.lockTab(selectedTab);
       const current = await executor.currentTab().catch(() => null);
-      if (selectedTab !== null && !current) throw new Error("The selected tab was closed. Choose another tab.");
+      if (selectedTab !== null && !current) throw new Error(tr.tabGone);
       if (current?.id) { executor.lockTab(current.id); setSelectedTab(current.id); }
       if (controller.signal.aborted) return;
       const restricted = !current || isRestrictedUrl(current.url);
@@ -464,7 +468,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         { id: uid(), role: "user", text: text.trim(), screenshot: thumb },
         { id: assistantId, role: "assistant", segments: [], streaming: true }]);
       visible = true;
-      if (runMode === "act") await executor.setActiveOverlay(true, "Enki is controlling this tab…");
+      if (runMode === "act") await executor.setActiveOverlay(true, tr.controlling);
       const effectiveMode = intent === "observe" ? "ask" : runMode;
       await runTurn({ provider: createProvider(settings), model: settings.model, mode: effectiveMode,
         system: buildSystemPrompt(effectiveMode, settings.customInstructions, settings.devMode && !!settings.unfiltered), history,
@@ -541,7 +545,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   const openChat = async (id: string) => {
     if (abortRef.current) return;
     const restored = await loadChat(id);
-    if (!restored) { setBanner("That chat could not be opened."); return; }
+    if (!restored) { setBanner(tr.chatNotOpened); return; }
     historyRef.current = restored.history;
     restoredRef.current = true;
     followedMessages.current = restored.messages;
@@ -624,14 +628,14 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         canContinue={!running && messages.length > 0}
         onContinue={retry}
         onReadAgain={() => { invalidateObservations(historyRef.current); void send("Read the current page again and report its state.", "observe"); }}
-        onCopyDiagnostics={() => navigator.clipboard.writeText(diagnosticReport(settings)).then(() => setBanner("Diagnostic report copied. Page content and credentials excluded."), () => setBanner("Clipboard unavailable. Open Logs to export the report."))}
+        onCopyDiagnostics={() => navigator.clipboard.writeText(diagnosticReport(settings)).then(() => setBanner(tr.diagnosticsCopied), () => setBanner(tr.noClipboard))}
         onLogs={settings.devMode ? () => setView("logs") : undefined}
         tabs={tabs}
         selectedTab={selectedTab}
         onSelectTab={setSelectedTab}
         usage={usage}
       />
-      {banner && <div role="status" className="mx-3 mb-1 rounded-lg bg-ink-900 px-3 py-1.5 text-xs text-zinc-400">{banner} <button className="underline" onClick={() => setBanner("")}>Dismiss</button></div>}
+      {banner && <div role="status" className="mx-3 mb-1 rounded-lg bg-ink-900 px-3 py-1.5 text-xs text-zinc-400">{banner} <button className="underline" onClick={() => setBanner("")}>{tr.dismiss}</button></div>}
 
       <Chat
         messages={messages}
@@ -641,20 +645,19 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         onRetry={running ? undefined : retry}
         showSteps={settings.showSteps !== false}
         showRunDetails={settings.showRunDetails !== false}
-        progress={running ? { ...progress, maxSteps: settings.maxSteps, elapsed, message: progress.message === "Waiting for provider" ? `Waiting for ${presetOf(settings.preset).label.split(" (")[0]}` : progress.message } as Progress : null}
+        progress={running ? { ...progress, maxSteps: settings.maxSteps, elapsed, message: progress.message === "Waiting for provider" ? tr.waitingFor(presetOf(settings.preset).label.split(" (")[0]) : tr.status[progress.message] ?? progress.message } as Progress : null}
       />
 
       {settings.acceptedTerms !== TERMS_VERSION && (
         <div role="note" className="mx-3 mb-1 rounded-xl border border-ink-700 bg-ink-900 px-3 py-2.5 text-xs text-zinc-300">
           <p>
-            Enki can make mistakes: check what matters. It acts in your browser only for you, and asks before sending, buying or deleting anything.
-            By using Enki you agree to the{" "}
-            <a className="underline" href={legalLinks().terms} target="_blank" rel="noreferrer">Terms of Use</a> and the{" "}
-            <a className="underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">Privacy Policy</a>.
+            {tr.termsNote}
+            <a className="underline" href={legalLinks().terms} target="_blank" rel="noreferrer">{tr.termsLink}</a>{tr.termsAnd}
+            <a className="underline" href={legalLinks().privacy} target="_blank" rel="noreferrer">{tr.privacyLink}</a>{tr.termsEnd}
           </p>
           <div className="mt-2 flex justify-end">
             <button type="button" className="rounded-md bg-enki-500 px-3 py-1 text-xs font-medium text-ink-950" onClick={() => { const next = { ...settings, acceptedTerms: TERMS_VERSION }; setSettings(next); void saveSettings(next); }}>
-              Got it
+              {tr.gotIt}
             </button>
           </div>
         </div>
@@ -662,9 +665,9 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
 
       {needsKey && (
         <div className="mx-3 mb-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Add an API key in{" "}
-          <button className="underline" onClick={() => setView("settings")}>Settings</button>{" "}
-          to start.
+          {tr.needsKeyBefore}
+          <button className="underline" onClick={() => setView("settings")}>{tr.settings}</button>
+          {tr.needsKeyAfter}
         </div>
       )}
 

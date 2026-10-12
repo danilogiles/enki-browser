@@ -5,6 +5,7 @@ import { presetOf, type Settings } from "../lib/settings";
 import { isRestrictedUrl } from "../lib/tools/executor";
 import type { ChatEntry } from "../lib/history";
 import type { TabInfo } from "./types";
+import { t } from "./strings";
 
 /**
  * The panel's only chrome, kept as quiet as Comet's: Enki and the model on the left (a click
@@ -67,16 +68,16 @@ export function Header(p: Props) {
           type="button"
           disabled={p.running}
           onClick={() => { setSearch(""); models.setOpen(!models.open); }}
-          title={`Model: ${p.settings.model} (${preset.label}). Click to switch.`}
+          title={t.modelTitle(p.settings.model, preset.label)}
           className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-zinc-400 transition hover:bg-ink-800 hover:text-zinc-100 disabled:opacity-60"
         >
           <span className="max-w-[150px] truncate">{short(p.settings.model || p.settings.preset)}</span>
           <ChevronDown size={12} className="shrink-0" />
         </button>
         {p.settings.devMode && p.settings.unfiltered && (
-          <span title="Unfiltered: Enki's tone rules are off; the model's policy is the only filter (Settings → Behavior → Developer)."
+          <span title={t.unfilteredTitle}
             className="absolute -right-1 top-1/2 translate-x-full -translate-y-1/2 rounded-full border border-amber-500/40 px-1.5 py-px text-[10px] text-amber-300">
-            unfiltered
+            {t.unfiltered}
           </span>
         )}
         {models.open && (
@@ -86,8 +87,8 @@ export function Header(p: Props) {
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search models"
-              aria-label="Search models"
+              placeholder={t.searchModels}
+              aria-label={t.searchModels}
               className="mb-1 w-full rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 text-xs text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-enki-500/60"
             />
             <div className="max-h-64 overflow-y-auto">
@@ -97,10 +98,10 @@ export function Header(p: Props) {
                   {m === p.settings.model && <Check size={13} className="shrink-0 text-enki-400" />}
                 </MenuItem>
               ))}
-              {!choices.length && <div className="px-2 py-1.5 text-xs text-zinc-500">No matching model.</div>}
+              {!choices.length && <div className="px-2 py-1.5 text-xs text-zinc-500">{t.noModel}</div>}
             </div>
             <Divider />
-            <MenuItem onClick={() => { models.setOpen(false); p.onOpenSettings(); }}>All models and providers…</MenuItem>
+            <MenuItem onClick={() => { models.setOpen(false); p.onOpenSettings(); }}>{t.allModels}</MenuItem>
           </Popover>
         )}
       </div>
@@ -108,8 +109,8 @@ export function Header(p: Props) {
       <div ref={more.ref} className="relative ml-auto">
         <button
           type="button"
-          title="More"
-          aria-label="More"
+          title={t.more}
+          aria-label={t.more}
           onClick={() => more.setOpen(!more.open)}
           className="rounded-md p-1.5 text-zinc-400 transition hover:bg-ink-800 hover:text-zinc-100"
         >
@@ -117,13 +118,13 @@ export function Header(p: Props) {
         </button>
         {more.open && (
           <Popover className="right-0 w-72">
-            <MenuItem title="New chat" onClick={() => { more.setOpen(false); p.onNewChat(); }}>New chat</MenuItem>
-            {p.canContinue && <MenuItem onClick={() => { more.setOpen(false); p.onContinue(); }}>Continue safely</MenuItem>}
-            {p.canContinue && <MenuItem onClick={() => { more.setOpen(false); p.onReadAgain(); }}>Read page again</MenuItem>}
+            <MenuItem title={t.newChat} onClick={() => { more.setOpen(false); p.onNewChat(); }}>{t.newChat}</MenuItem>
+            {p.canContinue && <MenuItem onClick={() => { more.setOpen(false); p.onContinue(); }}>{t.continueSafely}</MenuItem>}
+            {p.canContinue && <MenuItem onClick={() => { more.setOpen(false); p.onReadAgain(); }}>{t.readAgain}</MenuItem>}
             {p.chats.length > 0 && (
               <>
                 <Divider />
-                <div className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">Recent chats</div>
+                <div className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">{t.recentChats}</div>
                 <div className="max-h-56 overflow-y-auto">
                   {p.chats.slice(0, 20).map((c) => (
                     <div key={c.id} className="group flex items-center">
@@ -131,7 +132,7 @@ export function Header(p: Props) {
                         <span className={`min-w-0 flex-1 truncate ${c.id === p.currentChat ? "text-enki-400" : ""}`}>{c.title}</span>
                         <span className="shrink-0 text-[11px] text-zinc-500">{ago(c.updatedAt)}</span>
                       </MenuItem>
-                      <button type="button" title="Delete chat" aria-label={`Delete chat ${c.title}`} onClick={() => p.onDeleteChat(c.id)}
+                      <button type="button" title={t.deleteChat} aria-label={t.deleteChatNamed(c.title)} onClick={() => p.onDeleteChat(c.id)}
                         className="invisible shrink-0 rounded p-1 text-zinc-500 hover:text-red-300 group-hover:visible">
                         <Trash2 size={12} />
                       </button>
@@ -141,18 +142,18 @@ export function Header(p: Props) {
               </>
             )}
             <Divider />
-            <label htmlFor="controlled-tab" className="block px-2 pb-1 text-[11px] text-zinc-500">Controlled tab {p.running ? "(locked for this task)" : ""}</label>
+            <label htmlFor="controlled-tab" className="block px-2 pb-1 text-[11px] text-zinc-500">{t.controlledTab} {p.running ? t.lockedForTask : ""}</label>
             <select id="controlled-tab" disabled={p.running} value={p.selectedTab ?? ""} onChange={(e) => p.onSelectTab(e.target.value ? Number(e.target.value) : null)}
               className="mx-2 mb-1 w-[calc(100%-1rem)] min-w-0 rounded-md border border-ink-700 bg-ink-950 p-1.5 text-xs text-zinc-200">
-              <option value="">Active tab when a task starts</option>
-              {p.selectedTab !== null && !p.tabs.some((t) => t.id === p.selectedTab) && <option value={p.selectedTab}>Selected tab was closed</option>}
-              {p.tabs.map((t) => <option value={t.id} key={t.id}>{t.title || t.url}{isRestrictedUrl(t.url) ? " (internal page — navigate only)" : ""}</option>)}
+              <option value="">{t.activeTab}</option>
+              {p.selectedTab !== null && !p.tabs.some((tab) => tab.id === p.selectedTab) && <option value={p.selectedTab}>{t.tabClosed}</option>}
+              {p.tabs.map((tab) => <option value={tab.id} key={tab.id}>{tab.title || tab.url}{isRestrictedUrl(tab.url) ? t.internalPage : ""}</option>)}
             </select>
             <Divider />
-            <MenuItem onClick={() => { more.setOpen(false); p.onCopyDiagnostics(); }}>Copy diagnostics</MenuItem>
-            {p.onLogs && <MenuItem title="Logs" onClick={() => { more.setOpen(false); p.onLogs?.(); }}>Logs</MenuItem>}
+            <MenuItem onClick={() => { more.setOpen(false); p.onCopyDiagnostics(); }}>{t.copyDiagnostics}</MenuItem>
+            {p.onLogs && <MenuItem title={t.logs} onClick={() => { more.setOpen(false); p.onLogs?.(); }}>{t.logs}</MenuItem>}
             {p.usage.input + p.usage.output > 0 && (
-              <div className="px-2 pt-1 text-[11px] text-zinc-500">This chat: {fmt(p.usage.input)} in / {fmt(p.usage.output)} out tokens</div>
+              <div className="px-2 pt-1 text-[11px] text-zinc-500">{t.tokens(fmt(p.usage.input), fmt(p.usage.output))}</div>
             )}
           </Popover>
         )}
@@ -182,9 +183,9 @@ function Divider() {
   return <div className="my-1 h-px bg-ink-700" />;
 }
 
-function ago(t: number): string {
-  const m = Math.round((Date.now() - t) / 60000);
-  if (m < 1) return "now";
+function ago(at: number): string {
+  const m = Math.round((Date.now() - at) / 60000);
+  if (m < 1) return t.now;
   if (m < 60) return `${m}m`;
   if (m < 60 * 24) return `${Math.round(m / 60)}h`;
   return `${Math.round(m / 1440)}d`;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Camera, CameraOff, Loader2, Mic, Monitor, Search, Settings as SettingsIcon, Square } from "lucide-react";
 import { askMicrophonePermission, startRecording, transcribe, uiLanguage, type Recording, type VoiceState } from "../lib/voice";
 import type { Mode } from "../lib/agent/prompt";
+import { t } from "./strings";
 
 /**
  * The request box, in the shape of Comet's: the text on top, and one quiet row underneath with the
@@ -64,16 +65,16 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
     } catch (e) {
       if (e instanceof Error && e.message === "permission") {
         askMicrophonePermission();
-        setVoice({ kind: "error", message: "Allow the microphone in the tab that opened, then press the microphone again." });
+        setVoice({ kind: "error", message: t.voiceAllowMic });
       } else {
         setVoice({ kind: "error", message: e instanceof Error ? e.message : String(e) });
       }
     }
   };
-  const voiceTitle = voice.kind === "recording" ? "Listening — click to stop"
-    : voice.kind === "transcribing" ? "Turning your voice into text…"
-    : voice.kind === "downloading" ? `Downloading the voice model, once (${voice.percent}%)`
-    : "Speak instead of typing (stays on this computer)";
+  const voiceTitle = voice.kind === "recording" ? t.voiceListening
+    : voice.kind === "transcribing" ? t.voiceTranscribing
+    : voice.kind === "downloading" ? t.voiceDownloading(voice.percent)
+    : t.voiceIdle;
 
   const submit = () => {
     if (disabled || running || !value.trim()) return;
@@ -97,7 +98,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
   return (
     <div className="relative px-3 pb-3 pt-1">
       {options.length > 0 && (
-        <ul role="listbox" aria-label="Saved tasks and apps" className="absolute inset-x-3 bottom-full mb-1 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 py-1 shadow-lg">
+        <ul role="listbox" aria-label={t.suggestionsList} className="absolute inset-x-3 bottom-full mb-1 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 py-1 shadow-lg">
           {options.map((o, i) => (
             <li key={o.label} role="option" aria-selected={i === pick}>
               <button type="button" onMouseDown={(e) => { e.preventDefault(); choose(i); }}
@@ -115,8 +116,8 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
           rows={1}
           value={value}
           disabled={disabled}
-          placeholder={mode === "ask" ? "Ask anything…" : "Tell Enki what to do…"}
-          aria-label="Message Enki"
+          placeholder={mode === "ask" ? t.placeholderAsk : t.placeholderAct}
+          aria-label={t.message}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (options.length) {
@@ -141,8 +142,8 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
         <div className="mt-1.5 flex items-center gap-1">
           {onMode && (
             <div className="flex rounded-lg bg-ink-950/60 p-0.5">
-              {modeButton("ask", <Search size={15} />, "Ask: Enki reads the page and answers")}
-              {modeButton("act", <Monitor size={15} />, "Act: Enki can navigate, click and type")}
+              {modeButton("ask", <Search size={15} />, t.modeAsk)}
+              {modeButton("act", <Monitor size={15} />, t.modeAct)}
             </div>
           )}
           <button
@@ -160,7 +161,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
             <button
               type="button"
               onClick={onToggleScreenshot}
-              title={attachScreenshot ? "Screenshot attached to each message (click to turn off)" : "Screenshot off (click to attach)"}
+              title={attachScreenshot ? t.screenshotOn : t.screenshotOff}
               className={`rounded-md p-1.5 transition ${attachScreenshot ? "text-zinc-200 hover:bg-ink-800" : "text-zinc-500 hover:bg-ink-800 hover:text-zinc-300"}`}
             >
               {attachScreenshot ? <Camera size={15} /> : <CameraOff size={15} />}
@@ -169,19 +170,19 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
           <button
             type="button"
             onClick={onSettings}
-            title="Settings"
-            aria-label="Settings"
+            title={t.settings}
+            aria-label={t.settings}
             className="ml-auto rounded-md p-1.5 text-zinc-500 transition hover:bg-ink-800 hover:text-zinc-200"
           >
             <SettingsIcon size={15} />
           </button>
           {running ? (
-            <button type="button" onClick={onStop} title="Stop" aria-label="Stop"
+            <button type="button" onClick={onStop} title={t.stop} aria-label={t.stop}
               className="rounded-full bg-zinc-100 p-1.5 text-ink-950 transition hover:bg-zinc-300">
               <Square size={14} fill="currentColor" />
             </button>
           ) : (
-            <button type="button" onClick={submit} disabled={disabled || !value.trim()} title="Send (Enter)" aria-label="Send"
+            <button type="button" onClick={submit} disabled={disabled || !value.trim()} title={t.sendTitle} aria-label={t.send}
               className="rounded-full bg-zinc-100 p-1.5 text-ink-950 transition hover:bg-zinc-300 disabled:bg-ink-800 disabled:text-zinc-500">
               <ArrowUp size={15} strokeWidth={2.5} />
             </button>
@@ -190,7 +191,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
       </div>
       {(voice.kind === "downloading" || voice.kind === "error") && (
         <p role="status" className="mt-1 px-1 text-[11px] text-zinc-400">
-          {voice.kind === "downloading" ? `Downloading the voice model, once: ${voice.percent}%. After this, voice works offline.` : voice.message}
+          {voice.kind === "downloading" ? t.voiceDownloadingNote(voice.percent) : voice.message}
         </p>
       )}
     </div>
