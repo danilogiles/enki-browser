@@ -13,6 +13,6 @@ if [[ -f /etc/apparmor.d/enki-browser-user ]]; then
   sudo apparmor_parser -R /etc/apparmor.d/enki-browser-user 2>/dev/null || true
   sudo rm -f /etc/apparmor.d/enki-browser-user
 fi
-rm -rf "$DEST"
+rm -rf "$DEST" "$DEST.staged" "$DEST.previous" "${XDG_STATE_HOME:-$HOME/.local/state}/enki-browser/update"
 if [[ "${1:-}" == "--purge" ]]; then rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/enki-browser"; echo "Enki Browser and its profile removed."
 else echo "Enki Browser removed. Your profile is kept in ${XDG_CONFIG_HOME:-$HOME/.config}/enki-browser (use --purge to delete it)."; fi

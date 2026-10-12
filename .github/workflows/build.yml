@@ -118,6 +118,7 @@ jobs:
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/session.mjs
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/burn-confirm.mjs
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/shield-menu.mjs
+      - run: node test/update-linux.mjs
       # Fresh profiles hide what an update breaks: the latest published release runs on a profile
       # first, then this build on the same one (extension workers, Ctrl+Shift+E, Act refusals).
       - name: Update from the latest release
@@ -460,6 +461,8 @@ jobs:
           url="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$(basename "$zip")"
           node build/sign-update.mjs "$zip" "$url"
           node build/scoop-manifest.mjs "$zip" "$url"
+          # Pending Danilo's decision on the signing key (#22): signing update-linux.json with
+          # UPDATE_SIGNING_KEY is not wired in yet. build/sign-update.mjs supports the tar.gz already.
       # The installer, the .deb and the .dmgs also go up under names without the version, so
       # releases/latest/download/EnkiBrowserSetup.exe is a download link that never goes stale
       # (the README's and anyone else's). The versioned files stay for checksums and history.

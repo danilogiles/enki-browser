@@ -247,8 +247,9 @@ static class Updater
             if (!rsa.VerifyData(body, sig, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
                 throw new Exception("update manifest signature is invalid: " + manifestUrl);
         }
-        var d = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(Encoding.UTF8.GetString(body));
-        return new Manifest { Version = new Version((string)d["version"]), Url = (string)d["url"], Sha256 = (string)d["sha256"] };
+        var m = new Manifest();
+        UpdateManifest.Parse(Encoding.UTF8.GetString(body), out m.Version, out m.Url, out m.Sha256);
+        return m;
     }
 
     internal static WebClient Client()

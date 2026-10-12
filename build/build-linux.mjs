@@ -49,8 +49,11 @@ for (const size of [48]) {
 
 step("Defaults, launcher, installer");
 writeDefaults(path.join(app, "chromium"), path.join(app, "config"), ext.enkiId, ext.shieldId);
-for (const f of ["enki-browser", "install.sh", "uninstall.sh", "enki-browser.desktop", "apparmor-profile"]) cpSync(path.join(pkgDir, f), path.join(app, f));
-for (const f of ["enki-browser", "install.sh", "uninstall.sh"]) chmodSync(path.join(app, f), 0o755);
+for (const f of ["enki-browser", "enki-update", "install.sh", "uninstall.sh", "enki-browser.desktop", "apparmor-profile"]) cpSync(path.join(pkgDir, f), path.join(app, f));
+for (const f of ["enki-browser", "enki-update", "install.sh", "uninstall.sh"]) chmodSync(path.join(app, f), 0o755);
+// enki-update verifies update-linux.json against this key (the one Windows compiles into its
+// launcher; tests point UPDATE_PUBLIC_KEY_FILE at a throwaway one).
+cpSync(process.env.UPDATE_PUBLIC_KEY_FILE ?? path.join(root, "config", "update-signing.pub"), path.join(app, "config", "update-signing.pub"));
 cpSync(path.join(root, "LICENSE"), path.join(app, "LICENSE"));
 cpSync(path.join(root, "THIRD_PARTY.md"), path.join(app, "THIRD_PARTY.md"));
 const version = versionInfo({
@@ -77,7 +80,8 @@ if (hasDpkg) {
   const opt = path.join(deb, "opt", "enki-browser");
   mkdirSync(path.dirname(opt), { recursive: true });
   cpSync(app, opt, { recursive: true });
-  for (const f of ["install.sh", "uninstall.sh"]) rmSync(path.join(opt, f)); // apt installs and removes it
+  // apt installs, removes and updates it: no self-updater in a system install.
+  for (const f of ["install.sh", "uninstall.sh", "enki-update"]) rmSync(path.join(opt, f));
   mkdirSync(path.join(deb, "usr", "bin"), { recursive: true });
   symlinkSync("/opt/enki-browser/enki-browser", path.join(deb, "usr", "bin", "enki-browser"));
   mkdirSync(path.join(deb, "usr", "share", "applications"), { recursive: true });

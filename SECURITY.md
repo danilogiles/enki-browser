@@ -34,5 +34,7 @@ Enki Browser yet, tell us through the same channel.
 
 ## Supported versions
 
-Only the latest release. The browser updates itself on Windows; on macOS and Linux, install the
-newest release.
+Only the latest release. The browser updates itself on Windows and in Linux `tar.gz` installs
+(the same signing key and rules: signature, SHA-256, no downgrades) once releases publish a signed `update-linux.json`, which is pending (#22);
+on macOS and with the `.deb`,
+install the newest release.
