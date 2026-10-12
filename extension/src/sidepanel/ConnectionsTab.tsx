@@ -20,7 +20,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function ConnectionsTab() {
+export function ConnectionsTab({ taskSeed }: { taskSeed?: SavedTask | null } = {}) {
   const [apps, setApps] = useState<Connection[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -138,14 +138,15 @@ export function ConnectionsTab() {
         )}
       </Section>
 
-      <SavedTasks />
+      <SavedTasks seed={taskSeed ?? null} />
     </>
   );
 }
 
-function SavedTasks() {
+function SavedTasks({ seed }: { seed: SavedTask | null }) {
   const [tasks, setTasks] = useState<SavedTask[]>([]);
-  const [draft, setDraft] = useState<SavedTask | null>(null);
+  // Opened from the chat's ⋯ → Save as task: the form starts filled with that request.
+  const [draft, setDraft] = useState<SavedTask | null>(seed);
   useEffect(() => { void loadTasks().then(setTasks); }, []);
   const store = async (next: SavedTask[]) => { setTasks(next); await saveTasks(next); };
   return (

@@ -193,6 +193,20 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.deepEqual(suggestions('/da', tasks, apps).map((s) => s.label), ['/daily-standup']);
     assert.deepEqual(suggestions('/daily x', tasks, apps), []);
   });
+  check('a chat request becomes a prefilled saved task that runs with /name', () => {
+    const { expand, taskFromRequest } = require('../src/lib/shortcuts.ts');
+    const tasks = [{ id: '1', name: 'Daily Standup', prompt: 'List my open tickets', mode: 'act' }];
+    const t = taskFromRequest('  Summarize this page in 3 bullets ', 'ask', tasks, 'x');
+    assert.deepEqual(t, { id: 'x', name: 'summarize-this-page', prompt: 'Summarize this page in 3 bullets', mode: 'ask' });
+    assert.equal(expand('/summarize-this-page', [...tasks, t], []).text, 'Summarize this page in 3 bullets');
+    assert.equal(expand('/summarize-this-page', [...tasks, t], []).mode, 'ask');
+    const again = taskFromRequest('/daily-standup for today', 'ask', tasks, 'y');
+    assert.equal(again.prompt, 'List my open tickets\n\nfor today');
+    assert.equal(again.mode, 'act');
+    assert.equal(again.name, 'list-my-open');
+    assert.equal(taskFromRequest('Daily standup', 'act', tasks, 'z').name, 'daily-standup-2');
+    assert.equal(taskFromRequest('!!!', 'act', [], 'w').name, 'task');
+  });
   check('saved keys are masked to a recognisable prefix and last four', () => {
     const { maskKey } = require('../src/lib/settings.ts');
     assert.equal(maskKey('nvapi-abcdefghijklmnop1234'), 'nvapi-••••••1234');

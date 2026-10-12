@@ -21,7 +21,7 @@ import { Header } from "./Header";
 import { invalidateObservations } from "../lib/agent/context";
 import { diagnosticReport } from "../lib/diagnostics";
 import { connectorTools, loadConnections, onConnectionsChange, type Connection } from "../lib/connectors";
-import { expand, loadTasks, suggestions, type SavedTask } from "../lib/shortcuts";
+import { expand, loadTasks, suggestions, taskFromRequest, type SavedTask } from "../lib/shortcuts";
 import { legalLinks, TERMS_VERSION } from "../lib/legal";
 
 const MODE_KEY = "enki:mode";
@@ -68,6 +68,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<"chat" | "settings" | "logs">(PAGE_OPEN_SETTINGS ? "settings" : "chat");
   const [mode, setMode] = useState<Mode>("ask");
+  const [taskSeed, setTaskSeed] = useState<SavedTask | null>(null);
   // Connected apps (Settings → Connections) and saved tasks, kept current while the panel is open.
   const [apps, setApps] = useState<Connection[]>([]);
   const [tasks, setTasks] = useState<SavedTask[]>([]);
@@ -600,12 +601,16 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         onSave={async (s) => {
           await saveSettings(s);
           setSettings(s);
+          setTaskSeed(null);
           setView("chat");
         }}
-        onClose={() => setView("chat")}
+        onClose={() => { setTaskSeed(null); setView("chat"); }}
+        taskSeed={taskSeed}
       />
     );
   }
+
+  const lastRequest = [...messages].reverse().find((m) => m.role === "user" && m.text?.trim())?.text;
 
   const needsKey = !settings.apiKey && !presetOf(settings.preset).keyOptional;
 
@@ -623,6 +628,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         onDeleteChat={(id) => { void removeChat(id); }}
         canContinue={!running && messages.length > 0}
         onContinue={retry}
+        onSaveTask={!running && lastRequest ? () => { setTaskSeed(taskFromRequest(lastRequest, mode, tasks, Math.random().toString(36).slice(2, 10))); setView("settings"); } : undefined}
         onReadAgain={() => { invalidateObservations(historyRef.current); void send("Read the current page again and report its state.", "observe"); }}
         onCopyDiagnostics={() => navigator.clipboard.writeText(diagnosticReport(settings)).then(() => setBanner("Diagnostic report copied. Page content and credentials excluded."), () => setBanner("Clipboard unavailable. Open Logs to export the report."))}
         onLogs={settings.devMode ? () => setView("logs") : undefined}
