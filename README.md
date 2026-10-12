@@ -88,11 +88,12 @@ Tested on Ubuntu 24.04 and Debian 12. *Make default* in Enki Browser's settings
 
 On Windows, Enki Browser updates itself (on macOS, install the new release the same way you
 installed it; Scoop installs are updated by Scoop). Linux installs from the `tar.gz` (`install.sh`
-or the one-line installer) update themselves too, from the next release on: the browser checks a
+or the one-line installer) can update themselves too: the browser checks a
 signed `update-linux.json` every couple of hours, downloads and verifies the new release beside
 yours, and switches to it the next time you start it (the old one is kept as
 `~/.local/opt/enki-browser.previous`). The `.deb` does not update itself: install the new `.deb`
-over it. While the browser is open it looks for a newer
+over it. Releases do not publish `update-linux.json` yet (the signing step in CI is pending a
+decision, #22), so for now install each new `tar.gz` release yourself. While the browser is open it looks for a newer
 release every couple of hours, downloads it and installs it **beside the one you are using**. A
 notification then offers to restart now: every window and tab comes back, on the new version. If
 you ignore it, the next time you start Enki Browser you are on the new version anyway. Nothing
@@ -302,7 +303,8 @@ Honest list; each is on the roadmap.
 - **No Chrome Web Store.** As in ungoogled-chromium, extensions install from `.crx` files with a
   confirmation prompt. See [chromium-web-store](https://github.com/NeverDecaf/chromium-web-store).
 - **No automatic updates on macOS or for the `.deb` yet**: install each new release with the
-  `.dmg` or the `.deb`. Linux `tar.gz` installs update themselves.
+  `.dmg` or the `.deb`. Linux `tar.gz` installs can update themselves once releases
+  publish a signed `update-linux.json` (pending, #22).
 - **macOS: not notarized.** The first launch needs *Open Anyway* (see [macOS](#macos)), and after
   an update macOS may ask again for the keychain item that encrypts your logins. A Developer ID
   signature would end both; it needs an Apple Developer account.
