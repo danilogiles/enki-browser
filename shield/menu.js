@@ -5,7 +5,9 @@
 // reliably for extensions loaded from the command line, so the item is (re)made whenever the
 // worker starts: removed first, then created, so it never fails as a duplicate.
 
-const MENU = { id: "shield-check-updates", title: "Check for updates", contexts: ["action"] };
+import { t } from "./i18n.js";
+
+const MENU = { id: "shield-check-updates", title: t("checkUpdates"), contexts: ["action"] };
 const UPDATES_URL = "options.html#check-updates";
 
 function call(fn, ...args) {

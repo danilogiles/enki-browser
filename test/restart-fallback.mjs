@@ -3,7 +3,11 @@
 // fake clock: after 10 seconds, a grey helper line and a "Try again" button.
 //   node test/restart-fallback.mjs
 import { readFileSync } from "node:fs";
-import { RESTART_FALLBACK_MS, RESTART_HELP, restartWithFallback } from "../shield/updates.js";
+
+// updates.js reads its words through chrome.i18n (shield/i18n.js); here, the English messages.
+const en = JSON.parse(readFileSync(new URL("../shield/_locales/en/messages.json", import.meta.url), "utf8"));
+globalThis.chrome = { i18n: { getMessage: (key, subs = []) => (en[key]?.message ?? "").replace(/\$(\d)/g, (_, n) => subs[n - 1] ?? "") } };
+const { RESTART_FALLBACK_MS, RESTART_HELP, restartWithFallback } = await import("../shield/updates.js");
 
 let failed = 0;
 const check = (name, ok, detail = "") => { if (!ok) failed++; console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };

@@ -1,5 +1,8 @@
 // The Shields panel: the button right of the address bar, as Brave's lion is.
 import { BADGE, LEVELS, blocker, blockerId, forgetList, setForget, setSite, sites } from "./sites.js";
+import { localize, t } from "./i18n.js";
+
+localize();
 
 const $ = (id) => document.getElementById(id);
 const DOCS = "https://github.com/danilogiles/enki-browser/blob/main/";
@@ -35,7 +38,7 @@ async function render() {
   const known = typeof level === "number";
   const up = !known || level > 0;
   setSwitch($("toggle"), up);
-  $("state").textContent = up ? "Shields up for this site" : "Shields down for this site";
+  $("state").textContent = t(up ? "p_up" : "p_down");
   $("advanced-body").classList.toggle("disabled", !up);
 
   const select = $("level");
@@ -47,7 +50,7 @@ async function render() {
   const record = ((await chrome.storage.session.get("shields:tabs"))["shields:tabs"] ?? {})[tab.id];
   const count = record?.host === host ? record.count : 0;
   $("count").textContent = String(count);
-  $("count-label").textContent = count === 1 ? "tracker, ad, or more blocked" : "trackers, ads, and more blocked";
+  $("count-label").textContent = t(count === 1 ? "p_countOne" : "p_countMany");
   const list = $("blocked");
   list.replaceChildren(...Object.entries(record?.hosts ?? {}).sort((a, b) => b[1] - a[1]).map(([h, n]) => {
     const li = document.createElement("li");
@@ -114,9 +117,9 @@ const confirmBox = (kind) => {
   $("burn-title").hidden = !burn;
   $("burn-lists").hidden = !burn;
   $("burn-confirm").setAttribute("aria-labelledby", burn ? "burn-title" : "burn-text");
-  if (burn) $("burn-text").replaceChildren("Every tab closes. ", Object.assign(document.createElement("strong"), { textContent: "This cannot be undone." }));
-  else $("burn-text").textContent = `Delete ${host}'s cookies and site data and close its tabs?`;
-  $("burn-go").textContent = burn ? "Burn" : "Shred";
+  if (burn) $("burn-text").replaceChildren(t("p_burnSub"), Object.assign(document.createElement("strong"), { textContent: t("cannotUndo") }));
+  else $("burn-text").textContent = t("p_shredAsk", host);
+  $("burn-go").textContent = t(burn ? "burn" : "p_shredGo");
   $("burn-confirm").hidden = false;
   document.querySelector(".burn").classList.add("dim");
   $("burn-cancel").focus();
@@ -136,7 +139,7 @@ document.addEventListener("keydown", (e) => {
 });
 $("burn-go").onclick = async () => {
   $("burn-go").disabled = $("burn-cancel").disabled = true;
-  $("burn-go").textContent = pending === "burn" ? "Burning…" : "Shredding…";
+  $("burn-go").textContent = t(pending === "burn" ? "burning" : "p_shredding");
   await chrome.runtime.sendMessage(pending === "burn" ? { type: "shields:burn" } : { type: "shields:shred", host });
   window.close();
 };

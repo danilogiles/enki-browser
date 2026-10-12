@@ -1,0 +1,410 @@
+{
+  "extName": {
+    "message": "Enki Shield"
+  },
+  "extDescription": {
+    "message": "Enki Browser's Shields: what was blocked on each site, per-site switches, and a warning before known phishing sites. Everything is checked and kept on this device."
+  },
+  "actionTitle": {
+    "message": "Enki Shields"
+  },
+  "p_shieldsSite": {
+    "message": "Shields for this site"
+  },
+  "p_countMany": {
+    "message": "trackers, ads, and more blocked"
+  },
+  "p_countOne": {
+    "message": "tracker, ad, or more blocked"
+  },
+  "p_advanced": {
+    "message": "Advanced options"
+  },
+  "blockTrackers": {
+    "message": "Block trackers & ads"
+  },
+  "p_level": {
+    "message": "Blocking level"
+  },
+  "httpsUpgrade": {
+    "message": "Upgrade connections to HTTPS"
+  },
+  "p_always": {
+    "message": "Always"
+  },
+  "p_blockScripts": {
+    "message": "Block scripts"
+  },
+  "p_blockScriptsSite": {
+    "message": "Block scripts on this site"
+  },
+  "p_fpTitle": {
+    "message": "Every site gets tiny random noise in canvas and layout readings, so they cannot be used to identify this browser."
+  },
+  "p_blockFp": {
+    "message": "Block fingerprinting"
+  },
+  "p_standard": {
+    "message": "Standard"
+  },
+  "p_cookies": {
+    "message": "Cookies"
+  },
+  "p_cookiesSite": {
+    "message": "Cookies on this site"
+  },
+  "p_cookies3p": {
+    "message": "Block third-party cookies"
+  },
+  "p_cookiesAll": {
+    "message": "Block all cookies"
+  },
+  "p_forget": {
+    "message": "Forget me when I close this site"
+  },
+  "p_forgetLabel": {
+    "message": "Forget this site when its last tab closes"
+  },
+  "p_shredTitle": {
+    "message": "Delete this site's cookies and storage and close its tabs"
+  },
+  "p_shred": {
+    "message": "Shred this site"
+  },
+  "p_burnTitle": {
+    "message": "Close every tab and delete history, cookies, site data and cache"
+  },
+  "burnAll": {
+    "message": "🔥 Burn all data"
+  },
+  "burnAsk": {
+    "message": "Burn everything now?"
+  },
+  "p_burnAsk": {
+    "message": "🔥 Burn everything now?"
+  },
+  "p_deletes": {
+    "message": "✕ Deletes"
+  },
+  "p_deletesList": {
+    "message": "History, cookies and site data, cache, download history, autofill (saved addresses & cards)"
+  },
+  "p_kept": {
+    "message": "✓ Kept"
+  },
+  "p_keptList": {
+    "message": "Passwords, bookmarks, and Enki chats, settings, and API keys. Shields settings too."
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "burn": {
+    "message": "Burn"
+  },
+  "p_enterCancels": {
+    "message": "Enter cancels"
+  },
+  "p_lists": {
+    "message": "Filter lists"
+  },
+  "p_global": {
+    "message": "Global settings"
+  },
+  "p_broken": {
+    "message": "If this site seems broken, try Shields down. Blocking stays on everywhere else."
+  },
+  "checkUpdates": {
+    "message": "Check for updates"
+  },
+  "terms": {
+    "message": "Terms"
+  },
+  "privacy": {
+    "message": "Privacy"
+  },
+  "p_notWeb": {
+    "message": "Shields work on websites. This page belongs to the browser."
+  },
+  "p_up": {
+    "message": "Shields up for this site"
+  },
+  "p_down": {
+    "message": "Shields down for this site"
+  },
+  "p_burnSub": {
+    "message": "Every tab closes. "
+  },
+  "cannotUndo": {
+    "message": "This cannot be undone."
+  },
+  "p_shredAsk": {
+    "message": "Delete $1's cookies and site data and close its tabs?"
+  },
+  "p_shredGo": {
+    "message": "Shred"
+  },
+  "burning": {
+    "message": "Burning…"
+  },
+  "p_shredding": {
+    "message": "Shredding…"
+  },
+  "o_title": {
+    "message": "Enki Shields settings"
+  },
+  "o_intro": {
+    "message": "Defaults for every site. Change one site from the Shields button next to the address bar."
+  },
+  "o_everywhere": {
+    "message": "Everywhere"
+  },
+  "o_level": {
+    "message": "Default blocking level"
+  },
+  "o_badge": {
+    "message": "Show the number blocked on the Shields button"
+  },
+  "o_badgeLabel": {
+    "message": "Show the number blocked"
+  },
+  "o_alwaysBrowser": {
+    "message": "Always · browser settings"
+  },
+  "o_3p": {
+    "message": "Third-party cookies"
+  },
+  "o_blockedBrowser": {
+    "message": "Blocked · browser settings"
+  },
+  "o_fp": {
+    "message": "Fingerprinting"
+  },
+  "o_fpState": {
+    "message": "Standard noise on every site"
+  },
+  "o_phishing": {
+    "message": "Phishing warnings"
+  },
+  "o_phishingState": {
+    "message": "On, list checked on this device"
+  },
+  "o_burn": {
+    "message": "Burn"
+  },
+  "o_autoBurn": {
+    "message": "Burn all data when I close the browser"
+  },
+  "o_autoBurnNote": {
+    "message": "Cookies and site data are deleted when the last window closes; history and cache when the browser next opens, and the tabs do not come back. Passwords and bookmarks are kept."
+  },
+  "o_autoBurnLabel": {
+    "message": "Burn all data when the browser closes"
+  },
+  "o_burnNow": {
+    "message": "Burn everything now"
+  },
+  "o_download": {
+    "message": "Download"
+  },
+  "o_restartUpdate": {
+    "message": "Restart to update"
+  },
+  "o_defaultBrowser": {
+    "message": "Default browser"
+  },
+  "o_makeDefault": {
+    "message": "Make default"
+  },
+  "o_guide": {
+    "message": "First-run guide"
+  },
+  "o_guideNote": {
+    "message": "Welcome, default browser, AI setup and Shield summary."
+  },
+  "o_guideAgain": {
+    "message": "Show the guide again"
+  },
+  "o_video": {
+    "message": "Protected video"
+  },
+  "o_widevine": {
+    "message": "Widevine, for Crunchyroll, Spotify and other streaming sites"
+  },
+  "o_restartBrowser": {
+    "message": "Restart Enki Browser"
+  },
+  "o_turnOff": {
+    "message": "Turn off"
+  },
+  "o_turnOn": {
+    "message": "Turn on"
+  },
+  "o_wvAsk": {
+    "message": "Download Widevine from Google?"
+  },
+  "o_wvConsent": {
+    "message": "Widevine is Google's closed-source module that streaming sites use to play protected video. Enki Browser does not include it: this downloads it from Google (update.googleapis.com), checks Google's signature, and keeps it up to date with about one request to Google a day. Google's terms apply. It runs only when a site plays protected video, and you can turn it off here at any time."
+  },
+  "o_wvGo": {
+    "message": "Download from Google"
+  },
+  "o_sites": {
+    "message": "Sites with their own settings"
+  },
+  "o_burnSub": {
+    "message": "Every tab closes and this browsing data is deleted. <strong>This cannot be undone.</strong>"
+  },
+  "o_deletes": {
+    "message": "Deletes"
+  },
+  "o_kept": {
+    "message": "Kept"
+  },
+  "o_delTabs": {
+    "message": "Every open tab (closed)"
+  },
+  "o_delHistory": {
+    "message": "History"
+  },
+  "o_delCookies": {
+    "message": "Cookies and site data"
+  },
+  "o_delCache": {
+    "message": "Cache"
+  },
+  "o_delDownloads": {
+    "message": "Download history"
+  },
+  "o_delAutofill": {
+    "message": "Autofill (saved addresses & cards)"
+  },
+  "o_keepPasswords": {
+    "message": "Passwords"
+  },
+  "o_keepBookmarks": {
+    "message": "Bookmarks"
+  },
+  "o_keepEnki": {
+    "message": "Enki chats, settings, and API keys"
+  },
+  "o_keepShields": {
+    "message": "Shields settings"
+  },
+  "o_enterEsc": {
+    "message": "<kbd>Enter</kbd> or <kbd>Esc</kbd> cancels"
+  },
+  "o_none": {
+    "message": "None yet."
+  },
+  "o_reset": {
+    "message": "Reset"
+  },
+  "o_scriptsBlocked": {
+    "message": "scripts blocked"
+  },
+  "o_cookiesBlocked": {
+    "message": "all cookies blocked"
+  },
+  "o_forgotten": {
+    "message": "forgotten on close"
+  },
+  "u_version": {
+    "message": "Enki Browser $1"
+  },
+  "u_ready": {
+    "message": "Enki Browser $1 is downloaded and verified. Restart to use it; every window and tab comes back."
+  },
+  "u_error": {
+    "message": "Could not check for updates: $1"
+  },
+  "u_off": {
+    "message": "Updates are turned off on this computer (a file named no-update next to EnkiBrowser.exe)."
+  },
+  "u_available": {
+    "message": "Enki Browser $1 is available. Install it the way you installed this one; your profile is kept."
+  },
+  "u_checkedNoRelease": {
+    "message": "Checked just now · could not find the latest release."
+  },
+  "u_checkedLatest": {
+    "message": "Checked just now · $1 is the latest."
+  },
+  "u_checkedUpToDate": {
+    "message": "Checked just now · you have the latest version."
+  },
+  "u_auto": {
+    "message": "Updates download by themselves every couple of hours."
+  },
+  "u_manual": {
+    "message": "This copy does not update by itself; check here for a new release."
+  },
+  "d_isDefault": {
+    "message": "Enki Browser is your default browser."
+  },
+  "d_other": {
+    "message": "Another browser opens links from other apps."
+  },
+  "d_opened": {
+    "message": "In Windows Settings, choose Enki Browser, then “Set default”."
+  },
+  "d_failed": {
+    "message": "Windows Settings could not be opened. Open Settings → Apps → Default apps and choose Enki Browser."
+  },
+  "u_checking": {
+    "message": "Checking… a download can take a minute."
+  },
+  "w_otherOs": {
+    "message": "Can be turned on in Enki Browser for Windows; macOS and Linux come next."
+  },
+  "w_error": {
+    "message": "Could not finish: $1"
+  },
+  "w_ready": {
+    "message": "Widevine $1 is downloaded from Google and verified. Restart Enki Browser to use it; your tabs come back."
+  },
+  "w_on": {
+    "message": "On · Widevine $1, kept up to date from Google."
+  },
+  "w_byHand": {
+    "message": "Widevine $1 was put here by hand; Enki does not keep it up to date."
+  },
+  "w_off": {
+    "message": "Off. Protected video does not play."
+  },
+  "w_keepUpdated": {
+    "message": "Keep it up to date"
+  },
+  "w_downloading": {
+    "message": "Downloading from Google and checking its signature… about 20 MB."
+  },
+  "w_removed": {
+    "message": "Off. Widevine is removed from this computer."
+  },
+  "restarting": {
+    "message": "Restarting…"
+  },
+  "lvBasic": {
+    "message": "Basic"
+  },
+  "lvBasicHint": {
+    "message": "Only the most common ads and trackers; fewest site breakages."
+  },
+  "lvStandard": {
+    "message": "Standard"
+  },
+  "lvStandardHint": {
+    "message": "Ads, trackers and annoyances, without breaking sites (default)."
+  },
+  "lvAggressive": {
+    "message": "Aggressive"
+  },
+  "lvAggressiveHint": {
+    "message": "Everything uBlock knows, including first-party trackers; may break some sites."
+  },
+  "u_restartHelp": {
+    "message": "Didn't restart? Close every Enki window and reopen it."
+  },
+  "u_tryAgain": {
+    "message": "Try again"
+  }
+}

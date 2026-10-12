@@ -6,6 +6,8 @@
 // Linux have no updater yet: there it asks GitHub for the number of the latest release and links
 // to the download.
 
+import { t } from "./i18n.js";
+
 const HOST = "io.github.danilogiles.enki_browser";
 const LATEST = "https://api.github.com/repos/danilogiles/enki-browser/releases/latest";
 export const DOWNLOAD = "https://github.com/danilogiles/enki-browser/releases/latest";
@@ -67,7 +69,7 @@ export function restart() {
 }
 
 export const RESTART_FALLBACK_MS = 10000;
-export const RESTART_HELP = "Didn't restart? Close every Enki window and reopen it.";
+export const RESTART_HELP = t("u_restartHelp");
 
 /**
  * "Restart to update", clicked. The browser closing takes this page with it; if it is still here
@@ -79,7 +81,7 @@ export function restartWithFallback(els, ask = restart, ms = RESTART_FALLBACK_MS
   const { button, state, help } = els;
   button.disabled = true;
   help.hidden = true;
-  state.textContent = "Restarting…";
+  state.textContent = t("restarting");
   return new Promise((resolve) => {
     let done = false;
     const fallback = () => {
@@ -88,7 +90,7 @@ export function restartWithFallback(els, ask = restart, ms = RESTART_FALLBACK_MS
       state.textContent = "";
       help.textContent = RESTART_HELP;
       help.hidden = false;
-      button.textContent = "Try again";
+      button.textContent = t("u_tryAgain");
       button.disabled = false;
       resolve("fallback");
     };
