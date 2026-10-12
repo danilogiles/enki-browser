@@ -37,6 +37,15 @@ export const PRESETS: Preset[] = [
   { id: "notion", name: "Notion", url: "https://mcp.notion.com/mcp", auth: "oauth", hint: "Pages and databases" },
   { id: "sentry", name: "Sentry", url: "https://mcp.sentry.dev/mcp", auth: "oauth", hint: "Errors and issues" },
   { id: "github", name: "GitHub", url: "https://api.githubcopilot.com/mcp/", auth: "token", hint: "Needs a personal access token (github.com/settings/tokens)" },
+  // Added 2026-10-12 (#35): official remote servers whose code is open source, checked for a 401
+  // with OAuth metadata, dynamic client registration and Enki's loopback redirect (or, for the
+  // two read-only ones, no sign-in at all). Payment services are left out on purpose.
+  { id: "cloudflare-docs", name: "Cloudflare Docs", url: "https://docs.mcp.cloudflare.com/mcp", auth: "none", hint: "Search Cloudflare's documentation; no sign-in" },
+  { id: "cloudflare", name: "Cloudflare Workers", url: "https://bindings.mcp.cloudflare.com/mcp", auth: "oauth", hint: "Workers, KV, R2 and D1 in your account" },
+  { id: "huggingface", name: "Hugging Face", url: "https://huggingface.co/mcp", auth: "none", hint: "Search models, datasets, Spaces and papers; no sign-in" },
+  { id: "neon", name: "Neon", url: "https://mcp.neon.tech/mcp", auth: "oauth", hint: "Postgres projects, branches and queries" },
+  { id: "supabase", name: "Supabase", url: "https://mcp.supabase.com/mcp", auth: "oauth", hint: "Projects, database and edge functions" },
+  { id: "webflow", name: "Webflow", url: "https://mcp.webflow.com/mcp", auth: "oauth", hint: "Sites, pages and CMS collections" },
 ];
 
 const LIST = "enki:connections";
