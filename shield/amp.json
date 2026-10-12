@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "redirect", "redirect": { "regexSubstitution": "https://\\1" } },
+    "condition": { "regexFilter": "^https://(?:www\\.)?google\\.(?:[a-z]{2,3}|co\\.[a-z]{2}|com\\.[a-z]{2})/amp/s/([^/?#][^#]*)$", "resourceTypes": ["main_frame"] }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "redirect", "redirect": { "regexSubstitution": "https://\\1" } },
+    "condition": { "regexFilter": "^https://[a-z0-9-]+\\.cdn\\.ampproject\\.org/c/s/([^/?#][^#]*)$", "resourceTypes": ["main_frame"] }
+  }
+]
