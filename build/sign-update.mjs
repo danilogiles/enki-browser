@@ -1,6 +1,11 @@
 // Writes update.json and its signature next to a release zip.
 //
 //   UPDATE_SIGNING_KEY="<PEM>" node build/sign-update.mjs out/EnkiBrowser-X-windows-x64.zip <download url>
+//   UPDATE_SIGNING_KEY="<PEM>" node build/sign-update.mjs out/enki-browser-X-linux-x64.tar.gz <download url>
+//
+// The Windows zip gets update.json (read by launcher/Updater.cs, unchanged); the Linux tarball gets
+// update-linux.json with "platform": "linux-x64" (read by packaging/linux/enki-update, which
+// refuses a manifest for any other platform). Both are signed with the same key.
 //
 // The launcher accepts an update only if update.json verifies against the public key compiled
 // into it, and only installs the zip whose SHA-256 this manifest names. In CI the private key is
@@ -18,11 +23,15 @@ const key = createPrivateKey(pem);
 
 // The version inside the zip is the one that gets installed, so the manifest takes it from there
 // rather than from a tag name or an argument that could disagree.
-const version = /EnkiBrowser-(\d+\.\d+\.\d+)-windows-x64\.zip$/.exec(path.basename(zip))?.[1];
+const win = /^EnkiBrowser-(\d+\.\d+\.\d+)-windows-x64\.zip$/.exec(path.basename(zip));
+const linux = /^enki-browser-(\d+\.\d+\.\d+)-linux-x64\.tar\.gz$/.exec(path.basename(zip));
+const version = (win ?? linux)?.[1];
 if (!version) throw new Error(`Cannot read a version from ${path.basename(zip)}`);
+const name = linux ? "update-linux.json" : "update.json";
 const sha256 = createHash("sha256").update(readFileSync(zip)).digest("hex");
 
-const manifest = Buffer.from(JSON.stringify({ version, url, sha256, published: new Date().toISOString() }, null, 2) + "\n");
+const fields = linux ? { version, platform: "linux-x64", url, sha256 } : { version, url, sha256 };
+const manifest = Buffer.from(JSON.stringify({ ...fields, published: new Date().toISOString() }, null, 2) + "\n");
 const signature = sign("sha256", manifest, key);
 // Refuse to publish a signature the paired public key would reject (wrong secret, wrong key file).
 const pub = process.env.UPDATE_PUBLIC_KEY_FILE ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "config", "update-signing.pub");
@@ -30,6 +39,6 @@ if (!verify("sha256", manifest, createPublicKey(readFileSync(pub)), signature)) 
   throw new Error(`The signing key does not match ${pub}; the launcher would reject this update.`);
 }
 const dir = path.dirname(zip);
-writeFileSync(path.join(dir, "update.json"), manifest);
-writeFileSync(path.join(dir, "update.json.sig"), signature.toString("base64") + "\n");
-console.log(`signed update.json for ${version} (${sha256})`);
+writeFileSync(path.join(dir, name), manifest);
+writeFileSync(path.join(dir, `${name}.sig`), signature.toString("base64") + "\n");
+console.log(`signed ${name} for ${version} (${sha256})`);

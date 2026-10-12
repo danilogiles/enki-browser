@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Enki Browser's updater for Linux tarball installs (~/.local/opt/enki-browser, install.sh).
+# The Windows counterpart is launcher/Updater.cs, and the trust rules are the same:
+#
+#   - Each release carries update-linux.json (version, platform, tarball URL, tarball SHA-256) and
+#     update-linux.json.sig, an RSA-SHA256 signature made in CI with the same key that signs the
+#     Windows update.json (build/sign-update.mjs). The public half ships in config/update-signing.pub.
+#   - A manifest without a valid signature is ignored; one for another platform is ignored; a
+#     tarball whose hash differs from the signed one is discarded; a tarball that does not contain
+#     the version the manifest names is discarded; a version not newer than the running one is
+#     never installed. No openssl means no update: nothing unverified is ever installed.
+#
+#   enki-update check   look for a newer signed release and stage it beside this install
+#                       (<install>.staged); at most every two hours unless --force
+#   enki-update apply   if a verified release is staged and this browser is not running, switch to
+#                       it (the launcher runs this before starting Chromium)
+#
+# Off with a file named no-update in the install folder or ENKI_BROWSER_NO_UPDATE=1. A system
+# install (the .deb, under /opt) is not writable by the user and is never touched: apt updates it.
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+FEED="https://api.github.com/repos/danilogiles/enki-browser/releases?per_page=20"
+PLATFORM="linux-x64"
+INTERVAL=$((2 * 60 * 60))
+STAGED="$HERE.staged"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/enki-browser/update"
+PUB="$HERE/config/update-signing.pub"
+
+log() { mkdir -p "$STATE"; printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$STATE/update.log"; }
+die() { log "$*"; echo "enki-update: $*" >&2; exit 1; }
+version_of() { sed -n 's/.*"enkiBrowser": *"\([0-9][0-9.]*\)".*/\1/p' "$1/version.json" 2>/dev/null | head -n1; }
+# 0 when $1 is a newer x.y.z than $2.
+newer() { [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)" == "$1" ]]; }
+field() { sed -n "s/^ *\"$1\": *\"\\([^\"]*\\)\".*/\\1/p" "$2" | head -n1; }
+fetch() { curl -fsSL --proto '=https,http' --max-time 600 -A EnkiBrowser-Updater "$@"; }
+
+disabled() {
+  [[ -e "$HERE/no-update" || "${ENKI_BROWSER_NO_UPDATE:-}" == "1" ]] && return 0
+  # Only an install the user owns, in a folder the user can write beside (not the .deb's /opt).
+  [[ -w "$HERE" && -w "$(dirname "$HERE")" ]] || return 0
+  return 1
+}
+
+running() { pgrep -f "^$HERE/chromium/chrome( |$)" >/dev/null 2>&1; }
+
+check() {
+  local force="${1:-}"
+  disabled && { echo "updates are off for this install"; return 0; }
+  # A portable profile lives inside the folder that would be swapped; it is updated by hand.
+  [[ -e "$HERE/portable" ]] && { echo "portable copies update by hand"; return 0; }
+  command -v openssl >/dev/null || die "openssl is not installed: updates cannot be verified, so none are installed"
+  [[ -f "$PUB" ]] || die "no update key in $PUB"
+  mkdir -p "$STATE"
+  exec 9>"$STATE/lock"
+  flock -n 9 || { echo "another update check is running"; return 0; }
+  local stamp="$STATE/last-check"
+  if [[ "$force" != "--force" && -f "$stamp" ]] && (( $(date +%s) - $(stat -c %Y "$stamp") < INTERVAL )); then return 0; fi
+  touch "$stamp"
+
+  tmp="$(mktemp -d "$STATE/check.XXXXXX")"
+  trap 'rm -rf "$tmp"' EXIT
+  local manifest_url sig_url
+  if [[ -n "${ENKI_BROWSER_UPDATE_FEED:-}" ]]; then
+    manifest_url="$ENKI_BROWSER_UPDATE_FEED"; sig_url="$ENKI_BROWSER_UPDATE_FEED.sig"
+  else
+    # Releases come newest first; the first one with a Linux manifest is the one to check.
+    fetch "$FEED" -o "$tmp/releases.json" || die "could not reach GitHub"
+    manifest_url="$(grep -o '"browser_download_url": *"[^"]*/update-linux\.json"' "$tmp/releases.json" | head -n1 | sed 's/.*"\(http[^"]*\)"/\1/')"
+    [[ -n "$manifest_url" ]] || { log "no signed Linux release found"; echo "no signed Linux release found"; return 0; }
+    sig_url="$manifest_url.sig"
+  fi
+  fetch "$manifest_url" -o "$tmp/m.json" && fetch "$sig_url" -o "$tmp/m.sig.b64" || die "could not download the update manifest"
+  base64 -d "$tmp/m.sig.b64" > "$tmp/m.sig" 2>/dev/null || die "update manifest signature is not base64: $manifest_url"
+  openssl dgst -sha256 -verify "$PUB" -signature "$tmp/m.sig" "$tmp/m.json" >/dev/null 2>&1 \
+    || die "update manifest signature is invalid: $manifest_url"
+
+  local version url sha platform current
+  version="$(field version "$tmp/m.json")"; url="$(field url "$tmp/m.json")"
+  sha="$(field sha256 "$tmp/m.json")"; platform="$(field platform "$tmp/m.json")"
+  [[ "$platform" == "$PLATFORM" ]] || die "signed manifest is for '${platform:-windows-x64}', not $PLATFORM"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$sha" =~ ^[0-9a-f]{64}$ && "$url" == http* ]] || die "signed manifest is malformed"
+  current="$(version_of "$HERE")"
+  if ! newer "$version" "${current:-0.0.0}"; then
+    log "up to date ($current; latest signed release $version)"; echo "up to date ($current; latest signed release $version)"; return 0
+  fi
+  if [[ "$(version_of "$STAGED")" == "$version" && -f "$STAGED/.verified" ]]; then echo "$version is ready"; return 0; fi
+
+  log "downloading $version from $url"
+  fetch "$url" -o "$tmp/r.tar.gz" || die "download failed: $url"
+  local actual; actual="$(sha256sum "$tmp/r.tar.gz" | cut -d' ' -f1)"
+  [[ "$actual" == "$sha" ]] || die "tarball hash $actual does not match the signed manifest ($sha); discarded"
+  # Only plain files, folders and links inside enki-browser/: no absolute paths, no "..".
+  tar -tzf "$tmp/r.tar.gz" > "$tmp/list" || die "tarball is unreadable"
+  if grep -qvE '^enki-browser(/|$)' "$tmp/list" || grep -qE '(^|/)\.\.(/|$)' "$tmp/list"; then die "tarball has entries outside enki-browser/; discarded"; fi
+  mkdir "$tmp/x"
+  tar -xzf "$tmp/r.tar.gz" -C "$tmp/x" --no-same-owner
+  [[ "$(version_of "$tmp/x/enki-browser")" == "$version" ]] || die "tarball does not contain version $version"
+  [[ -x "$tmp/x/enki-browser/enki-browser" && -x "$tmp/x/enki-browser/chromium/chrome" ]] || die "tarball is not a complete Enki Browser"
+  printf '%s\n' "$sha" > "$tmp/x/enki-browser/.verified"
+  rm -rf "$STAGED.new"
+  mv "$tmp/x/enki-browser" "$STAGED.new"
+  rm -rf "$STAGED"
+  mv "$STAGED.new" "$STAGED"
+  log "staged $version; it opens the next time Enki Browser starts"
+  echo "$version is ready"
+  command -v notify-send >/dev/null && notify-send -a "Enki Browser" -i enki-browser "Enki Browser $version is ready" \
+    "It was downloaded and verified. It opens the next time you start Enki Browser." 2>/dev/null || true
+}
+
+apply() {
+  [[ -d "$STAGED" && -f "$STAGED/.verified" ]] || return 0
+  disabled && return 0
+  [[ -e "$HERE/portable" ]] && return 0
+  running && return 0 # the open browser keeps its version; the next start switches
+  local staged current; staged="$(version_of "$STAGED")"; current="$(version_of "$HERE")"
+  if ! newer "$staged" "${current:-0.0.0}"; then rm -rf "$STAGED"; return 0; fi
+  # Two renames: the old install is kept as <install>.previous (the way back) until the next one.
+  rm -rf "$HERE.previous"
+  mv "$HERE" "$HERE.previous"
+  if ! mv "$STAGED" "$HERE"; then mv "$HERE.previous" "$HERE"; die "could not switch to $staged"; fi
+  rm -f "$HERE/.verified"
+  log "switched from $current to $staged"
+}
+
+case "${1:-}" in
+  check) check "${2:-}" ;;
+  apply) apply ;;
+  *) echo "usage: enki-update check [--force] | apply" >&2; exit 2 ;;
+esac

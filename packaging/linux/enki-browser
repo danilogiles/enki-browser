@@ -7,6 +7,18 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
+# Tarball installs update themselves (enki-update; the .deb is updated by apt): a release that a
+# previous check downloaded and verified is switched in now, before Chromium starts, and a new
+# check runs in the background, at most every two hours.
+if [[ -x "$HERE/enki-update" && -z "${ENKI_LAUNCHER_UPDATED:-}" ]]; then
+  before="$(cat "$HERE/version.json" 2>/dev/null || true)"
+  "$HERE/enki-update" apply 2>/dev/null || true
+  if [[ "$(cat "$HERE/version.json" 2>/dev/null || true)" != "$before" ]]; then
+    ENKI_LAUNCHER_UPDATED=1 exec "$HERE/enki-browser" "$@" # the new release's own launcher
+  fi
+  (setsid "$HERE/enki-update" check >/dev/null 2>&1 &) || true
+fi
+
 EXTRA=()
 if [[ -f "$HERE/portable" ]]; then
   # A profile that travels with the folder cannot rely on this machine's keyring.
