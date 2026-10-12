@@ -14,7 +14,7 @@ SUPPORT="$HOME/Library/Application Support"
 DATA="${ENKI_BROWSER_USER_DATA:-$SUPPORT/Enki Browser}"
 mkdir -p "$DATA"
 
-# First-run defaults (Enki as the search engine, Enki and Shields pinned, third-party cookies
+# First-run defaults (DuckDuckGo as the search engine, no suggestions while typing, Enki and Shields pinned, third-party cookies
 # blocked…). Chromium for macOS reads them from one fixed place only, its own folder —
 # ~/Library/Application Support/Chromium/Chromium Initial Preferences — whatever --user-data-dir
 # says, and only when a profile is created. So for a new profile the file is put there, left while
