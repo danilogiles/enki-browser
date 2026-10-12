@@ -25,6 +25,8 @@ type Props = {
   onContinue: () => void;
   onReadAgain: () => void;
   onCopyDiagnostics: () => void;
+  /** Saves the last request as a /task; absent while the chat has none. */
+  onSaveTask?: () => void;
   onLogs?: () => void;
   tabs: TabInfo[];
   selectedTab: number | null;
@@ -120,6 +122,7 @@ export function Header(p: Props) {
             <MenuItem title="New chat" onClick={() => { more.setOpen(false); p.onNewChat(); }}>New chat</MenuItem>
             {p.canContinue && <MenuItem onClick={() => { more.setOpen(false); p.onContinue(); }}>Continue safely</MenuItem>}
             {p.canContinue && <MenuItem onClick={() => { more.setOpen(false); p.onReadAgain(); }}>Read page again</MenuItem>}
+            {p.onSaveTask && <MenuItem title="Save your last request as a task you run with /name" onClick={() => { more.setOpen(false); p.onSaveTask?.(); }}>Save as task</MenuItem>}
             {p.chats.length > 0 && (
               <>
                 <Divider />

@@ -9,6 +9,7 @@ import { runTurn, type AgentEvent } from "../lib/agent/loop";
 import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
 import { Chat, type Progress } from "./Chat";
 import { Composer } from "./Composer";
+import type { TaskDraft } from "./ConnectionsTab";
 import { SettingsView } from "./SettingsView";
 import { LogsView } from "./LogsView";
 import { log, setDevMode } from "../lib/debug";
@@ -96,6 +97,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   // The saved chat this conversation belongs to; a new chat gets an id on its first message.
   const [chatId, setChatId] = useState<string | null>(null);
   const [chats, setChats] = useState<ChatEntry[]>([]);
+  // "Save as task" in the menu: Settings › Connections opens with the task form filled in.
+  const [taskDraft, setTaskDraft] = useState<TaskDraft | null>(null);
   const windowRef = useRef<number | undefined>(undefined);
   const restoredRef = useRef(false);
 
@@ -589,6 +592,9 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     await saveSettings(next);
   };
 
+  // The request last typed in this chat, which "Save as task" starts from.
+  const lastRequest = [...messages].reverse().find((m) => m.role === "user" && m.text?.trim())?.text?.trim() ?? null;
+
   if (!settings || !ready) return null;
 
   if (view === "logs") return <LogsView settings={settings} onClose={() => setView("chat")} />;
@@ -597,12 +603,14 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     return (
       <SettingsView
         settings={settings}
+        initialTab={taskDraft ? "connections" : undefined}
+        taskDraft={taskDraft}
         onSave={async (s) => {
           await saveSettings(s);
           setSettings(s);
           setView("chat");
         }}
-        onClose={() => setView("chat")}
+        onClose={() => { setTaskDraft(null); setView("chat"); }}
       />
     );
   }
@@ -624,6 +632,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         canContinue={!running && messages.length > 0}
         onContinue={retry}
         onReadAgain={() => { invalidateObservations(historyRef.current); void send("Read the current page again and report its state.", "observe"); }}
+        onSaveTask={lastRequest ? () => { setTaskDraft({ prompt: lastRequest, mode }); setView("settings"); } : undefined}
         onCopyDiagnostics={() => navigator.clipboard.writeText(diagnosticReport(settings)).then(() => setBanner("Diagnostic report copied. Page content and credentials excluded."), () => setBanner("Clipboard unavailable. Open Logs to export the report."))}
         onLogs={settings.devMode ? () => setView("logs") : undefined}
         tabs={tabs}

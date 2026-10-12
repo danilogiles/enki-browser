@@ -17,19 +17,23 @@ import { createProvider } from "../lib/providers";
 import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
-import { ConnectionsTab } from "./ConnectionsTab";
+import { ConnectionsTab, type TaskDraft } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
 
 type Props = {
   settings: Settings;
   onSave: (s: Settings) => Promise<void>;
   onClose: () => void;
+  /** The tab to open on (Model unless said). */
+  initialTab?: TabId;
+  /** A saved task to start from ("Save as task" in the chat's menu). */
+  taskDraft?: TaskDraft | null;
 };
 
-type TabId = "model" | "appearance" | "behavior" | "connections";
+export type TabId = "model" | "appearance" | "behavior" | "connections";
 
-export function SettingsView({ settings, onSave, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>("model");
+export function SettingsView({ settings, onSave, onClose, initialTab, taskDraft }: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "model");
   const [draft, setDraft] = useState<Settings>(settings);
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<string[]>([]);
@@ -161,7 +165,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 text-sm">
-        {activeTab === "connections" && <ConnectionsTab />}
+        {activeTab === "connections" && <ConnectionsTab taskDraft={taskDraft} />}
         {/* TAB 1: MODEL & PROVIDER SETUP */}
         {activeTab === "model" && (
           <Section title="Model Provider Setup">
