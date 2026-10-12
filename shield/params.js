@@ -6,7 +6,7 @@
 // An explicit list, on purpose: no utm_* wildcard and nothing generic such as ref or id, which
 // sites also use for what the page shows. On a site with Shields down nothing is removed. Nothing
 // is stored or logged about the pages this touches.
-import { DOWN, downList, setDown } from "./sites.js";
+import { DOWN, downList, inIncognito, setDown, storedDownList } from "./sites.js";
 
 export const TRACKING_PARAMS = [
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
@@ -36,5 +36,12 @@ export async function applyStripRule() {
 const applying = () => void applyStripRule().catch((e) => console.warn(`[shield] tracking parameters: ${e.message}`));
 applying();
 chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes[DOWN]) applying(); });
+// In Incognito the panel cannot keep the list itself (it closes) and nothing is written to
+// storage, so it hands the change to this worker, which keeps it in memory (sites.js).
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg?.what !== "enki-shield:set-down" || sender.id !== chrome.runtime.id || typeof msg.host !== "string") return;
+  setDown(msg.host, !!msg.down, { incognito: true }).then(applyStripRule).then(() => reply(true), () => reply(false));
+  return true;
+});
 // For test/shield-params.mjs, which drives the worker.
-globalThis.enkiShieldParams = { applyStripRule, setDown, TRACKING_PARAMS };
+globalThis.enkiShieldParams = { applyStripRule, downList, inIncognito, setDown, storedDownList, TRACKING_PARAMS };

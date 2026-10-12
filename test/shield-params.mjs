@@ -4,7 +4,12 @@
 //     while its other parameters (ref and id included) and its #fragment stay as they were;
 //   - parameters merely named like them (utm_foo, a utm_source inside a value) are kept;
 //   - frames are not rewritten (main_frame only);
-//   - with Shields down for the site, nothing is removed, and with Shields up again it is.
+//   - with Shields down for the site, nothing is removed, and with Shields up again it is;
+//   - a site set down from an Incognito context is kept in memory only: excluded from the rule,
+//     nothing in storage.local. This build cannot load Shield in Incognito (no split mode before
+//     #70), so the test simulates the context: it makes chrome.extension.inIncognitoContext read
+//     true in the worker, turns a site down through the same setDown the worker's Incognito message
+//     handler uses (no incognito: argument, so the context is what decides), then restores it.
 //
 //   xvfb-run -a node test/shield-params.mjs        Playwright's Chromium (npx playwright install chromium)
 //   ENKI_LINUX_DIR=… xvfb-run -a node test/…        an installed Enki Browser's own Chromium
@@ -112,6 +117,26 @@ try {
   await until(ruleHas((d) => !d.includes("down.example")), 5000);
   await tab.goto("https://down.example/a?utm_source=x&b=2");
   check("Shields up again: removed there again", lastOf("down.example")?.url === "/a?b=2", lastOf("down.example")?.url);
+
+  // Incognito (simulated, see the top): memory only.
+  const before = await sw.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+  const simulated = await sw.evaluate(() => {
+    Object.defineProperty(chrome.extension, "inIncognitoContext", { configurable: true, get: () => true });
+    return globalThis.enkiShieldParams.inIncognito();
+  });
+  check("Incognito context simulated (inIncognitoContext reads true)", simulated === true);
+  await sw.evaluate(() => globalThis.enkiShieldParams.setDown("private.example", true));
+  await sw.evaluate(() => globalThis.enkiShieldParams.applyStripRule());
+  check("Incognito: the site set down is out of the rule", !!(await until(ruleHas((d) => d.includes("private.example")), 5000)));
+  await tab.goto("https://private.example/a?utm_source=x&b=2");
+  check("…and nothing is removed there", lastOf("private.example")?.url === "/a?utm_source=x&b=2", lastOf("private.example")?.url);
+  const after = await sw.evaluate(async () => {
+    const all = await chrome.storage.local.get(null);
+    return { raw: JSON.stringify(all), down: await globalThis.enkiShieldParams.storedDownList() };
+  });
+  check("Incognito: nothing about it is in storage.local (sealed list unsealed too)", !after.raw.includes("private.example") && !after.down.includes("private.example") && after.raw === before, JSON.stringify(after.down));
+  await sw.evaluate(() => { delete chrome.extension.inIncognitoContext; });
+  check("context restored", await sw.evaluate(() => globalThis.enkiShieldParams.inIncognito()) === false);
 
   // Session storage holds the Shields panel's per-tab count (shields.js), as before; this adds nothing.
   const stored = await sw.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));

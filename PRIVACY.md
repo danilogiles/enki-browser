@@ -33,7 +33,8 @@ included (`extension/`).
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:
 third-party cookies, known trackers and ads, the local network address WebRTC would reveal, and
 tracking parameters such as `utm_source` or `fbclid` in the addresses of pages you open (not on
-sites where you turn Shields down).
+sites where you turn Shields down; a site turned down from an Incognito window is kept in memory
+only, never written to storage).
 
 ## What stays on your device, and how it is protected
 

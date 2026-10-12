@@ -82,12 +82,24 @@ export async function setForget(host, on) {
 // Sites with Shields down, as the panel's main switch set them. uBlock keeps its own mode per
 // site; this copy is for what Enki Shield itself does (removing tracking parameters, params.js),
 // which must stop on the same sites. Sealed like the lists above: it names sites.
+//
+// A site turned down from an Incognito context (split Incognito, #70) names a private visit: it
+// stays in this worker's memory only, never in storage.local, and is gone when the last private
+// window closes, the same as the search rule. Read at call time so tests can simulate it.
+export const inIncognito = () => chrome.extension?.inIncognitoContext === true;
+const memoryDown = new Set();
+
+export const storedDownList = () => readSealed(DOWN, []);
 export async function downList() {
-  return readSealed(DOWN, []);
+  return [...new Set([...(await storedDownList()), ...memoryDown])];
 }
 
-export async function setDown(host, down) {
-  const list = (await downList()).filter((h) => h !== host);
+export async function setDown(host, down, { incognito = inIncognito() } = {}) {
+  if (incognito) {
+    if (down) memoryDown.add(host); else memoryDown.delete(host);
+    return;
+  }
+  const list = (await storedDownList()).filter((h) => h !== host);
   if (down) list.push(host);
   await chrome.storage.local.set({ [DOWN]: await seal(list) });
 }
