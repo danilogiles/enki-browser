@@ -1,7 +1,7 @@
 // Prereqs: `npm run build`, `node test/mock-llm.mjs` running, `npx playwright install chromium`.
 import path from "node:path";
 import os from "node:os";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
@@ -182,6 +182,26 @@ try {
   check("the Pie tab draws a slice per row", await panel.locator("svg[aria-label='Pie chart'] path").count() === 2);
   await panel.click("[role=tab]:has-text('Table')");
   check("the Table tab shows the numbers as written", (await panel.locator("figure.enki-visual table").textContent()).includes("1.200.000"));
+  // Taking a chart elsewhere: its data as CSV (unformatted numbers, every series), and the chart
+  // as a picture on the clipboard.
+  const [csvFile] = await Promise.all([panel.waitForEvent("download"), panel.click("figure.enki-visual button[aria-label='Download CSV']")]);
+  const csv = await readFile(await csvFile.path(), "utf8");
+  check("Download CSV gives every series with plain numbers", csv === "Candidate,Votes,%\r\nAna,1200000,51.2\r\nBruno,1140000,48.8\r\n" && csvFile.suggestedFilename().endsWith(".csv"));
+  // Chromium grants no clipboard-read to an extension page under automation, so the test looks at
+  // what the page hands the clipboard: the real write still happens.
+  await panel.evaluate(() => {
+    const write = navigator.clipboard.write.bind(navigator.clipboard);
+    navigator.clipboard.write = async (items) => { globalThis.enkiCopied = items; return write(items).catch(() => undefined); };
+  });
+  await panel.click("[role=tab]:has-text('Bar')");
+  await panel.click("figure.enki-visual button[aria-label='Copy image']");
+  const copied = await panel.waitForFunction(() => globalThis.enkiCopied, null, { timeout: 5000 }).then(() => panel.evaluate(async () => {
+    const [item] = globalThis.enkiCopied;
+    if (!item?.types.includes("image/png")) return null;
+    const bitmap = await createImageBitmap(await item.getType("image/png"));
+    return { width: bitmap.width, height: bitmap.height };
+  }), () => null);
+  check("Copy image puts the chart on the clipboard as a PNG", !!copied && copied.width === 1280 && copied.height > 100);
   check("the mind map has every node", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
 
   // The web: a page that builds its content with JavaScript is rendered in a background tab,
