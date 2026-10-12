@@ -63,3 +63,18 @@ export function suggestions(input: string, tasks: SavedTask[], apps: Connection[
   return apps.filter((a) => a.enabled && a.status === "connected" && handle(a.name).startsWith(q)).slice(0, 6)
     .map((a) => ({ insert: `@${handle(a.name)} `, label: `@${handle(a.name)}`, detail: `${a.name} · ${a.tools.length} tools` }));
 }
+
+/**
+ * A task form prefilled from a request the user just made in the chat (⋯ → Save as task). A
+ * request that itself ran a saved task (`/name …`) is saved as what was actually sent, in that
+ * task's mode. The name comes from the first words and never collides with an existing task.
+ */
+export function taskFromRequest(text: string, mode: Mode, tasks: SavedTask[], id: string): SavedTask {
+  const ex = expand(text, tasks, []);
+  const prompt = ex.task ? ex.text : text.trim();
+  const base = handle(prompt.split(/\s+/).slice(0, 3).join(" ")).slice(0, 24).replace(/-+$/, "") || "task";
+  const taken = new Set(tasks.map((t) => handle(t.name)));
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+  return { id, name, prompt, mode: ex.mode ?? mode };
+}

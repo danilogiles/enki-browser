@@ -253,6 +253,25 @@ try {
   const taskText = await panel.textContent("body");
   check("a saved task sends its prompt plus the extra words", taskText.includes("Say the standup words") && taskText.includes("extra bit"));
 
+  // Saved from the chat: ⋯ → Save as task opens the form filled with the last request.
+  await newChat();
+  await panel.fill("textarea", "Repeat the weekly words");
+  await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
+  await panel.click("button[title='More']");
+  await panel.click("button:has-text('Save as task')");
+  check("Save as task prefills the form with the request", (await panel.inputValue("textarea[aria-label='Task prompt']")) === "Repeat the weekly words" && (await panel.inputValue("input[aria-label='Task name']")) === "repeat-the-weekly");
+  await panel.click("button:has-text('Save task')");
+  await panel.click("button[title='Back']");
+  await newChat();
+  // The whole name still shows the /suggestion, and Enter there picks it; a second Enter sends.
+  await panel.fill("textarea", "/repeat-the-weekly");
+  check("a task saved from the chat is suggested by /name", (await panel.locator("[role=listbox] >> text=/repeat-the-weekly").count()) === 1);
+  await panel.press("textarea", "Enter");
+  await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
+  check("a task saved from the chat runs with /name", (await panel.textContent("body")).includes("Repeat the weekly words"));
+
   // Conversations, the chat list and saved tasks are stored encrypted, never as readable text.
   await panel.waitForTimeout(500);
   const sealed = await panel.evaluate(async () => chrome.storage.local.get(null));

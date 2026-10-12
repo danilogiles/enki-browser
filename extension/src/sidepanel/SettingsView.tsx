@@ -18,18 +18,21 @@ import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
+import type { SavedTask } from "../lib/shortcuts";
 import { legalLinks } from "../lib/legal";
 
 type Props = {
   settings: Settings;
   onSave: (s: Settings) => Promise<void>;
   onClose: () => void;
+  /** Open on Connections with the saved-task form prefilled (chat ⋯ → Save as task). */
+  taskSeed?: SavedTask | null;
 };
 
 type TabId = "model" | "appearance" | "behavior" | "connections";
 
-export function SettingsView({ settings, onSave, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>("model");
+export function SettingsView({ settings, onSave, onClose, taskSeed }: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>(taskSeed ? "connections" : "model");
   const [draft, setDraft] = useState<Settings>(settings);
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<string[]>([]);
@@ -161,7 +164,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 text-sm">
-        {activeTab === "connections" && <ConnectionsTab />}
+        {activeTab === "connections" && <ConnectionsTab taskSeed={taskSeed} />}
         {/* TAB 1: MODEL & PROVIDER SETUP */}
         {activeTab === "model" && (
           <Section title="Model Provider Setup">
