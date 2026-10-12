@@ -168,6 +168,19 @@ check('diagnostic export excludes secrets embedded in raw error strings and argu
     assert.deepEqual(t.children.map((c) => c.label), ['Product', 'Marketing']);
     assert.deepEqual(t.children[0].children.map((c) => c.label), ['Pricing', 'Docs']);
   });
+  check('charts export as CSV and as a self-contained SVG for the PNG', () => {
+    const { toCsv, chartSvg, exportName } = require('../src/lib/visual-data.ts');
+    const d = dataFromTable(['Candidate', 'Votes', '%'], [['Ana', '1.200.000', '51,2'], ['Bruno, "B"', '1.140.000', '48,8'], ['=SUM(A1)', '1', '0']]);
+    assert.equal(toCsv(d), ",Votes,%\r\nAna,1200000,51.2\r\n\"Bruno, \"\"B\"\"\",1140000,48.8\r\n'=SUM(A1),1,0\r\n");
+    assert.equal(exportName({ ...d, title: 'Résultats 2024!' }, 'csv'), 'resultats-2024.csv');
+    assert.equal(exportName(d, 'png'), 'enki-chart.png');
+    for (const kind of ['bar', 'line', 'pie']) {
+      const svg = chartSvg({ ...d, title: '<b>x</b>' }, kind);
+      for (const tag of svg.match(/<[a-z]+ [^>]*>/g)) { const names = [...tag.matchAll(/ ([a-z-]+)=/g)].map((m) => m[1]); assert.equal(new Set(names).size, names.length, 'duplicate attribute in ' + tag); }
+      assert.match(svg, /^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
+      assert.ok(!/href|url\(|var\(|<b>/.test(svg), kind + ' SVG must not reference anything outside itself');
+    }
+  });
   check('a long task trims its oldest tool results instead of stopping', () => {
     const { trimToolResults } = require('../src/lib/agent/context.ts');
     const result = (id, n) => ({ role: 'tool', parts: [{ type: 'tool_result', name: 'read_url', toolCallId: id, content: [{ type: 'text', text: 'x'.repeat(n) }] }] });
