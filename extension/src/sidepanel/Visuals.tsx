@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 
-import { dataFromSpec, dataFromTable, parseMindmap, type DataSet, type Kind, type MapNode } from "../lib/visual-data";
+import { Copy, Download } from "lucide-react";
+import { chartSvg, dataFromSpec, dataFromTable, exportName, parseMindmap, toCsv, type DataSet, type Kind, type MapNode } from "../lib/visual-data";
 
 const PALETTE = ["var(--color-enki-400)", "#a78bfa", "#f472b6", "#34d399", "#fbbf24", "#fb923c", "#60a5fa", "#94a3b8"];
 
@@ -40,6 +41,32 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   return ticks;
 }
 
+// ---------- copy as image, download as CSV: both stay on this device
+
+/** Draws the chart's SVG to a canvas and puts the PNG on the clipboard. */
+async function copyImage(data: DataSet, kind: Kind): Promise<void> {
+  const url = URL.createObjectURL(new Blob([chartSvg(data, kind === "table" ? "bar" : kind)], { type: "image/svg+xml" }));
+  try {
+    const img = new Image();
+    await new Promise<void>((ok, fail) => { img.onload = () => ok(); img.onerror = () => fail(new Error("Could not draw the chart")); img.src = url; });
+    const scale = 2, canvas = document.createElement("canvas");
+    canvas.width = img.width * scale; canvas.height = img.height * scale;
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+    const png = await new Promise<Blob>((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error("Could not draw the chart"))), "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+/** Saves the data as a .csv through a local download link. */
+function downloadCsv(data: DataSet) {
+  const url = URL.createObjectURL(new Blob(["\ufeff" + toCsv(data)], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = exportName(data, "csv");
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ---------- the chart card with its mini-tabs
 
 export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind; table?: ReactNode }) {
@@ -50,6 +77,9 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
   const [active, setActive] = useState(0);
   const shown: DataSet = mixed ? { ...data, series: [data.series[active]] } : data;
   const names: Record<Kind, string> = { bar: "Bar", line: "Line", pie: "Pie", table: "Table" };
+  const [copied, setCopied] = useState<"" | "ok" | "error">("");
+  const flash = (v: "ok" | "error") => { setCopied(v); setTimeout(() => setCopied(""), 1500); };
+  const tool = "rounded-md p-1 text-zinc-400 hover:bg-ink-800 hover:text-zinc-100";
   return (
     <figure className="enki-visual my-2 rounded-xl border border-ink-700 bg-ink-900/60 p-2.5">
       <div className="mb-2 flex items-center gap-2">
@@ -62,6 +92,13 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
             </button>
           ))}
         </div>
+        <button type="button" title={copied === "ok" ? "Copied" : copied === "error" ? "Could not copy the image" : "Copy image"} aria-label="Copy image" className={tool}
+          onClick={() => void copyImage(kind === "pie" && !pieFits(shown) ? data : shown, kind).then(() => flash("ok"), () => flash("error"))}>
+          <Copy size={12} className={copied === "ok" ? "text-emerald-400" : copied === "error" ? "text-red-400" : ""} />
+        </button>
+        <button type="button" title="Download CSV" aria-label="Download CSV" className={tool} onClick={() => downloadCsv(data)}>
+          <Download size={12} />
+        </button>
       </div>
       {kind === "bar" && <Bars data={shown} first={mixed ? active : 0} />}
       {kind === "line" && <Lines data={shown} first={mixed ? active : 0} />}

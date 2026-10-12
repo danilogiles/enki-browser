@@ -2,6 +2,7 @@
 import path from "node:path";
 import os from "node:os";
 import { mkdir, mkdtemp } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
@@ -183,6 +184,14 @@ try {
   await panel.click("[role=tab]:has-text('Table')");
   check("the Table tab shows the numbers as written", (await panel.locator("figure.enki-visual table").textContent()).includes("1.200.000"));
   check("the mind map has every node", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
+  const [csvDownload] = await Promise.all([panel.waitForEvent("download"), panel.click("figure.enki-visual button[aria-label='Download CSV']")]);
+  const csvText = readFileSync(await csvDownload.path(), "utf8");
+  check("Download CSV saves the chart's data", csvDownload.suggestedFilename().endsWith(".csv") && csvText.includes(",Votes,%") && csvText.includes("Ana,1200000,51.2") && csvText.includes("Bruno,1140000,48.8"));
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+  await panel.click("[role=tab]:has-text('Bar')");
+  await panel.click("figure.enki-visual button[aria-label='Copy image']");
+  await panel.waitForSelector("figure.enki-visual button[title='Copied'], figure.enki-visual button[title='Could not copy the image']");
+  check("Copy image puts a PNG on the clipboard", await panel.locator("figure.enki-visual button[title='Copied']").count() === 1);
 
   // The web: a page that builds its content with JavaScript is rendered in a background tab,
   // read, and closed again; the user's tab never moves.
