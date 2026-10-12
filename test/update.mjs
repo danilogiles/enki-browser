@@ -188,9 +188,14 @@ try {
   // launcher watching this browser, which 0.8.5 and 0.8.6 did not notice, so the click did nothing
   // and the page stayed on "Restarting…".
   await settings.click("#restart-update");
-  for (let i = 0; i < 120 && !(chromes().length > 0 && chromes().every((p) => p.includes("\\app\\0.0.2\\"))); i++) await sleep(500);
+  // Judge one snapshot at a time, and only after two reads in a row agree: while the old browser
+  // exits, its processes can briefly drop out of the list (no ExecutablePath), so a single read
+  // can look like "all in 0.0.2" and the next one still show an 0.0.1 process.
+  const allNew = (c) => c.length > 0 && c.every((p) => p.includes("\\app\\0.0.2\\"));
+  let procs = [], settled = 0;
+  for (let i = 0; i < 120 && settled < 2; i++) { await sleep(500); procs = chromes(); settled = allNew(procs) ? settled + 1 : 0; }
   check("Shields' Restart to update restarts the browser into the update it installed",
-    chromes().length > 0 && chromes().every((p) => p.includes("\\app\\0.0.2\\")), lastLog());
+    settled >= 2, `${lastLog()} (${procs.length} chrome.exe: ${[...new Set(procs.map((p) => p.match(/app\\([^\\]+)\\/)?.[1]))].join(", ")})`);
   browser = await connect(9451).catch(() => undefined);
   if (browser) await closeBrowser(browser);
   browser = undefined;
