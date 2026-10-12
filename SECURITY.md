@@ -26,6 +26,22 @@ You are credited in the advisory unless you prefer otherwise.
   browser) that reaches Chromium, the launcher or `EnkiBrowser.exe` as a switch instead of as one
   literal argument (`launcher/Args.cs`).
 
+## Accepted risk: Act can reach every site you're signed into
+
+The Enki extension has access to all sites (`<all_urls>`). It needs this to talk to the model you chose (including Ollama on your own computer), to MCP connectors and their sign-in, and to read pages for `web_search` and `read_url`. Act mode uses the same access to click and type on any site, including sites where you're signed in.
+
+That means two things could act on those sites without asking you site by site:
+- **A bad update to the extension.** Updates are signed, and the browser refuses unsigned ones.
+- **A web page that tricks the model** (prompt injection) into doing something you didn't ask for.
+
+What limits this today:
+- Act only runs when you start it.
+- Act asks you before sending, buying or deleting anything, and never fills in passwords or payments.
+- Ask mode can't take actions at all.
+- The permissions are fixed by a test. Adding or removing one fails CI until it's reviewed (see `docs/ACT-PERMISSIONS.md`).
+
+We looked at asking for each site one at a time (issue #52) and decided against it for now. It would break bring-your-own-model and connectors, and it would stop Act at every new site in the middle of a task. We'll look at it again if Act is rebuilt as part of our own Chromium build (#5).
+
 ## Chromium itself
 
 Enki Browser ships ungoogled-chromium's builds. Vulnerabilities in Chromium are fixed upstream;
