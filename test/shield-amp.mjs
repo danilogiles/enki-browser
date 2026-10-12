@@ -2,9 +2,12 @@
 // every host name pointed at a local HTTPS server, and checks:
 //   - google.*/amp/s/… and *.cdn.ampproject.org/c/s/… go straight to the original https:// page,
 //     its query kept, before the AMP address is requested;
-//   - a publisher's AMP page (<html amp> or <html ⚡>) goes to its https: canonical on the same site;
-//   - it stays put for a canonical on another site, an http: one, a neighbour on a shared host
-//     (github.io), and a regular page that has a canonical link.
+//   - a publisher's AMP page (<html amp> or <html ⚡>) goes to its https: canonical on the exact
+//     same host, or that host with www. added or removed (example.com ↔ www.example.com);
+//   - it stays put for any other host, even a related one (news.example.com → example.com,
+//     amp.pub.example → www.pub.example), a neighbour on a shared host (a.herokuapp.com →
+//     b.herokuapp.com, alice.github.io → bob.github.io), an http: canonical, and a regular page
+//     that has a canonical link.
 //
 //   xvfb-run -a node test/shield-amp.mjs           Playwright's Chromium (npx playwright install chromium)
 //   ENKI_LINUX_DIR=… xvfb-run -a node test/…        an installed Enki Browser's own Chromium
@@ -98,19 +101,22 @@ try {
   check("…without requesting the cache", !r.requested.some((h) => h.includes("ampproject")), r.requested.join(", "));
 
   const amp = (host, canonical, extra = "") => `https://${host}/amp-page?canonical=${encodeURIComponent(canonical)}${extra}`;
-  r = await visit(tab, amp("amp.pub.example", "https://www.pub.example/story"));
-  check("a publisher's <html amp> page goes to its canonical on the same site", r.url === "https://www.pub.example/story", r.url);
+  r = await visit(tab, amp("example.com", "https://www.example.com/story"));
+  check("a publisher's <html amp> page goes to its canonical with www. added (example.com → www.example.com)", r.url === "https://www.example.com/story", r.url);
+  r = await visit(tab, amp("www.example.com", "https://example.com/story"));
+  check("…and with www. removed (www.example.com → example.com)", r.url === "https://example.com/story", r.url);
   r = await visit(tab, amp("pub.example", "/story-2", "&attr=%E2%9A%A1"));
-  check("…<html ⚡> and a relative canonical too", r.url === "https://pub.example/story-2", r.url);
-  r = await visit(tab, amp("amp.pub.co.uk", "https://www.pub.co.uk/s"));
-  check("…same site under a country's second level (pub.co.uk)", r.url === "https://www.pub.co.uk/s", r.url);
+  check("…<html ⚡> and a relative canonical on the same host too", r.url === "https://pub.example/story-2", r.url);
 
   const stays = async (name, url) => {
     const v = await visit(tab, url);
     check(name, v.url === url && !v.requested.some((h) => !h.startsWith(new URL(url).host)), `${v.url} ${v.requested.join(", ")}`);
   };
   await stays("a canonical on another site does not redirect (and nothing is requested from it)", amp("pub.example", "https://evil.example/story"));
-  await stays("…nor one on a lookalike under another country (pub.co.uk → other.co.uk)", amp("pub.co.uk", "https://other.co.uk/s"));
+  await stays("…nor another customer of the same host (a.herokuapp.com → b.herokuapp.com)", amp("a.herokuapp.com", "https://b.herokuapp.com/x"));
+  await stays("…nor a subdomain's canonical on the parent (news.example.com → example.com)", amp("news.example.com", "https://example.com/story"));
+  await stays("…nor a sibling subdomain (amp.pub.example → www.pub.example)", amp("amp.pub.example", "https://www.pub.example/story"));
+  await stays("…nor one under another country's second level (pub.co.uk → other.co.uk)", amp("pub.co.uk", "https://other.co.uk/s"));
   await stays("…nor an http: canonical", amp("pub.example", "http://www.pub.example/story"));
   await stays("…nor a neighbour on a shared host (alice.github.io → bob.github.io)", amp("alice.github.io", "https://bob.github.io/x"));
   await stays("…nor a regular (non-AMP) page with a canonical link", amp("pub.example", "https://www.pub.example/other", "&plain=1"));
