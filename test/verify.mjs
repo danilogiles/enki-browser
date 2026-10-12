@@ -208,19 +208,33 @@ try {
   check("canvas readings carry per-load noise", first !== second, `${first} vs ${second}`);
 
   // ---- third-party cookies: what the settings page says is in effect
+  // The settings page renders its radio group asynchronously; on the slower macOS x64 runner a
+  // fixed 1.5 s wait once read the page before any option was checked. Poll until one is.
   await page.goto("chrome://settings/cookies");
-  await page.waitForTimeout(1500);
-  const cookieState = await page.evaluate(() => {
-    const find = (n) => {
-      for (const el of [n, ...(n.shadowRoot ? [n.shadowRoot] : []), ...n.querySelectorAll?.("*") ?? []]) {
-        if (el !== n && el.shadowRoot) { const r = find(el.shadowRoot); if (r) return r; }
-        if (el.getAttribute?.("aria-checked") === "true" && /third-party/i.test(el.textContent || el.getAttribute("label") || "")) return el.getAttribute("label") || el.textContent;
-        if (el.checked === true && /block/i.test(el.getAttribute?.("label") || "")) return el.getAttribute("label");
-      }
-      return null;
-    };
-    return find(document.body);
-  });
+  let cookieState = null;
+  for (let i = 0; i < 40 && !cookieState; i++) {
+    await page.waitForTimeout(250);
+    cookieState = await page.evaluate(() => {
+      const find = (n) => {
+        for (const el of [n, ...(n.shadowRoot ? [n.shadowRoot] : []), ...n.querySelectorAll?.("*") ?? []]) {
+          if (el !== n && el.shadowRoot) { const r = find(el.shadowRoot); if (r) return r; }
+          if (el.getAttribute?.("aria-checked") === "true" && /third-party/i.test(el.textContent || el.getAttribute("label") || "")) return el.getAttribute("label") || el.textContent;
+          if (el.checked === true && /block/i.test(el.getAttribute?.("label") || "")) return el.getAttribute("label");
+        }
+        return null;
+      };
+      return find(document.body);
+    });
+  }
+  if (!cookieState) {
+    // Say what the page did show, so a real regression is distinguishable from a slow render.
+    const options = await page.evaluate(() => {
+      const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
+      return all(document).filter((el) => el.hasAttribute("aria-checked") || "checked" in el && /radio|toggle|checkbox/i.test(el.tagName + (el.getAttribute("role") ?? "")))
+        .map((el) => `${el.tagName.toLowerCase()} "${(el.getAttribute("label") || el.textContent || "").trim().slice(0, 60)}" checked=${el.checked ?? el.getAttribute("aria-checked")}`);
+    }).catch(() => []);
+    console.log(`  cookie settings options (${options.length}):\n    ${options.join("\n    ") || "none rendered"}`);
+  }
   check("third-party cookies are blocked", /block/i.test(cookieState ?? ""), cookieState ?? "no checked option found");
 
   // ---- closing the last window must end the browser, or a staged update never installs.

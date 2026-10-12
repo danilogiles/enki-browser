@@ -23,6 +23,8 @@ import { diagnosticReport } from "../lib/diagnostics";
 import { connectorTools, loadConnections, onConnectionsChange, type Connection } from "../lib/connectors";
 import { expand, loadTasks, suggestions, type SavedTask } from "../lib/shortcuts";
 import { legalLinks, TERMS_VERSION } from "../lib/legal";
+import { LegacySearchCard } from "./LegacySearchCard";
+import { showLegacyCard } from "../lib/legacy-search";
 
 const MODE_KEY = "enki:mode";
 
@@ -632,6 +634,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         usage={usage}
       />
       {banner && <div role="status" className="mx-3 mb-1 rounded-lg bg-ink-900 px-3 py-1.5 text-xs text-zinc-400">{banner} <button className="underline" onClick={() => setBanner("")}>Dismiss</button></div>}
+
+      {isolated && showLegacyCard(location.search) && <LegacySearchCard />}
 
       <Chat
         messages={messages}
