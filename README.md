@@ -206,6 +206,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 | Address bar search | Enki: a search opens Enki's answer page, which searches the web and cites its sources. DuckDuckGo, Google, Bing and others are one click away in Settings → Search engine (suggestions while typing come from DuckDuckGo) | `config/initial_preferences.json` |
 | Connections | `http://` upgraded to `https://`, with a warning where a site has no HTTPS | same |
 | Third-party cookies | Blocked | same |
+| Tracking redirects and AMP | Skipped: `google.com/url?q=…`, Facebook, YouTube, Reddit and similar redirect links open the destination directly, and AMP pages open the publisher's regular page | Enki Shield (`shield/rules/debounce.json`, `shield/amp.js`) |
 | Startup | Your tabs come back, as you left them; a new tab is Enki Home. Off when *burn every time the browser closes* is on | `config/initial_preferences.json`; the launcher, for profiles made before 0.8.1 |
 | Fingerprinting | Tiny per-page noise in canvas and layout readings | ungoogled-chromium switches in `config/flags.txt` |
 | WebRTC | Public interface only (no local IP leak) | same |

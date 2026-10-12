@@ -45,6 +45,11 @@ const check = (name, ok, detail = "") => {
 
 // A local page for the checks that need one; the blocker and fingerprint checks run from it.
 const server = http.createServer((req, res) => {
+  // An AMP page a site hosts itself, naming its regular version (Shield's amp.js leaves it).
+  if (req.url.startsWith("/amp-article")) {
+    res.setHeader("content-type", "text/html");
+    return res.end(`<!doctype html><html amp lang="en"><head><meta charset="utf-8"><link rel="canonical" href="/article?from=amp"><title>AMP</title></head><body>AMP copy</body></html>`);
+  }
   res.setHeader("content-type", "text/html");
   res.end(`<!doctype html><title>Enki Browser check</title><canvas id=c width=200 height=50></canvas>
 <script>
@@ -123,6 +128,16 @@ try {
   await page.goto("http://example.com/").catch(() => undefined);
   await page.waitForTimeout(1000);
   check("http:// is upgraded to https://", page.url().startsWith("https://"), page.url());
+
+  // ---- tracking redirects and AMP (Shield's rules/debounce.json and amp.js): the real page,
+  // without the tracker or Google's copy in between
+  const lands = async (from, to) => {
+    await page.goto(from).catch(() => undefined);
+    return page.waitForURL((u) => u.href === to, { timeout: 15000 }).then(() => true, () => false);
+  };
+  check("a google.com/url?q=… link opens the destination directly", await lands("https://www.google.com/url?q=https%3A%2F%2Fexample.com%2F&sa=D", "https://example.com/"), page.url());
+  check("Google's AMP copy opens the publisher's page", await lands("https://www.google.com/amp/s/example.com/", "https://example.com/"), page.url());
+  check("an AMP page a site hosts itself opens its regular version", await lands(`${local}amp-article`, `${local}article?from=amp`), page.url());
 
   // ---- tracker/ad blocking, observed as a failed request from an ordinary page
 // uBlock either refuses a request (ERR_BLOCKED_BY_CLIENT) or, for scripts whose absence would
