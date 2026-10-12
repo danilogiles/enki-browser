@@ -183,6 +183,27 @@ try {
   await panel.click("[role=tab]:has-text('Table')");
   check("the Table tab shows the numbers as written", (await panel.locator("figure.enki-visual table").textContent()).includes("1.200.000"));
   check("the mind map has every node", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
+  // Keyboard and screen readers (#34): arrow keys move between tabs, each tab names its panel,
+  // the chart has its numbers in words, and foldable mind map nodes are buttons.
+  await panel.focus("[role=tab][aria-selected=true]");
+  await panel.keyboard.press("ArrowLeft");
+  const tabsA11y = await panel.evaluate(() => {
+    const sel = document.querySelector("[role=tab][aria-selected=true]");
+    const tabpanel = document.getElementById(sel?.getAttribute("aria-controls") ?? "");
+    return { selected: sel?.textContent, focused: document.activeElement === sel, panel: tabpanel?.getAttribute("role"),
+      stops: [...document.querySelectorAll("[role=tab]")].filter((t) => t.tabIndex === 0).length };
+  });
+  check("Left arrow moves from Table to Pie, focus follows, aria-controls names the tab panel",
+    tabsA11y.selected === "Pie" && tabsA11y.focused && tabsA11y.panel === "tabpanel" && tabsA11y.stops === 1, JSON.stringify(tabsA11y));
+  await panel.keyboard.press("Home");
+  check("the chart has a text alternative with its numbers",
+    /^Bar chart: Votes: Ana 1.200.000; Bruno 1.140.000\. %: Ana 51.2; Bruno 48.8/.test((await panel.locator("[role=tabpanel] .sr-only").textContent())?.replace(/[,.\u202f\u00a0]/g, ".") ?? ""));
+  const node = panel.locator("svg[aria-label^='Mind map'] [role=button]").last(); // the root, drawn last
+  check("foldable mind map nodes are focusable buttons", await panel.locator("svg[aria-label^='Mind map'] [role=button][tabindex='0'][aria-expanded=true]").count() === 3);
+  await node.focus(); await panel.keyboard.press("Enter");
+  check("Enter folds a mind map node", await node.getAttribute("aria-expanded") === "false" && await panel.locator("svg[aria-label^='Mind map'] rect").count() === 1);
+  await panel.keyboard.press(" ");
+  check("Space opens it again", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
 
   // The web: a page that builds its content with JavaScript is rendered in a background tab,
   // read, and closed again; the user's tab never moves.
