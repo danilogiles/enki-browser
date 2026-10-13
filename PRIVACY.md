@@ -32,6 +32,9 @@ included (`extension/`).
 
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:
 third-party cookies, known trackers and ads, and the local network address WebRTC would reveal.
+Every request also carries a [Global Privacy Control](https://globalprivacycontrol.org) signal
+(`Sec-GPC: 1`, and `navigator.globalPrivacyControl` for page scripts) telling sites not to sell
+or share your data; in some places, such as California and Colorado, they must honour it.
 
 ## What stays on your device, and how it is protected
 

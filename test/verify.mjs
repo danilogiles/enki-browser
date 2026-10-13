@@ -45,6 +45,11 @@ const check = (name, ok, detail = "") => {
 
 // A local page for the checks that need one; the blocker and fingerprint checks run from it.
 const server = http.createServer((req, res) => {
+  // What the browser sent, for the checks on request headers (Global Privacy Control).
+  if (req.url.startsWith("/echo-headers")) {
+    res.setHeader("content-type", "application/json");
+    return res.end(JSON.stringify(req.headers));
+  }
   res.setHeader("content-type", "text/html");
   res.end(`<!doctype html><title>Enki Browser check</title><canvas id=c width=200 height=50></canvas>
 <script>
@@ -124,6 +129,13 @@ try {
   await page.goto("http://example.com/").catch(() => undefined);
   await page.waitForTimeout(1000);
   check("http:// is upgraded to https://", page.url().startsWith("https://"), page.url());
+
+  // ---- Global Privacy Control: the header on requests, and the property for page scripts
+  await page.goto(`${local}echo-headers`);
+  const sent = JSON.parse(await page.evaluate(() => document.body.innerText));
+  check("requests carry Global Privacy Control (Sec-GPC: 1)", sent["sec-gpc"] === "1", `sec-gpc: ${sent["sec-gpc"]}`);
+  await page.goto(local);
+  check("pages see navigator.globalPrivacyControl === true", (await page.evaluate(() => navigator.globalPrivacyControl)) === true);
 
   // ---- tracker/ad blocking, observed as a failed request from an ordinary page
 // uBlock either refuses a request (ERR_BLOCKED_BY_CLIENT) or, for scripts whose absence would
