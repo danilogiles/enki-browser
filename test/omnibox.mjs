@@ -8,6 +8,12 @@
 //   no-enki    the same profile, Enki missing (its extension folder removed)
 //   no-engine  a profile without any default engine (what a reset of Chromium's protected setting
 //              leaves in ungoogled-chromium, which has no built-in engines)
+//   incognito  no-engine, typed in an Incognito window, Shield allowed in Incognito
+//   incognito-no-shield  the same with Shield not allowed there: a known limit (Shield's rule cannot
+//              run, so the words may still be looked up as a site name). Recorded, never a failure.
+//
+// Windows and macOS: only the rule checks run (no xdotool to type into the real address bar there);
+// the address-bar cases print SKIP and exit 0.
 //
 //   xvfb-run -a node test/omnibox.mjs        build in out/linux/enki-browser (or ENKI_LINUX_DIR)
 //   ENKI_NO_SANDBOX=1 ...                    containers without user namespaces only
@@ -38,12 +44,15 @@ const build = process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enk
   if (!ok || !fb) process.exit(1);
   if (process.argv.includes("--unit")) process.exit(0);
 }
-if (process.platform !== "linux") { console.log("SKIP omnibox: Linux only (xdotool types into the real address bar)"); process.exit(0); }
+if (process.platform !== "linux") { console.log(`SKIP omnibox address-bar cases on ${process.platform}: they need Linux with xdotool and an X display (rule checks above passed)`); process.exit(0); }
+try { execSync("command -v xdotool", { stdio: "ignore", shell: "/bin/bash" }); } catch { console.log("SKIP omnibox address-bar cases: xdotool not installed"); process.exit(0); }
+if (!process.env.DISPLAY) { console.log("SKIP omnibox address-bar cases: no X display (run under xvfb-run -a)"); process.exit(0); }
 const version = JSON.parse(readFileSync(path.join(build, "version.json"), "utf8"));
 const ENKI = `chrome-extension://${version.enkiExtensionId}/src/sidepanel/index.html?q=`;
 const QUERY = "elon musk github replacemente";
 const port = 9334;
 const results = [];
+const known = [];
 const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };
 
 const prefs = JSON.parse(readFileSync(path.join(build, "chromium", "initial_preferences"), "utf8"));
@@ -55,7 +64,7 @@ const legacyEngine = {
   },
 };
 
-async function run(name, { engine, withoutEnki = false }, expect) {
+async function run(name, { engine, withoutEnki = false, incognito = false, shieldIncognito = false, knownLimit = false }, expect) {
   const tmp = mkdtempSync(path.join(os.tmpdir(), `enki-omnibox-${name}-`));
   const app = path.join(tmp, "app");
   cpSync(build, app, { recursive: true });
@@ -68,7 +77,21 @@ async function run(name, { engine, withoutEnki = false }, expect) {
   const netlog = path.join(tmp, "netlog.json");
   const args = [`--remote-debugging-port=${port}`, `--log-net-log=${netlog}`, "about:blank"];
   if (process.env.ENKI_NO_SANDBOX === "1") args.unshift("--no-sandbox");
-  const child = spawn(path.join(app, "enki-browser"), args, { env: { ...process.env, ENKI_BROWSER_USER_DATA: path.join(tmp, "data") }, stdio: "ignore" });
+  const userData = path.join(tmp, "data");
+  const launch = (a) => spawn(path.join(app, "enki-browser"), a, { env: { ...process.env, ENKI_BROWSER_USER_DATA: userData }, stdio: "ignore" });
+  if (incognito) {
+    // First run creates the profile; then "Allow in Incognito" is set (or left off) for Shield the
+    // way a person's click stores it on Linux: Preferences only, Secure Preferences untouched.
+    const first = launch(args.filter((a) => !a.startsWith("--log-net-log")));
+    await new Promise((r) => setTimeout(r, 6000));
+    first.kill(); await new Promise((r) => setTimeout(r, 2000));
+    const pf = path.join(userData, "Default", "Preferences");
+    const pr = JSON.parse(readFileSync(pf, "utf8"));
+    const sid = version.shieldExtensionId;
+    ((pr.extensions ??= {}).settings ??= {})[sid] = { ...(pr.extensions.settings[sid] ?? {}), incognito: shieldIncognito };
+    writeFileSync(pf, JSON.stringify(pr));
+  }
+  const child = launch(args);
   let browser;
   try {
     for (let i = 0; i < 60 && !browser; i++) {
@@ -79,6 +102,11 @@ async function run(name, { engine, withoutEnki = false }, expect) {
     await new Promise((r) => setTimeout(r, 4000)); // extensions up, first-run tabs open
     const page = await ctx.newPage();
     await page.bringToFront();
+    if (incognito) {
+      const sw = ctx.serviceWorkers().find((w) => w.url().startsWith(`chrome-extension://${version.shieldExtensionId}/`));
+      const allowed = sw ? await sw.evaluate(() => chrome.extension.isAllowedIncognitoAccess()) : null;
+      check(`${name}: Shield ${shieldIncognito ? "is" : "is not"} allowed in Incognito (test profile)`, allowed === shieldIncognito, String(allowed));
+    }
     const navs = []; // main-frame addresses that committed (a redirected request never commits)
     const watch = (pg) => pg.on("framenavigated", (f) => { if (f === pg.mainFrame()) navs.push(f.url()); });
     ctx.pages().forEach(watch); ctx.on("page", watch);
@@ -86,11 +114,16 @@ async function run(name, { engine, withoutEnki = false }, expect) {
     // turned into a search before any lookup.
     const wentOut = [];
     ctx.on("requestfailed", (r) => { if (/^https?:\/\/[^/]*%20/.test(r.url())) wentOut.push(r.url()); });
-    execSync(`xdotool search --sync --onlyvisible --class enki-browser windowactivate --sync 2>/dev/null; sleep 0.5; xdotool key ctrl+l; sleep 0.5; xdotool type --delay 20 "${QUERY}"; sleep 0.8; xdotool key Return`, { shell: "/bin/bash" });
+    execSync(`xdotool search --sync --onlyvisible --class enki-browser windowactivate --sync 2>/dev/null; sleep 0.5; ${incognito ? "xdotool key ctrl+shift+n; sleep 2.5; xdotool search --sync --onlyvisible --class enki-browser | tail -1 | xargs -r xdotool windowactivate --sync 2>/dev/null; sleep 0.5; " : ""}xdotool key ctrl+l; sleep 0.5; xdotool type --delay 20 "${QUERY}"; sleep 0.8; xdotool key Return`, { shell: "/bin/bash" });
     let landed = "";
     for (let i = 0; i < 20; i++) {
-      landed = ctx.pages().map((x) => x.url()).find((u) => /elon/i.test(u)) ?? "";
-      if (landed && !/^chrome-error:/.test(landed)) break;
+      // Every page target, Incognito windows included (they are not in the default context).
+      const all = await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json()).then((t) => t.filter((x) => x.type === "page").map((x) => x.url)).catch(() => []);
+      // A target can list the typed address for a moment before the rule redirects it: prefer
+      // where it ended up, and keep waiting while it is only that address.
+      const seen = [...ctx.pages().map((x) => x.url()), ...all].filter((u) => /elon/i.test(u));
+      landed = seen.find((u) => !/^https?:\/\/[^/]*%20/.test(u) && !/^chrome-error:/.test(u)) ?? seen[0] ?? "";
+      if (landed && !/^chrome-error:/.test(landed) && !/^https?:\/\/[^/]*%20/.test(landed)) break;
       await new Promise((r) => setTimeout(r, 500));
     }
     await browser.close().catch(() => {});
@@ -98,9 +131,15 @@ async function run(name, { engine, withoutEnki = false }, expect) {
     await new Promise((r) => setTimeout(r, 2500)); // the net log is completed on exit
     const log = existsSync(netlog) ? readFileSync(netlog, "utf8") : "";
     const leaked = (log.match(/"host":"[^"]*"/g) ?? []).filter((h) => /elon|%20/i.test(h));
-    check(`${name}: search lands on ${expect}`, landed.startsWith(expect === "Enki" ? ENKI : "https://duckduckgo.com/?q="), landed || navs.join(" "));
-    check(`${name}: never an http(s):// address of the typed words`, !wentOut.length && ![...navs, landed, ...ctx.pages().map((x) => x.url())].some((u) => /^https?:\/\/[^/]*%20/.test(u)), [...wentOut, ...navs.filter((u) => /elon/i.test(u))].join(" "));
-    check(`${name}: no DNS lookup of the typed words`, log.length > 0 && leaked.length === 0, leaked.slice(0, 2).join(" "));
+    const c = knownLimit ? (n, ok, d = "") => { known.push(`${n}: ${ok ? "did not happen here" : "happened"}${d ? ` — ${d}` : ""}`); console.log(`KNOWN LIMIT ${n} — ${ok ? "ok in this run" : "gap reproduced"}${d ? ` — ${d}` : ""}`); } : check;
+    c(`${name}: search lands on ${expect}`, landed.startsWith(expect === "Enki" ? ENKI : "https://duckduckgo.com/?q="), landed || navs.join(" "));
+    if (incognito) {
+      let onlyQ = false;
+      try { const u = new URL(landed); onlyQ = u.origin === "https://duckduckgo.com" && [...u.searchParams.keys()].join() === "q" && u.searchParams.get("q") === QUERY; } catch {}
+      c(`${name}: DuckDuckGo gets only q`, onlyQ, landed);
+    }
+    c(`${name}: never an http(s):// address of the typed words`, !wentOut.length && ![...navs, landed, ...ctx.pages().map((x) => x.url())].some((u) => /^https?:\/\/[^/]*%20/.test(u)), [...wentOut, ...navs.filter((u) => /elon/i.test(u))].join(" "));
+    c(`${name}: no DNS lookup of the typed words`, log.length > 0 && leaked.length === 0, leaked.slice(0, 2).join(" "));
   } finally {
     try { child.kill(); } catch {}
     rmSync(tmp, { recursive: true, force: true });
@@ -111,5 +150,9 @@ await run("new", { engine: "default" }, "DuckDuckGo");
 await run("legacy", { engine: "legacy" }, "Enki");
 await run("no-enki", { engine: "legacy", withoutEnki: true }, "DuckDuckGo");
 await run("no-engine", { engine: "none" }, "DuckDuckGo");
+await run("incognito", { engine: "none", incognito: true, shieldIncognito: true }, "DuckDuckGo");
+// Known limit (release note): in Incognito the fix needs Shield allowed there.
+await run("incognito-no-shield", { engine: "none", incognito: true, shieldIncognito: false, knownLimit: true }, "DuckDuckGo");
+if (known.length) console.log(`known limit recorded (not a failure): ${known.length} observation(s)`);
 console.log(results.every(Boolean) ? "omnibox: all passed" : "omnibox: FAILED");
 process.exit(results.every(Boolean) ? 0 : 1);
