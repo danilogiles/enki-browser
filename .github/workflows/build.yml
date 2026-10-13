@@ -43,6 +43,9 @@ jobs:
       - run: node test/launcher-unit.mjs
       - run: node test/shield-welcome.mjs
       - run: node test/restart-fallback.mjs
+      # The address-bar rule checks (0.8.9); the cases that type into the real address bar need
+      # xdotool and run in the Linux job, so this prints SKIP for them.
+      - run: node test/omnibox.mjs
       - run: node build/build.mjs
         env:
           ENKI_SIGN_COMMAND: ${{ secrets.ENKI_SIGN_COMMAND }}
@@ -118,6 +121,7 @@ jobs:
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/session.mjs
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/burn-confirm.mjs
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/shield-menu.mjs
+          ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/omnibox.mjs
       # Fresh profiles hide what an update breaks: the latest published release runs on a profile
       # first, then this build on the same one (extension workers, Ctrl+Shift+E, Act refusals).
       - name: Update from the latest release

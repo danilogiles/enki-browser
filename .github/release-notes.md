@@ -1,5 +1,7 @@
 Early alpha. Read *Known gaps* in the README first.
 
+**Fixed in 0.8.9:** in some profiles, a search typed in the address bar was treated as a website address and failed. Searches of two or more words now go to your search engine, or to DuckDuckGo if none is set. In Incognito this needs Shield allowed in Incognito.
+
 **Known issue:** video that needs DRM (Netflix, Crunchyroll, Disney+) does not play yet, because the Widevine component is not included. An opt-in download is planned; until then, watch those in another browser.
 
 **Windows** — run `EnkiBrowserSetup-<version>.exe` (it also upgrades older installs, keeping your profile). The Windows installer is now signed, with verified publisher Danilo De Souza. For the first few days SmartScreen may still show a warning, until the signature builds reputation. Without an installer: the `windows-x64.zip` is the same browser, portable; or with Scoop:
