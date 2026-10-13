@@ -1,4 +1,5 @@
 // Enki Shields' global settings, opened from the panel's "Global settings".
+import { t } from "./i18n.js";
 import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, setSite, sites } from "./sites.js";
 import { DOWNLOAD, check, compare, native, restart, restartWithFallback, status } from "./updates.js";
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
@@ -8,7 +9,7 @@ import { GPC, gpcOn } from "./gpc.js";
 const $ = (id) => document.getElementById(id);
 
 const level = $("level");
-level.replaceChildren(...LEVELS.map((l) => Object.assign(document.createElement("option"), { value: l.level, textContent: `${l.label} — ${l.hint}` })));
+level.replaceChildren(...LEVELS.map((l) => Object.assign(document.createElement("option"), { value: l.level, textContent: `${t(`level${l.label}`, l.label)} — ${t(`hint${l.label}`, l.hint)}` })));
 const current = await blocker("getDefaultFilteringMode");
 level.value = String(typeof current === "number" && current > 0 ? current : 2);
 level.disabled = typeof current !== "number";
@@ -36,12 +37,12 @@ async function renderSites() {
   const forget = await forgetList();
   const hosts = [...new Set([...Object.keys(all), ...forget])].sort();
   const list = $("sites");
-  if (!hosts.length) { list.replaceChildren(Object.assign(document.createElement("li"), { textContent: "None yet." })); return; }
+  if (!hosts.length) { list.replaceChildren(Object.assign(document.createElement("li"), { textContent: t("noneYet", "None yet.") })); return; }
   list.replaceChildren(...hosts.map((h) => {
     const s = all[h] ?? {};
-    const what = [s.scripts === "block" && "scripts blocked", s.cookies === "block" && "all cookies blocked", forget.includes(h) && "forgotten on close"].filter(Boolean).join(", ");
+    const what = [s.scripts === "block" && t("scriptsBlocked", "scripts blocked"), s.cookies === "block" && t("allCookiesBlocked", "all cookies blocked"), forget.includes(h) && t("forgotten", "forgotten on close")].filter(Boolean).join(", ");
     const li = document.createElement("li");
-    const reset = Object.assign(document.createElement("button"), { className: "link", textContent: "Reset" });
+    const reset = Object.assign(document.createElement("button"), { className: "link", textContent: t("reset", "Reset") });
     reset.onclick = async () => { await setSite(h, { scripts: undefined, cookies: undefined }); await setForget(h, false); await renderSites(); };
     li.append(Object.assign(document.createElement("span"), { textContent: `${h} — ${what}` }), reset);
     return li;
@@ -79,7 +80,7 @@ document.addEventListener("keydown", (e) => {
 // (An "Also delete Enki chats" choice would be read here and sent with the message; not in 0.8.4.)
 burnGo.onclick = async () => {
   burnGo.disabled = burnCancel.disabled = true;
-  burnGo.textContent = "Burning…";
+  burnGo.textContent = t("burning", "Burning…");
   await chrome.runtime.sendMessage({ type: "shields:burn" }); // closes every tab, this one too
 };
 
@@ -95,22 +96,22 @@ function showUpdates(s, checked) {
   $("restart-help").hidden = true;
   downloadUpdate.hidden = true;
   if (s.updater && s.ready) {
-    updateState.textContent = `Enki Browser ${s.ready} is downloaded and verified. Restart to use it; every window and tab comes back.`;
+    updateState.textContent = t("upReady", `Enki Browser ${s.ready} is downloaded and verified. Restart to use it; every window and tab comes back.`, s.ready);
     restartUpdate.hidden = false;
   } else if (s.error) {
-    updateState.textContent = `Could not check for updates: ${s.error}`;
+    updateState.textContent = t("upError", `Could not check for updates: ${s.error}`, s.error);
   } else if (s.updater && s.updatesOff) {
-    updateState.textContent = "Updates are turned off on this computer (a file named no-update next to EnkiBrowser.exe).";
+    updateState.textContent = t("upOff", "Updates are turned off on this computer (a file named no-update next to EnkiBrowser.exe).");
   } else if (!s.updater && s.latest && s.running && compare(s.latest, s.running) > 0) {
-    updateState.textContent = `Enki Browser ${s.latest} is available. Install it the way you installed this one; your profile is kept.`;
+    updateState.textContent = t("upAvailable", `Enki Browser ${s.latest} is available. Install it the way you installed this one; your profile is kept.`, s.latest);
     downloadUpdate.hidden = false;
   } else if (checked) {
     // Say that a check just happened: "You have the latest version" alone looked like nothing ran.
     const latest = s.updater ? s.running : s.latest;
-    updateState.textContent = !s.updater && !s.latest ? "Checked just now · could not find the latest release."
-      : latest ? `Checked just now · ${latest} is the latest.` : "Checked just now · you have the latest version.";
+    updateState.textContent = !s.updater && !s.latest ? t("upNoLatest", "Checked just now · could not find the latest release.")
+      : latest ? t("upLatestIs", `Checked just now · ${latest} is the latest.`, latest) : t("upLatest", "Checked just now · you have the latest version.");
   } else {
-    updateState.textContent = s.updater ? "Updates download by themselves every couple of hours." : "This copy does not update by itself; check here for a new release.";
+    updateState.textContent = s.updater ? t("upAuto", "Updates download by themselves every couple of hours.") : t("upManual", "This copy does not update by itself; check here for a new release.");
   }
 }
 // Default browser (default-browser.js): only for an install Windows knows as a browser.
@@ -118,13 +119,13 @@ async function showDefault() {
   const s = await defaultStatus(native);
   $("default-row").hidden = !s?.registered;
   if (!s?.registered) return;
-  $("default-state").textContent = s.isDefault ? "Enki Browser is your default browser." : "Another browser opens links from other apps.";
+  $("default-state").textContent = s.isDefault ? t("isDefault", "Enki Browser is your default browser.") : t("notDefault", "Another browser opens links from other apps.");
   $("make-default").hidden = s.isDefault;
 }
 $("make-default").onclick = async () => {
   $("default-state").textContent = (await openDefaultApps(native))
-    ? "In Windows Settings, choose Enki Browser, then “Set default”."
-    : "Windows Settings could not be opened. Open Settings → Apps → Default apps and choose Enki Browser.";
+    ? t("defaultSteps", "In Windows Settings, choose Enki Browser, then “Set default”.")
+    : t("defaultFail", "Windows Settings could not be opened. Open Settings → Apps → Default apps and choose Enki Browser.");
 };
 window.addEventListener("focus", () => void showDefault());
 void showDefault();
@@ -132,7 +133,7 @@ showUpdates(await status(), false);
 document.documentElement.dataset.updates = "ready"; // tests wait for this before reading or clicking
 checkUpdates.onclick = async () => {
   checkUpdates.disabled = true;
-  updateState.textContent = "Checking… a download can take a minute.";
+  updateState.textContent = t("checking", "Checking… a download can take a minute.");
   try { showUpdates(await check(), true); } finally { checkUpdates.disabled = false; }
 };
 // Settings › About in the Enki panel and the Shields popup open this page at #check-updates:

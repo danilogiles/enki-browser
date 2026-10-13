@@ -1,0 +1,455 @@
+{
+  "langCode": {
+    "message": "en"
+  },
+  "extName": {
+    "message": "Enki Shield"
+  },
+  "extDescription": {
+    "message": "Enki Browser's Shields: what was blocked on each site, per-site switches, and a warning before known phishing sites. Everything is checked and kept on this device."
+  },
+  "actionTitle": {
+    "message": "Enki Shields"
+  },
+  "toggleAria": {
+    "message": "Shields for this site"
+  },
+  "countLabelMany": {
+    "message": "trackers, ads, and more blocked"
+  },
+  "countLabelOne": {
+    "message": "tracker, ad, or more blocked"
+  },
+  "advanced": {
+    "message": "Advanced options"
+  },
+  "blockAds": {
+    "message": "Block trackers & ads"
+  },
+  "levelAria": {
+    "message": "Blocking level"
+  },
+  "https": {
+    "message": "Upgrade connections to HTTPS"
+  },
+  "always": {
+    "message": "Always"
+  },
+  "blockScripts": {
+    "message": "Block scripts"
+  },
+  "scriptsAria": {
+    "message": "Block scripts on this site"
+  },
+  "fpTitle": {
+    "message": "Every site gets tiny random noise in canvas and layout readings, so they cannot be used to identify this browser."
+  },
+  "blockFp": {
+    "message": "Block fingerprinting"
+  },
+  "standard": {
+    "message": "Standard"
+  },
+  "cookies": {
+    "message": "Cookies"
+  },
+  "cookiesAria": {
+    "message": "Cookies on this site"
+  },
+  "block3p": {
+    "message": "Block third-party cookies"
+  },
+  "blockAll": {
+    "message": "Block all cookies"
+  },
+  "forget": {
+    "message": "Forget me when I close this site"
+  },
+  "forgetAria": {
+    "message": "Forget this site when its last tab closes"
+  },
+  "shredTitle": {
+    "message": "Delete this site's cookies and storage and close its tabs"
+  },
+  "shredBtn": {
+    "message": "Shred this site"
+  },
+  "burnTitleAttr": {
+    "message": "Close every tab and delete history, cookies, site data and cache"
+  },
+  "burnBtn": {
+    "message": "🔥 Burn all data"
+  },
+  "burnAsk": {
+    "message": "🔥 Burn everything now?"
+  },
+  "deletesHead": {
+    "message": "✕ Deletes"
+  },
+  "deletesList": {
+    "message": "History, cookies and site data, cache, download history, autofill (saved addresses & cards)"
+  },
+  "keptHead": {
+    "message": "✓ Kept"
+  },
+  "keptList": {
+    "message": "Passwords, bookmarks, and Enki chats, settings, and API keys. Shields settings too."
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "burn": {
+    "message": "Burn"
+  },
+  "shred": {
+    "message": "Shred"
+  },
+  "enterCancels": {
+    "message": "Enter cancels"
+  },
+  "filterLists": {
+    "message": "Filter lists"
+  },
+  "globalSettings": {
+    "message": "Global settings"
+  },
+  "brokenNote": {
+    "message": "If this site seems broken, try Shields down. Blocking stays on everywhere else."
+  },
+  "checkUpdates": {
+    "message": "Check for updates"
+  },
+  "terms": {
+    "message": "Terms"
+  },
+  "privacy": {
+    "message": "Privacy"
+  },
+  "notWeb": {
+    "message": "Shields work on websites. This page belongs to the browser."
+  },
+  "stateUp": {
+    "message": "Shields up for this site"
+  },
+  "stateDown": {
+    "message": "Shields down for this site"
+  },
+  "everyTabCloses": {
+    "message": "Every tab closes. "
+  },
+  "cannotUndo": {
+    "message": "This cannot be undone."
+  },
+  "shredAsk": {
+    "message": "Delete $HOST$'s cookies and site data and close its tabs?",
+    "placeholders": {
+      "host": {
+        "content": "$1"
+      }
+    }
+  },
+  "burning": {
+    "message": "Burning…"
+  },
+  "shredding": {
+    "message": "Shredding…"
+  },
+  "levelBasic": {
+    "message": "Basic"
+  },
+  "levelStandard": {
+    "message": "Standard"
+  },
+  "levelAggressive": {
+    "message": "Aggressive"
+  },
+  "hintBasic": {
+    "message": "Only the most common ads and trackers; fewest site breakages."
+  },
+  "hintStandard": {
+    "message": "Ads, trackers and annoyances, without breaking sites (default)."
+  },
+  "hintAggressive": {
+    "message": "Everything uBlock knows, including first-party trackers; may break some sites."
+  },
+  "settingsTitle": {
+    "message": "Enki Shields settings"
+  },
+  "defaultsIntro": {
+    "message": "Defaults for every site. Change one site from the Shields button next to the address bar."
+  },
+  "everywhere": {
+    "message": "Everywhere"
+  },
+  "defaultLevelAria": {
+    "message": "Default blocking level"
+  },
+  "showCount": {
+    "message": "Show the number blocked on the Shields button"
+  },
+  "showCountAria": {
+    "message": "Show the number blocked"
+  },
+  "alwaysBrowser": {
+    "message": "Always · browser settings"
+  },
+  "thirdParty": {
+    "message": "Third-party cookies"
+  },
+  "blockedBrowser": {
+    "message": "Blocked · browser settings"
+  },
+  "fingerprinting": {
+    "message": "Fingerprinting"
+  },
+  "fpNoise": {
+    "message": "Standard noise on every site"
+  },
+  "phishing": {
+    "message": "Phishing warnings"
+  },
+  "phishingOn": {
+    "message": "On, list checked on this device"
+  },
+  "burnSection": {
+    "message": "Burn"
+  },
+  "autoBurn": {
+    "message": "Burn all data when I close the browser"
+  },
+  "autoBurnHelp": {
+    "message": "Cookies and site data are deleted when the last window closes; history and cache when the browser next opens, and the tabs do not come back. Passwords and bookmarks are kept."
+  },
+  "autoBurnAria": {
+    "message": "Burn all data when the browser closes"
+  },
+  "burnNow": {
+    "message": "Burn everything now"
+  },
+  "download": {
+    "message": "Download"
+  },
+  "restartUpdate": {
+    "message": "Restart to update"
+  },
+  "defaultBrowser": {
+    "message": "Default browser"
+  },
+  "makeDefault": {
+    "message": "Make default"
+  },
+  "firstRun": {
+    "message": "First-run guide"
+  },
+  "firstRunHelp": {
+    "message": "Welcome, default browser, AI setup and Shield summary."
+  },
+  "protectedVideo": {
+    "message": "Protected video"
+  },
+  "widevineRow": {
+    "message": "Widevine, for Crunchyroll, Spotify and other streaming sites"
+  },
+  "restartEnki": {
+    "message": "Restart Enki Browser"
+  },
+  "turnOff": {
+    "message": "Turn off"
+  },
+  "turnOn": {
+    "message": "Turn on"
+  },
+  "widevineAsk": {
+    "message": "Download Widevine from Google?"
+  },
+  "widevineBody": {
+    "message": "Widevine is Google's closed-source module that streaming sites use to play protected video. Enki Browser does not include it: this downloads it from Google (update.googleapis.com), checks Google's signature, and keeps it up to date with about one request to Google a day. Google's terms apply. It runs only when a site plays protected video, and you can turn it off here at any time."
+  },
+  "downloadGoogle": {
+    "message": "Download from Google"
+  },
+  "ownSettings": {
+    "message": "Sites with their own settings"
+  },
+  "burnAskPlain": {
+    "message": "Burn everything now?"
+  },
+  "burnTextLead": {
+    "message": "Every tab closes and this browsing data is deleted. "
+  },
+  "deletes": {
+    "message": "Deletes"
+  },
+  "kept": {
+    "message": "Kept"
+  },
+  "dTabs": {
+    "message": "Every open tab (closed)"
+  },
+  "dHistory": {
+    "message": "History"
+  },
+  "dCookies": {
+    "message": "Cookies and site data"
+  },
+  "dCache": {
+    "message": "Cache"
+  },
+  "dDownloads": {
+    "message": "Download history"
+  },
+  "dAutofill": {
+    "message": "Autofill (saved addresses & cards)"
+  },
+  "kPasswords": {
+    "message": "Passwords"
+  },
+  "kBookmarks": {
+    "message": "Bookmarks"
+  },
+  "kEnki": {
+    "message": "Enki chats, settings, and API keys"
+  },
+  "kShields": {
+    "message": "Shields settings"
+  },
+  "orEsc": {
+    "message": " or "
+  },
+  "cancels": {
+    "message": " cancels"
+  },
+  "noneYet": {
+    "message": "None yet."
+  },
+  "scriptsBlocked": {
+    "message": "scripts blocked"
+  },
+  "allCookiesBlocked": {
+    "message": "all cookies blocked"
+  },
+  "forgotten": {
+    "message": "forgotten on close"
+  },
+  "reset": {
+    "message": "Reset"
+  },
+  "checking": {
+    "message": "Checking… a download can take a minute."
+  },
+  "upReady": {
+    "message": "Enki Browser $V$ is downloaded and verified. Restart to use it; every window and tab comes back.",
+    "placeholders": {
+      "v": {
+        "content": "$1"
+      }
+    }
+  },
+  "upError": {
+    "message": "Could not check for updates: $E$",
+    "placeholders": {
+      "e": {
+        "content": "$1"
+      }
+    }
+  },
+  "upOff": {
+    "message": "Updates are turned off on this computer (a file named no-update next to EnkiBrowser.exe)."
+  },
+  "upAvailable": {
+    "message": "Enki Browser $V$ is available. Install it the way you installed this one; your profile is kept.",
+    "placeholders": {
+      "v": {
+        "content": "$1"
+      }
+    }
+  },
+  "upNoLatest": {
+    "message": "Checked just now · could not find the latest release."
+  },
+  "upLatestIs": {
+    "message": "Checked just now · $V$ is the latest.",
+    "placeholders": {
+      "v": {
+        "content": "$1"
+      }
+    }
+  },
+  "upLatest": {
+    "message": "Checked just now · you have the latest version."
+  },
+  "upAuto": {
+    "message": "Updates download by themselves every couple of hours."
+  },
+  "upManual": {
+    "message": "This copy does not update by itself; check here for a new release."
+  },
+  "isDefault": {
+    "message": "Enki Browser is your default browser."
+  },
+  "notDefault": {
+    "message": "Another browser opens links from other apps."
+  },
+  "defaultSteps": {
+    "message": "In Windows Settings, choose Enki Browser, then “Set default”."
+  },
+  "defaultFail": {
+    "message": "Windows Settings could not be opened. Open Settings → Apps → Default apps and choose Enki Browser."
+  },
+  "wvUnsupported": {
+    "message": "Can be turned on in Enki Browser for Windows; macOS and Linux come next."
+  },
+  "wvError": {
+    "message": "Could not finish: $E$",
+    "placeholders": {
+      "e": {
+        "content": "$1"
+      }
+    }
+  },
+  "wvRestart": {
+    "message": "Widevine $V$ is downloaded from Google and verified. Restart Enki Browser to use it; your tabs come back.",
+    "placeholders": {
+      "v": {
+        "content": "$1"
+      }
+    }
+  },
+  "wvOn": {
+    "message": "On · Widevine $V$, kept up to date from Google.",
+    "placeholders": {
+      "v": {
+        "content": "$1"
+      }
+    }
+  },
+  "wvManual": {
+    "message": "Widevine $V$ was put here by hand; Enki does not keep it up to date.",
+    "placeholders": {
+      "v": {
+        "content": "$1"
+      }
+    }
+  },
+  "wvOff": {
+    "message": "Off. Protected video does not play."
+  },
+  "wvKeepUpdated": {
+    "message": "Keep it up to date"
+  },
+  "wvDownloading": {
+    "message": "Downloading from Google and checking its signature… about 20 MB."
+  },
+  "wvRemoved": {
+    "message": "Off. Widevine is removed from this computer."
+  },
+  "restarting": {
+    "message": "Restarting…"
+  },
+  "restartHelp": {
+    "message": "Didn't restart? Close every Enki window and reopen it."
+  },
+  "tryAgain": {
+    "message": "Try again"
+  }
+}

@@ -6,6 +6,7 @@
 // and keeps it current. Nothing is downloaded before the click on "Download from Google". macOS
 // and Linux have no launcher to ask yet; they get the row with that said.
 
+import { t } from "./i18n.js";
 /** Shows the row and wires its buttons. `native` asks the launcher; `restart` restarts the browser. */
 export async function showWidevine($, native, restart) {
   const state = $("widevine-state");
@@ -16,18 +17,18 @@ export async function showWidevine($, native, restart) {
     on.hidden = off.hidden = again.hidden = true;
     consent.hidden = true;
     if (!s) {
-      state.textContent = "Can be turned on in Enki Browser for Windows; macOS and Linux come next.";
+      state.textContent = t("wvUnsupported", "Can be turned on in Enki Browser for Windows; macOS and Linux come next.");
       return;
     }
-    if (s.error) state.textContent = `Could not finish: ${s.error}`;
+    if (s.error) state.textContent = t("wvError", `Could not finish: ${s.error}`, s.error);
     else if (s.restartNeeded && s.installed) {
-      state.textContent = `Widevine ${s.installed} is downloaded from Google and verified. Restart Enki Browser to use it; your tabs come back.`;
+      state.textContent = t("wvRestart", `Widevine ${s.installed} is downloaded from Google and verified. Restart Enki Browser to use it; your tabs come back.`, s.installed);
       again.hidden = false;
-    } else if (s.installed && s.managed) state.textContent = `On · Widevine ${s.installed}, kept up to date from Google.`;
-    else if (s.installed) state.textContent = `Widevine ${s.installed} was put here by hand; Enki does not keep it up to date.`;
-    else state.textContent = note ?? "Off. Protected video does not play.";
+    } else if (s.installed && s.managed) state.textContent = t("wvOn", `On · Widevine ${s.installed}, kept up to date from Google.`, s.installed);
+    else if (s.installed) state.textContent = t("wvManual", `Widevine ${s.installed} was put here by hand; Enki does not keep it up to date.`, s.installed);
+    else state.textContent = note ?? t("wvOff", "Off. Protected video does not play.");
     on.hidden = !!(s.installed && s.managed);
-    on.textContent = s.installed && !s.managed ? "Keep it up to date" : "Turn on";
+    on.textContent = s.installed && !s.managed ? t("wvKeepUpdated", "Keep it up to date") : t("turnOn", "Turn on");
     off.hidden = !s.installed;
   };
 
@@ -41,16 +42,16 @@ export async function showWidevine($, native, restart) {
   go.onclick = async () => {
     go.disabled = cancel.disabled = true;
     consent.hidden = true;
-    state.textContent = "Downloading from Google and checking its signature… about 20 MB.";
+    state.textContent = t("wvDownloading", "Downloading from Google and checking its signature… about 20 MB.");
     try { render(known(await native({ type: "widevine-install" }))); } finally { go.disabled = cancel.disabled = false; }
   };
   off.onclick = async () => {
     off.disabled = true;
-    try { render(known(await native({ type: "widevine-remove" })), "Off. Widevine is removed from this computer."); } finally { off.disabled = false; }
+    try { render(known(await native({ type: "widevine-remove" })), t("wvRemoved", "Off. Widevine is removed from this computer.")); } finally { off.disabled = false; }
   };
   again.onclick = async () => {
     again.disabled = true;
-    state.textContent = "Restarting…";
+    state.textContent = t("restarting", "Restarting…");
     await restart();
   };
 }
