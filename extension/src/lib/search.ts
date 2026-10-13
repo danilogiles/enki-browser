@@ -224,7 +224,7 @@ export async function chooseOtherEngine(io: SetupIO): Promise<void> {
 export const SEARCH_OPTION_TEXT = {
   ddg: "Searches go to DuckDuckGo, under its privacy policy. Enki doesn't see them.",
   other: "Searches go straight to that engine, under its own privacy policy. Enki doesn't see them.",
-  otherHowTo: "Enki can't change this for you. Open Chromium's search engine settings, find the engine you want, then choose ⋮ › Make default.",
+  otherHowTo: "Enki can't change this for you. Open Chromium's search engine settings, find the engine you want, then choose ⋮\u00a0›\u00a0Make\u00a0default.",
   otherIcons: "This Chromium page loads icons for other search engines when it opens.",
   needsModel: "Needs a model set up in Settings.",
   enkiScope: "Only what you type is sent, not your tabs or history. Your provider may search the web to answer.",
@@ -232,8 +232,9 @@ export const SEARCH_OPTION_TEXT = {
 
 /** Enki AI's line (Ink's mocks 02/04): provider + what is sent; without a model it also asks for one. */
 export function enkiOptionText(provider: string | undefined, hasModel: boolean): string {
-  const base = `Searches go to your AI provider (${provider || "not set"} · Ask). ${SEARCH_OPTION_TEXT.enkiScope}`;
-  return hasModel ? base : `${base} ${SEARCH_OPTION_TEXT.needsModel}`;
+  // No model means no provider yet: the "(provider · Ask)" part is left out (Ink, mock 04 review).
+  if (!hasModel || !provider) return `Searches go to your AI provider. ${SEARCH_OPTION_TEXT.enkiScope} ${SEARCH_OPTION_TEXT.needsModel}`;
+  return `Searches go to your AI provider (${provider} · Ask). ${SEARCH_OPTION_TEXT.enkiScope}`;
 }
 
 /** Short name of the selected provider for the option text: "Ollama (local)" → "Ollama". */

@@ -319,7 +319,9 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     const full = "Searches go to your AI provider (OpenRouter · Ask). Only what you type is sent, not your tabs or history. Your provider may search the web to answer.";
     assert.equal(S.enkiOptionText('OpenRouter', true), full);
     assert.ok(!S.enkiOptionText('OpenRouter', true).includes('Needs a model'));
-    assert.equal(S.enkiOptionText('OpenRouter', false), full + ' Needs a model set up in Settings.');
+    assert.equal(S.enkiOptionText('OpenRouter', false), "Searches go to your AI provider. Only what you type is sent, not your tabs or history. Your provider may search the web to answer. Needs a model set up in Settings.");
+    assert.ok(!S.enkiOptionText(undefined, false).includes('('));
+    assert.ok(S.SEARCH_OPTION_TEXT.otherHowTo.endsWith('⋮\u00a0›\u00a0Make\u00a0default.'));
     assert.equal(S.providerShortName({ preset: 'ollama', model: 'llama3' }), 'Ollama');
   });
 })().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -343,7 +343,7 @@ try {
   context.off("request", onReq);
   check("Other search engine is saved", await sp.evaluate(async () => (await chrome.storage.local.get("enki:searchEngine"))["enki:searchEngine"]) === "other");
   check("choosing Other opens nothing and makes no request", (await sp.evaluate(async () => (await chrome.tabs.query({})).length)) === seTabsBefore && netOnPick.length === 0);
-  check("Other shows the click-only settings button and icon notice", await sp.locator("button:has-text('Open search engine settings')").count() === 1 && (await sp.textContent("body")).includes("This Chromium page loads icons for other search engines when it opens."));
+  check("Other shows the click-only settings button and icon notice", await sp.locator("button:has-text('Open search engine settings')").count() === 1 && (await sp.textContent("body")).includes("This Chromium page loads icons for other search engines when it opens.") && (await sp.textContent("body")).includes("⋮\u00a0›\u00a0Make\u00a0default"));
   check("Enki AI names the provider and what is sent", (await sp.textContent("body")).includes("Only what you type is sent, not your tabs or history.") && !(await sp.textContent("body")).includes("Set up a model first"));
   await sp.close();
   await context.route("https://duckduckgo.com/**", (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<title>ddg</title>" }));

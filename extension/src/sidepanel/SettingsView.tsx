@@ -717,11 +717,14 @@ function SearchEngineControl({ settings }: { settings: Settings }) {
   };
   const doneCount = status ? Number(status.allowed) + Number(status.searchSetupDone) : 0;
   const showSetup = !!status && pending && current !== "enki";
+  /** The card shows the person's choice: Enki AI picked but setup unfinished is shown selected with
+   *  its checklist, while the address bar keeps using DuckDuckGo until both steps are done. */
+  const shown: SearchEngine = pending && current !== "enki" && hasModel && !shieldOff ? "enki" : current;
   const option = (v: SearchEngine, label: ReactNode, text: string, extra?: ReactNode) => (
-    <div key={v} className={`rounded-xl border p-3 ${current === v ? "border-[#38bdf8] bg-[#38bdf8]/10" : "border-ink-700"}`}>
-      <button type="button" role="radio" aria-checked={current === v} data-engine={v} disabled={v === "enki" && (shieldOff || !hasModel)} onClick={() => void choose(v)}
+    <div key={v} className={`rounded-xl border p-3 ${shown === v ? "border-[#38bdf8] bg-[#38bdf8]/10" : "border-ink-700"}`}>
+      <button type="button" role="radio" aria-checked={shown === v} data-engine={v} disabled={v === "enki" && (shieldOff || !hasModel)} onClick={() => void choose(v)}
         className="flex w-full items-start gap-2 text-left disabled:opacity-45">
-        <span className={`mt-0.5 inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 ${current === v ? "border-[#38bdf8] bg-[#38bdf8]" : "border-[#5f6468]"}`} />
+        <span className={`mt-0.5 inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 ${shown === v ? "border-[#38bdf8] bg-[#38bdf8]" : "border-[#5f6468]"}`} />
         <span className="min-w-0">
           <span className="block text-[13px] font-semibold text-zinc-100">{label}</span>
           <span className={`block text-xs ${v === "enki" && !hasModel ? "text-zinc-500" : "text-zinc-400"}`}>{text}</span>
@@ -736,33 +739,19 @@ function SearchEngineControl({ settings }: { settings: Settings }) {
       <p className="mb-2 text-xs text-zinc-400">Choose where your address-bar searches go.</p>
       <div role="radiogroup" aria-label="Search engine" className="space-y-2">
         {option("ddg", <>DuckDuckGo <span className="ml-1 rounded border border-[#38bdf8]/60 px-1 text-[10px] font-semibold text-[#38bdf8]">Default</span></>, SEARCH_OPTION_TEXT.ddg)}
-        {option("enki", "Enki AI", enkiOptionText(provider, hasModel), !hasModel && (
+        {option("enki", "Enki AI", enkiOptionText(provider, hasModel), <>
+          {!hasModel && (
           <p className="mt-2 ml-5 text-xs text-zinc-200">
             Set up a model first{" "}
             <button type="button" disabled={shieldOff} onClick={() => void choose("enki")} className="ml-1 text-[#38bdf8] hover:underline disabled:opacity-45">Open Settings</button>
           </p>
-        ))}
-        {option("other", "Other search engine", SEARCH_OPTION_TEXT.other, current === "other" && (
-          <div className="mt-2 ml-5 border-t border-ink-700 pt-2 text-xs">
-            <p className="text-zinc-300">{SEARCH_OPTION_TEXT.otherHowTo}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              {/* Opens only on this click: the page fetches other engines' icons as it loads. */}
-              <button type="button" onClick={() => void chrome.tabs.create({ url: SEARCH_SETTINGS_URL })}
-                className="h-7 rounded-lg border border-ink-700 px-3 font-semibold text-zinc-200 hover:bg-ink-800">Open search engine settings</button>
-              <span className="text-zinc-500">{SEARCH_OPTION_TEXT.otherIcons}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-      {shieldOff && <p role="alert" className="mt-2 text-xs text-zinc-400">Turn on Enki Shield to use AI search</p>}
-      {!shieldOff && changed && <p role="status" className="mt-2 text-xs text-zinc-400">Search engine changed</p>}
-      {!shieldOff && current === "enki" && <p className="mt-2 text-xs text-zinc-200">Tip: start with @enki or @ddg to choose for one search</p>}
-      {showSetup && (
-        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="mt-2 block text-xs text-[#38bdf8] hover:underline">
+          )}
+          {showSetup && (
+            <div className="mt-2 ml-5 border-t border-ink-700 pt-2">
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="block text-xs text-[#38bdf8] hover:underline">
           Finish setup ({doneCount} of 2 done) {open ? "⌄" : "›"}
         </button>
-      )}
-      {showSetup && open && status && (
+      {open && status && (
         <ol className="mt-2 space-y-3 rounded-xl border border-ink-700 bg-ink-800/60 p-3 text-xs">
           <SetupItem done={status.allowed} title="Allow Enki Shield in Incognito">
             <p className="text-zinc-400">So private windows always search with DuckDuckGo.</p>
@@ -793,6 +782,24 @@ function SearchEngineControl({ settings }: { settings: Settings }) {
           </SetupItem>
         </ol>
       )}
+            </div>
+          )}
+        </>)}
+        {option("other", "Other search engine", SEARCH_OPTION_TEXT.other, shown === "other" && (
+          <div className="mt-2 ml-5 border-t border-ink-700 pt-2 text-xs">
+            <p className="text-zinc-300">{SEARCH_OPTION_TEXT.otherHowTo}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {/* Opens only on this click: the page fetches other engines' icons as it loads. */}
+              <button type="button" onClick={() => void chrome.tabs.create({ url: SEARCH_SETTINGS_URL })}
+                className="h-7 rounded-lg border border-ink-700 px-3 font-semibold text-zinc-200 hover:bg-ink-800">Open search engine settings</button>
+              <span className="text-zinc-500">{SEARCH_OPTION_TEXT.otherIcons}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {shieldOff && <p role="alert" className="mt-2 text-xs text-zinc-400">Turn on Enki Shield to use AI search</p>}
+      {!shieldOff && changed && <p role="status" className="mt-2 text-xs text-zinc-400">Search engine changed</p>}
+      {!shieldOff && current === "enki" && <p className="mt-2 text-xs text-zinc-200">Tip: start with @enki or @ddg to choose for one search</p>}
     </div>
   );
 }
