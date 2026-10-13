@@ -751,6 +751,7 @@ function SearchEngineControl({ settings }: { settings: Settings }) {
         <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="block text-xs text-[#38bdf8] hover:underline">
           Finish setup ({doneCount} of 2 done) {open ? "⌄" : "›"}
         </button>
+        <p className="mt-1 text-xs text-zinc-400">Until then, searches go to DuckDuckGo.</p>
       {open && status && (
         <ol className="mt-2 space-y-3 rounded-xl border border-ink-700 bg-ink-800/60 p-3 text-xs">
           <SetupItem done={status.allowed} title="Allow Enki Shield in Incognito">

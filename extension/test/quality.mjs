@@ -357,5 +357,41 @@ try {
   context.off("request", onAi);
   check("with Other, an address-bar search goes to DuckDuckGo with only q and no AI call", new URL(os2.url()).searchParams.get("q") === "best headphones 2026" && [...new URL(os2.url()).searchParams.keys()].length === 1 && aiCalls.length === 0);
   await os2.close();
+
+  // Enki AI picked but setup pending: Settings shows Enki AI with the 2-step checklist, yet the
+  // address bar still goes to DuckDuckGo (only q, no AI call) until Shield confirms both steps.
+  // Shield's reply is stubbed in the page (same as the 02/05 screenshots); focus re-asks it.
+  await configure("mock-echo", "ask");
+  const pp = await context.newPage();
+  await pp.goto(`chrome-extension://${id}/src/sidepanel/index.html?view=settings`); await pp.waitForSelector("text=Search engine");
+  const shieldSays = async (reply) => { await pp.evaluate((r) => { chrome.runtime.sendMessage = async () => r; window.dispatchEvent(new Event("focus")); }, reply); await pp.waitForTimeout(400); };
+  const seStored = () => pp.evaluate(async () => (await chrome.storage.local.get(["enki:searchEngine", "enki:searchSetupPending"])));
+  await shieldSays({ allowed: false, searchSetupDone: false });
+  await pp.click("[role=radio][data-engine=enki]");
+  await pp.waitForSelector("text=Finish setup (0 of 2 done)");
+  const pendBody = await pp.textContent("body");
+  check("setup pending: Enki AI card is shown selected", await pp.getAttribute("[role=radio][data-engine=enki]", "aria-checked") === "true");
+  check("setup pending: the 2-step checklist is visible", await pp.isVisible("text=Allow Enki Shield in Incognito") && await pp.isVisible("text=Make Enki your default search") && pendBody.includes("Finish setup (0 of 2 done)") && await pp.isVisible("text=Until then, searches go to DuckDuckGo."));
+  const pendState = await seStored();
+  check("setup pending: the saved engine stays DuckDuckGo and the request is pending", pendState["enki:searchEngine"] !== "enki" && pendState["enki:searchSetupPending"] === true);
+  const aiPend = [];
+  const onAiPend = (r) => { if (r.url().includes("127.0.0.1:8787/v1")) aiPend.push(r.url()); };
+  context.on("request", onAiPend);
+  const ps = await context.newPage();
+  await ps.goto(`chrome-extension://${id}/search.html?q=${encodeURIComponent("best headphones 2026")}`).catch(() => {});
+  await ps.waitForURL(/duckduckgo\.com/, { timeout: 10000 });
+  await ps.waitForTimeout(800);
+  context.off("request", onAiPend);
+  check("setup pending: an address-bar search goes to DuckDuckGo with only q and no AI call", new URL(ps.url()).searchParams.get("q") === "best headphones 2026" && [...new URL(ps.url()).searchParams.keys()].length === 1 && aiPend.length === 0);
+  await ps.close();
+  await shieldSays({ allowed: true, searchSetupDone: false });
+  await pp.waitForSelector("text=Finish setup (1 of 2 done)");
+  check("setup pending: one step done still shows the checklist and keeps DuckDuckGo", (await seStored())["enki:searchEngine"] !== "enki" && await pp.isVisible("text=Make Enki your default search"));
+  await shieldSays({ allowed: true, searchSetupDone: true });
+  await pp.waitForSelector("text=Finish setup", { state: "detached", timeout: 5000 });
+  const doneState = await seStored();
+  check("both steps done: the checklist hides and Enki AI is saved", await pp.locator("text=Allow Enki Shield in Incognito").count() === 0 && await pp.locator("text=Until then, searches go to DuckDuckGo.").count() === 0 && doneState["enki:searchEngine"] === "enki" && doneState["enki:searchSetupPending"] === undefined);
+  await pp.evaluate(async () => chrome.storage.local.set({ "enki:searchEngine": "ddg" }));
+  await pp.close();
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }
