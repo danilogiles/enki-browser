@@ -16,7 +16,10 @@
 // the address-bar cases print SKIP and exit 0.
 //
 //   xvfb-run -a node test/omnibox.mjs        build in out/linux/enki-browser (or ENKI_LINUX_DIR)
-//   ENKI_NO_SANDBOX=1 ...                    containers without user namespaces only
+//   CI=1 ...                                 this test's browser runs with --no-sandbox (set by CI
+//                                            runners; set it by hand in containers without user namespaces)
+//   ENKI_OMNIBOX_APP=<dir>                   where each case's copy of the build goes (default
+//                                            $TMPDIR/enki-omnibox-app)
 import { execSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -51,6 +54,33 @@ const version = JSON.parse(readFileSync(path.join(build, "version.json"), "utf8"
 const ENKI = `chrome-extension://${version.enkiExtensionId}/src/sidepanel/index.html?q=`;
 const QUERY = "elon musk github replacemente";
 const port = 9334;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// One fixed place for each case's copy of the build.
+const APP = path.resolve(process.env.ENKI_OMNIBOX_APP ?? path.join(os.tmpdir(), "enki-omnibox-app"));
+// The copy runs from a temp folder, which on Ubuntu 23.10+ (the CI runner) has no AppArmor profile,
+// so Chromium's sandbox cannot start there and the browser exits at once. With CI set, only this test's browser runs without the sandbox; the product launcher and its
+// defaults are untouched. What is checked (where the search lands, DNS, addresses) does not depend
+// on the sandbox.
+const NO_SANDBOX = !!process.env.CI && process.env.CI !== "false";
+if (NO_SANDBOX) console.log("note: test browser runs with --no-sandbox (CI is set)");
+// The launcher is a bash script that runs Chromium as its child: stop the whole process group,
+// or Chromium outlives it and keeps the debugging port (and the profile) for the next case.
+const launchApp = (args, userData) => spawn(path.join(APP, "enki-browser"), args, { env: { ...process.env, ENKI_BROWSER_USER_DATA: userData }, stdio: ["ignore", "ignore", "pipe"], detached: true });
+async function stopApp(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const gone = new Promise((r) => child.once("exit", r));
+  try { process.kill(-child.pid, "SIGTERM"); } catch {}
+  if (await Promise.race([gone.then(() => true), sleep(8000).then(() => false)])) return;
+  try { process.kill(-child.pid, "SIGKILL"); } catch {}
+  await Promise.race([gone, sleep(3000)]);
+}
+async function portFree() {
+  for (let i = 0; i < 40; i++) {
+    if (!(await fetch(`http://127.0.0.1:${port}/json/version`).then(() => true, () => false))) return true;
+    await sleep(250);
+  }
+  return false;
+}
 const results = [];
 const known = [];
 const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };
@@ -66,7 +96,8 @@ const legacyEngine = {
 
 async function run(name, { engine, withoutEnki = false, incognito = false, shieldIncognito = false, knownLimit = false }, expect) {
   const tmp = mkdtempSync(path.join(os.tmpdir(), `enki-omnibox-${name}-`));
-  const app = path.join(tmp, "app");
+  const app = APP;
+  rmSync(app, { recursive: true, force: true });
   cpSync(build, app, { recursive: true });
   if (withoutEnki) rmSync(path.join(app, "extensions", "enki"), { recursive: true, force: true });
   const p = { ...prefs };
@@ -76,17 +107,25 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
   writeFileSync(path.join(app, "chromium", "initial_preferences"), JSON.stringify(p));
   const netlog = path.join(tmp, "netlog.json");
   const args = [`--remote-debugging-port=${port}`, `--log-net-log=${netlog}`, "about:blank"];
-  if (process.env.ENKI_NO_SANDBOX === "1") args.unshift("--no-sandbox");
+  if (NO_SANDBOX) args.unshift("--no-sandbox");
   const userData = path.join(tmp, "data");
-  const launch = (a) => spawn(path.join(app, "enki-browser"), a, { env: { ...process.env, ENKI_BROWSER_USER_DATA: userData }, stdio: "ignore" });
+  let stderr = "";
+  const launch = (a) => { const c = launchApp(a, userData); c.stderr.on("data", (d) => { stderr = (stderr + d).slice(-4000); }); return c; };
+  if (!(await portFree())) { check(`${name}: debugging port ${port} is free`, false, "a browser from an earlier run still holds it"); return; }
   if (incognito) {
     // First run creates the profile; then "Allow in Incognito" is set (or left off) for Shield the
     // way a person's click stores it on Linux: Preferences only, Secure Preferences untouched.
     const first = launch(args.filter((a) => !a.startsWith("--log-net-log")));
-    await new Promise((r) => setTimeout(r, 6000));
-    first.kill(); await new Promise((r) => setTimeout(r, 2000));
     const pf = path.join(userData, "Default", "Preferences");
-    const pr = JSON.parse(readFileSync(pf, "utf8"));
+    for (let i = 0; i < 60 && !existsSync(pf) && first.exitCode === null && first.signalCode === null; i++) await sleep(500);
+    await sleep(4000); // extensions registered in the new profile
+    await stopApp(first); await portFree();
+    let pr = null;
+    try { pr = JSON.parse(readFileSync(pf, "utf8")); } catch (e) {
+      check(`${name}: first run created the profile`, false, `${e.message}${stderr ? ` — ${stderr.trim().split("\n").slice(-3).join(" | ")}` : ""}`);
+      rmSync(tmp, { recursive: true, force: true });
+      return;
+    }
     const sid = version.shieldExtensionId;
     ((pr.extensions ??= {}).settings ??= {})[sid] = { ...(pr.extensions.settings[sid] ?? {}), incognito: shieldIncognito };
     writeFileSync(pf, JSON.stringify(pr));
@@ -96,7 +135,16 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
   try {
     for (let i = 0; i < 60 && !browser; i++) {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`).catch(() => null);
-      if (!browser) await new Promise((r) => setTimeout(r, 500));
+      if (!browser) {
+        if (child.exitCode !== null || child.signalCode !== null) break; // it will not come up
+        await sleep(500);
+      }
+    }
+    if (!browser) {
+      // Not a pass and not a crash: say why, and fail the case's checks.
+      const why = child.exitCode !== null || child.signalCode !== null ? `exited (${child.exitCode ?? child.signalCode})` : "no DevTools answer in 30 s";
+      check(`${name}: browser started`, false, `${why}${stderr ? ` — ${stderr.trim().split("\n").slice(-3).join(" | ")}` : ""}`);
+      return;
     }
     const ctx = browser.contexts()[0];
     await new Promise((r) => setTimeout(r, 4000)); // extensions up, first-run tabs open
@@ -116,23 +164,25 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
     ctx.on("requestfailed", (r) => { if (/^https?:\/\/[^/]*%20/.test(r.url())) wentOut.push(r.url()); });
     execSync(`xdotool search --sync --onlyvisible --class enki-browser windowactivate --sync 2>/dev/null; sleep 0.5; ${incognito ? "xdotool key ctrl+shift+n; sleep 2.5; xdotool search --sync --onlyvisible --class enki-browser | tail -1 | xargs -r xdotool windowactivate --sync 2>/dev/null; sleep 0.5; " : ""}xdotool key ctrl+l; sleep 0.5; xdotool type --delay 20 "${QUERY}"; sleep 0.8; xdotool key Return`, { shell: "/bin/bash" });
     let landed = "";
-    for (let i = 0; i < 20; i++) {
+    const want = expect === "Enki" ? ENKI : "https://duckduckgo.com/?q=";
+    for (let i = 0; i < 30; i++) {
       // Every page target, Incognito windows included (they are not in the default context).
       const all = await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json()).then((t) => t.filter((x) => x.type === "page").map((x) => x.url)).catch(() => []);
       // A target can list the typed address for a moment before the rule redirects it: prefer
       // where it ended up, and keep waiting while it is only that address.
       const seen = [...ctx.pages().map((x) => x.url()), ...all].filter((u) => /elon/i.test(u));
-      landed = seen.find((u) => !/^https?:\/\/[^/]*%20/.test(u) && !/^chrome-error:/.test(u)) ?? seen[0] ?? "";
-      if (landed && !/^chrome-error:/.test(landed) && !/^https?:\/\/[^/]*%20/.test(landed)) break;
+      // Enki's search page that cannot open is redirected by Shield a moment later: wait for the
+      // expected place, and report where it stayed otherwise.
+      landed = seen.find((u) => u.startsWith(want)) ?? seen.find((u) => !/^https?:\/\/[^/]*%20/.test(u) && !/^chrome-error:/.test(u)) ?? seen[0] ?? "";
+      if (landed.startsWith(want)) break;
       await new Promise((r) => setTimeout(r, 500));
     }
     await browser.close().catch(() => {});
-    child.kill();
-    await new Promise((r) => setTimeout(r, 2500)); // the net log is completed on exit
+    await stopApp(child); // the net log is completed on exit
     const log = existsSync(netlog) ? readFileSync(netlog, "utf8") : "";
     const leaked = (log.match(/"host":"[^"]*"/g) ?? []).filter((h) => /elon|%20/i.test(h));
     const c = knownLimit ? (n, ok, d = "") => { known.push(`${n}: ${ok ? "did not happen here" : "happened"}${d ? ` — ${d}` : ""}`); console.log(`KNOWN LIMIT ${n} — ${ok ? "ok in this run" : "gap reproduced"}${d ? ` — ${d}` : ""}`); } : check;
-    c(`${name}: search lands on ${expect}`, landed.startsWith(expect === "Enki" ? ENKI : "https://duckduckgo.com/?q="), landed || navs.join(" "));
+    c(`${name}: search lands on ${expect}`, landed.startsWith(want), landed || navs.join(" "));
     if (incognito) {
       let onlyQ = false;
       try { const u = new URL(landed); onlyQ = u.origin === "https://duckduckgo.com" && [...u.searchParams.keys()].join() === "q" && u.searchParams.get("q") === QUERY; } catch {}
@@ -141,7 +191,8 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
     c(`${name}: never an http(s):// address of the typed words`, !wentOut.length && ![...navs, landed, ...ctx.pages().map((x) => x.url())].some((u) => /^https?:\/\/[^/]*%20/.test(u)), [...wentOut, ...navs.filter((u) => /elon/i.test(u))].join(" "));
     c(`${name}: no DNS lookup of the typed words`, log.length > 0 && leaked.length === 0, leaked.slice(0, 2).join(" "));
   } finally {
-    try { child.kill(); } catch {}
+    await browser?.close().catch(() => {});
+    await stopApp(child);
     rmSync(tmp, { recursive: true, force: true });
   }
 }
@@ -154,5 +205,6 @@ await run("incognito", { engine: "none", incognito: true, shieldIncognito: true 
 // Known limit (release note): in Incognito the fix needs Shield allowed there.
 await run("incognito-no-shield", { engine: "none", incognito: true, shieldIncognito: false, knownLimit: true }, "DuckDuckGo");
 if (known.length) console.log(`known limit recorded (not a failure): ${known.length} observation(s)`);
+rmSync(APP, { recursive: true, force: true });
 console.log(results.every(Boolean) ? "omnibox: all passed" : "omnibox: FAILED");
 process.exit(results.every(Boolean) ? 0 : 1);
