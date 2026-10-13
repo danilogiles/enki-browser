@@ -6,20 +6,22 @@
 import type { ChatRequest } from "./types";
 import { DEFAULT_SETTINGS, presetOf, SETTINGS_KEY, type Settings } from "./settings";
 
-export type SearchEngine = "enki" | "ddg";
+/** "other": the user keeps (or picks) another engine in Chromium's own settings. For search.html it
+ *  behaves exactly like DuckDuckGo: no AI call, the query goes to DuckDuckGo with only q. */
+export type SearchEngine = "enki" | "ddg" | "other";
 export const SEARCH_ENGINE_KEY = "enki:searchEngine";
 /** Enki Shield's extension id: the only extension allowed to read or change the setting. */
 export const SHIELD_EXTENSION_ID = "aacambieennepbgemjkpailjdkldbjjf";
 
 export function isSearchEngine(v: unknown): v is SearchEngine {
-  return v === "enki" || v === "ddg";
+  return v === "enki" || v === "ddg" || v === "other";
 }
 
 /** "@enki q" / "@ddg q" choose the engine for one search; the prefix is removed. */
-export function parseQuery(raw: string): { query: string; force?: SearchEngine } {
+export function parseQuery(raw: string): { query: string; force?: "enki" | "ddg" } {
   const m = /^\s*@(enki|ddg)(?:\s+|$)([\s\S]*)$/i.exec(raw);
   if (!m) return { query: raw.trim() };
-  return { query: m[2].trim(), force: m[1].toLowerCase() as SearchEngine };
+  return { query: m[2].trim(), force: m[1].toLowerCase() as "enki" | "ddg" };
 }
 
 /** DuckDuckGo with only `q`: no extra parameters. */
@@ -29,7 +31,7 @@ export function ddgUrl(query: string): string {
 
 export type RouteInput = {
   engine: SearchEngine | undefined;
-  force?: SearchEngine;
+  force?: "enki" | "ddg";
   incognito: boolean;
   hasModel: boolean;
   query: string;
@@ -110,7 +112,7 @@ export async function earlyRoute(env: {
   incognito: boolean;
   storageGet: (keys: string[]) => Promise<Record<string, unknown>>;
   replace: (url: string) => void;
-}): Promise<{ route: "enki" | "ddg"; query: string; force?: SearchEngine }> {
+}): Promise<{ route: "enki" | "ddg"; query: string; force?: "enki" | "ddg" }> {
   const { query, force } = parseQuery(new URL(env.href).searchParams.get("q") ?? "");
   const stored = await env.storageGet([SEARCH_ENGINE_KEY, SETTINGS_KEY]);
   const engine = isSearchEngine(stored[SEARCH_ENGINE_KEY]) ? stored[SEARCH_ENGINE_KEY] : undefined;
@@ -192,10 +194,11 @@ export const setupComplete = (s: ShieldStatus | null | undefined): boolean => !!
  * both incognito access and the default-search setup. Until then the choice is remembered as
  * pending and the engine stays DuckDuckGo.
  */
-export async function chooseEnkiEngine(io: SetupIO & { send: (extensionId: string, msg: unknown) => Promise<unknown> }): Promise<{ result: "enabled" | "pending" | "no-shield"; status: ShieldStatus | null }> {
+export async function chooseEnkiEngine(io: SetupIO & { send: (extensionId: string, msg: unknown) => Promise<unknown>; hasModel?: boolean }): Promise<{ result: "enabled" | "pending" | "no-shield"; status: ShieldStatus | null }> {
   const status = await queryShieldStatus(io.send);
   if (!status) return { result: "no-shield", status };
-  if (setupComplete(status)) {
+  // Without a model Enki AI is never enabled: the choice stays pending and the setup opens.
+  if (setupComplete(status) && io.hasModel !== false) {
     await io.setEngine("enki");
     await io.setPending(false);
     return { result: "enabled", status };
@@ -211,6 +214,34 @@ export async function chooseDdgEngine(io: SetupIO): Promise<void> {
   await io.setPending(false);
 }
 
+/** "Other search engine": nothing opens and nothing is sent; search.html behaves like DuckDuckGo. */
+export async function chooseOtherEngine(io: SetupIO): Promise<void> {
+  await io.setEngine("other");
+  await io.setPending(false);
+}
+
+/** The three options of the "Search engine" setting (0.8.10, Ink's text reviewed by Cloak). */
+export const SEARCH_OPTION_TEXT = {
+  ddg: "Searches go to DuckDuckGo, under its privacy policy. Enki doesn't see them.",
+  other: "Searches go straight to that engine, under its own privacy policy. Enki doesn't see them.",
+  otherHowTo: "Enki can't change this for you. Open Chromium's search engine settings, find the engine you want, then choose ⋮ › Make default.",
+  otherIcons: "This Chromium page loads icons for other search engines when it opens.",
+  needsModel: "Needs a model set up in Settings.",
+  enkiScope: "Only what you type is sent, not your tabs or history. Your provider may search the web to answer.",
+} as const;
+
+/** Enki AI's line (Ink's mocks 02/04): provider + what is sent; without a model it also asks for one. */
+export function enkiOptionText(provider: string | undefined, hasModel: boolean): string {
+  const base = `Searches go to your AI provider (${provider || "not set"} · Ask). ${SEARCH_OPTION_TEXT.enkiScope}`;
+  return hasModel ? base : `${base} ${SEARCH_OPTION_TEXT.needsModel}`;
+}
+
+/** Short name of the selected provider for the option text: "Ollama (local)" → "Ollama". */
+export function providerShortName(raw: Partial<Settings> | undefined): string | undefined {
+  const s = { ...DEFAULT_SETTINGS, ...raw };
+  return presetOf(s.preset).label.split(" (")[0].trim() || undefined;
+}
+
 /**
  * Run on every fresh Shield reply (Settings opened or refocused). Finishes a pending request once
  * both steps are done, and pauses Enki AI (back to DuckDuckGo, request kept pending) when incognito
@@ -220,6 +251,7 @@ export async function reconcileSearchSetup(
   status: ShieldStatus | null,
   engine: SearchEngine | undefined,
   io: SetupIO,
+  hasModel = true,
 ): Promise<"enabled" | "paused" | "unchanged"> {
   if (engine === "enki") {
     if (status && status.allowed) return "unchanged";
@@ -227,7 +259,7 @@ export async function reconcileSearchSetup(
     await io.setPending(true);
     return "paused";
   }
-  if (setupComplete(status) && (await io.getPending())) {
+  if (hasModel && setupComplete(status) && (await io.getPending())) {
     await io.setEngine("enki");
     await io.setPending(false);
     return "enabled";
@@ -275,10 +307,12 @@ export async function handleExternalMessage(msg: unknown, sender: { id?: string 
       await io.setJustSetUp();
       return { ok: true, value: "enki" };
     }
-    return { ok: true, value: (await io.get()) ?? null };
+    // Shield only knows enki|ddg; "other" behaves like DuckDuckGo, so it is reported as ddg.
+    const cur = await io.get();
+    return { ok: true, value: cur === "other" ? "ddg" : cur ?? null };
   }
   if (m.type === "enki:setSearchEngine") {
-    if (!isSearchEngine(m.value)) return { ok: false, error: "invalid value" };
+    if (m.value !== "enki" && m.value !== "ddg") return { ok: false, error: "invalid value" };
     await io.setEngine(m.value);
     return { ok: true };
   }

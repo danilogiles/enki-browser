@@ -330,5 +330,32 @@ try {
   check("the answer page has no Act mode (acting would navigate the answer away)", await answer.locator("button[title^='Act:']").count() === 0);
   check("the answer page leaves the panel's open chat alone", await panel.evaluate(async () => (await chrome.storage.local.get("enki:current-chat"))["enki:current-chat"]) === openBefore);
   await answer.close();
+
+  // 0.8.10 "Search engine" setting: Other is saved without opening anything; search.html then goes to DuckDuckGo, no AI call.
+  const sp = await context.newPage();
+  await sp.goto(`chrome-extension://${id}/src/sidepanel/index.html`);
+  await sp.click("button[title='Settings']");
+  const seTabsBefore = (await sp.evaluate(async () => (await chrome.tabs.query({})).length));
+  const netOnPick = [];
+  const onReq = (r) => { if (!r.url().startsWith("chrome")) netOnPick.push(r.url()); };
+  context.on("request", onReq);
+  await sp.click("[role=radio][data-engine=other]"); await sp.waitForTimeout(400);
+  context.off("request", onReq);
+  check("Other search engine is saved", await sp.evaluate(async () => (await chrome.storage.local.get("enki:searchEngine"))["enki:searchEngine"]) === "other");
+  check("choosing Other opens nothing and makes no request", (await sp.evaluate(async () => (await chrome.tabs.query({})).length)) === seTabsBefore && netOnPick.length === 0);
+  check("Other shows the click-only settings button and icon notice", await sp.locator("button:has-text('Open search engine settings')").count() === 1 && (await sp.textContent("body")).includes("This Chromium page loads icons for other search engines when it opens."));
+  check("Enki AI names the provider and what is sent", (await sp.textContent("body")).includes("Only what you type is sent, not your tabs or history.") && !(await sp.textContent("body")).includes("Set up a model first"));
+  await sp.close();
+  await context.route("https://duckduckgo.com/**", (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<title>ddg</title>" }));
+  const aiCalls = [];
+  const onAi = (r) => { if (r.url().includes("127.0.0.1:8787/v1")) aiCalls.push(r.url()); };
+  context.on("request", onAi);
+  const os2 = await context.newPage();
+  await os2.goto(`chrome-extension://${id}/search.html?q=${encodeURIComponent("best headphones 2026")}`).catch(() => {});
+  await os2.waitForURL(/duckduckgo\.com/, { timeout: 10000 });
+  await os2.waitForTimeout(500);
+  context.off("request", onAi);
+  check("with Other, an address-bar search goes to DuckDuckGo with only q and no AI call", new URL(os2.url()).searchParams.get("q") === "best headphones 2026" && [...new URL(os2.url()).searchParams.keys()].length === 1 && aiCalls.length === 0);
+  await os2.close();
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

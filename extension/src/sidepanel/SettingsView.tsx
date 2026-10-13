@@ -19,7 +19,8 @@ import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
-import { chooseDdgEngine, chooseEnkiEngine, getSearchEngine, onSearchEngineChange, reconcileSearchSetup, SETUP_PENDING_KEY, storageSetupIO, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
+import { SEARCH_SETTINGS_URL } from "../lib/legacy-search";
+import { chooseDdgEngine, chooseEnkiEngine, chooseOtherEngine, enkiOptionText, providerShortName, storedHasModel, SEARCH_OPTION_TEXT, getSearchEngine, onSearchEngineChange, reconcileSearchSetup, SETUP_PENDING_KEY, storageSetupIO, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
 
 type Props = {
   settings: Settings;
@@ -133,7 +134,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
         <span className="font-semibold">Settings</span>
       </header>
 
-      <SearchEngineControl />
+      <SearchEngineControl settings={settings} />
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
@@ -643,7 +644,9 @@ function CustomColors({ selected, value, onChange }: { selected: boolean; value:
  * checklist). Same setting as Shields' switch (lib/search.ts), applied at once. Enki AI is saved
  * only when Shield confirms incognito access; the default-search step is guidance and never blocks.
  */
-function SearchEngineControl() {
+function SearchEngineControl({ settings }: { settings: Settings }) {
+  const hasModel = storedHasModel(settings);
+  const provider = providerShortName(settings);
   const [engine, setEngine] = useState<SearchEngine | undefined>();
   const [changed, setChanged] = useState(false);
   /** undefined: not asked yet; null: Shield off or not answering. */
@@ -669,7 +672,7 @@ function SearchEngineControl() {
     const refresh = async () => {
       const st = await queryShieldStatus(send);
       setStatus(st);
-      const r = await reconcileSearchSetup(st, await getSearchEngine(), storageSetupIO);
+      const r = await reconcileSearchSetup(st, await getSearchEngine(), storageSetupIO, storedHasModel(settings));
       if (r === "enabled") { setEngine("enki"); setPending(false); setOpen(false); setChanged(true); }
       if (r === "paused") { setEngine("ddg"); setPending(true); setOpen(true); setChanged(false); }
     };
@@ -695,37 +698,61 @@ function SearchEngineControl() {
   const current = engine ?? "ddg";
   const shieldOff = status === null;
   const choose = async (v: SearchEngine) => {
+    // Selecting never touches the network beyond asking Shield (a local extension message).
     if (v === "enki") {
       if (shieldOff || current === "enki") return;
-      const r = await chooseEnkiEngine({ ...storageSetupIO, send });
+      const r = await chooseEnkiEngine({ ...storageSetupIO, send, hasModel });
       setStatus(r.status);
       if (r.result === "enabled") { setEngine("enki"); setPending(false); setOpen(false); setChanged(true); }
-      else if (r.result === "pending") { setPending(true); setOpen(true); setChanged(false); }
+      else if (r.result === "pending") { setEngine("ddg"); setPending(true); setOpen(true); setChanged(false); }
       return;
     }
-    if (current === "ddg" && !pending) return;
-    await chooseDdgEngine(storageSetupIO);
-    const wasEnki = current === "enki";
-    setEngine("ddg");
+    if (current === v && !pending) return;
+    if (v === "other") await chooseOtherEngine(storageSetupIO);
+    else await chooseDdgEngine(storageSetupIO);
+    setEngine(v);
     setPending(false);
     setOpen(false);
-    setChanged(wasEnki);
+    setChanged(true);
   };
   const doneCount = status ? Number(status.allowed) + Number(status.searchSetupDone) : 0;
   const showSetup = !!status && pending && current !== "enki";
-  const seg = (v: SearchEngine, label: string) => (
-    <button key={v} type="button" role="radio" aria-checked={current === v} disabled={v === "enki" && shieldOff} onClick={() => void choose(v)}
-      className={`h-8 px-4 text-[13px] ${current === v ? "bg-[#38bdf8] font-semibold text-[#06131c]" : "text-zinc-400 hover:text-zinc-100 disabled:hover:text-zinc-400"}`}>
-      {label}
-    </button>
+  const option = (v: SearchEngine, label: ReactNode, text: string, extra?: ReactNode) => (
+    <div key={v} className={`rounded-xl border p-3 ${current === v ? "border-[#38bdf8] bg-[#38bdf8]/10" : "border-ink-700"}`}>
+      <button type="button" role="radio" aria-checked={current === v} data-engine={v} disabled={v === "enki" && (shieldOff || !hasModel)} onClick={() => void choose(v)}
+        className="flex w-full items-start gap-2 text-left disabled:opacity-45">
+        <span className={`mt-0.5 inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 ${current === v ? "border-[#38bdf8] bg-[#38bdf8]" : "border-[#5f6468]"}`} />
+        <span className="min-w-0">
+          <span className="block text-[13px] font-semibold text-zinc-100">{label}</span>
+          <span className={`block text-xs ${v === "enki" && !hasModel ? "text-zinc-500" : "text-zinc-400"}`}>{text}</span>
+        </span>
+      </button>
+      {extra}
+    </div>
   );
   return (
     <div className="border-b border-ink-700 px-4 py-3 text-sm">
-      <div className="mb-2 font-semibold text-zinc-200">Search engine</div>
-      <div role="radiogroup" aria-label="Search engine" aria-disabled={shieldOff}
-        className={`inline-flex overflow-hidden rounded-lg border border-ink-700 ${shieldOff ? "opacity-45" : ""}`}>
-        {seg("enki", "Enki AI")}
-        {seg("ddg", "DuckDuckGo")}
+      <div className="font-semibold text-zinc-200">Search engine</div>
+      <p className="mb-2 text-xs text-zinc-400">Choose where your address-bar searches go.</p>
+      <div role="radiogroup" aria-label="Search engine" className="space-y-2">
+        {option("ddg", <>DuckDuckGo <span className="ml-1 rounded border border-[#38bdf8]/60 px-1 text-[10px] font-semibold text-[#38bdf8]">Default</span></>, SEARCH_OPTION_TEXT.ddg)}
+        {option("enki", "Enki AI", enkiOptionText(provider, hasModel), !hasModel && (
+          <p className="mt-2 ml-5 text-xs text-zinc-200">
+            Set up a model first{" "}
+            <button type="button" disabled={shieldOff} onClick={() => void choose("enki")} className="ml-1 text-[#38bdf8] hover:underline disabled:opacity-45">Open Settings</button>
+          </p>
+        ))}
+        {option("other", "Other search engine", SEARCH_OPTION_TEXT.other, current === "other" && (
+          <div className="mt-2 ml-5 border-t border-ink-700 pt-2 text-xs">
+            <p className="text-zinc-300">{SEARCH_OPTION_TEXT.otherHowTo}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {/* Opens only on this click: the page fetches other engines' icons as it loads. */}
+              <button type="button" onClick={() => void chrome.tabs.create({ url: SEARCH_SETTINGS_URL })}
+                className="h-7 rounded-lg border border-ink-700 px-3 font-semibold text-zinc-200 hover:bg-ink-800">Open search engine settings</button>
+              <span className="text-zinc-500">{SEARCH_OPTION_TEXT.otherIcons}</span>
+            </div>
+          </div>
+        ))}
       </div>
       {shieldOff && <p role="alert" className="mt-2 text-xs text-zinc-400">Turn on Enki Shield to use AI search</p>}
       {!shieldOff && changed && <p role="status" className="mt-2 text-xs text-zinc-400">Search engine changed</p>}

@@ -275,3 +275,51 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
   assert.equal(S6.SHIELD_EXTENSIONS_PAGE, 'chrome://extensions/?id=aacambieennepbgemjkpailjdkldbjjf');
   console.log('PASS Enki AI only after both steps: pending flag, reconcile enables/pauses, DuckDuckGo clears; bad replies = no Shield');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
+
+// 0.8.10 "Search engine" setting: three options, Other never calls AI, no model never enables Enki.
+(async () => {
+  const mem = () => { const st = { engine: undefined, pending: false, sent: [] }; return { st,
+    setEngine: async (v) => { if (!S.isSearchEngine(v)) throw new Error('bad'); st.engine = v; },
+    getPending: async () => st.pending, setPending: async (v) => { st.pending = v; },
+    send: async (id, m) => { st.sent.push(m); return { allowed: true, searchSetupDone: true }; } }; };
+  await check('setting: other is a valid, persisted engine; ddg and other clear pending', async () => {
+    const io = mem(); io.st.pending = true;
+    await S.chooseOtherEngine(io); assert.equal(io.st.engine, 'other'); assert.equal(io.st.pending, false);
+    await S.chooseDdgEngine(io); assert.equal(io.st.engine, 'ddg');
+    assert.ok(S.isSearchEngine('other')); assert.ok(!S.isSearchEngine('google'));
+  });
+  await check('setting: storage round-trip through chrome.storage.local', async () => {
+    const store = {}; global.chrome = { storage: { local: { get: async (k) => ({ [k]: store[k] }), set: async (o) => Object.assign(store, o) } } };
+    await S.setSearchEngine('other'); assert.equal(await S.getSearchEngine(), 'other');
+    store[S.SEARCH_ENGINE_KEY] = 'bogus'; assert.equal(await S.getSearchEngine(), undefined);
+    delete global.chrome;
+  });
+  await check('Enki AI is not enabled without a model, even with Shield setup done', async () => {
+    const io = mem(); const r = await S.chooseEnkiEngine({ ...io, hasModel: false });
+    assert.equal(r.result, 'pending'); assert.notEqual(io.st.engine, 'enki'); assert.equal(io.st.pending, true);
+    assert.equal(await S.reconcileSearchSetup({ allowed: true, searchSetupDone: true }, 'ddg', io, false), 'unchanged');
+    const io2 = mem(); assert.equal((await S.chooseEnkiEngine({ ...io2, hasModel: true })).result, 'enabled');
+    assert.equal(S.decideRoute({ engine: 'enki', incognito: false, hasModel: false, query: 'a b' }), 'ddg');
+  });
+  await check('Other never calls AI: search.html goes to DuckDuckGo with only q, incognito too', async () => {
+    assert.equal(S.decideRoute({ engine: 'other', incognito: false, hasModel: true, query: 'best headphones' }), 'ddg');
+    for (const incognito of [false, true]) {
+      let replaced; const r = await S.earlyRoute({ href: 'chrome-extension://x/search.html?q=best+headphones', incognito,
+        storageGet: async () => ({ [S.SEARCH_ENGINE_KEY]: 'other', 'enki:settings': { preset: 'openai', model: 'm', apiKeys: { openai: 'k' } } }),
+        replace: (u) => { replaced = u; } });
+      assert.equal(r.route, 'ddg'); assert.equal(replaced, 'https://duckduckgo.com/?q=best+headphones');
+    }
+  });
+  await check('Shield sees other as ddg and cannot set other', async () => {
+    const io = { ...mem(), get: async () => 'other', setJustSetUp: async () => {} };
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:getSearchEngine' }, { id: S.SHIELD_EXTENSION_ID }, io), { ok: true, value: 'ddg' });
+    assert.equal((await S.handleExternalMessage({ type: 'enki:setSearchEngine', value: 'other' }, { id: S.SHIELD_EXTENSION_ID }, io)).ok, false);
+  });
+  await check('option text (mocks 02/04): provider + Cloak line; the model line only without a model', () => {
+    const full = "Searches go to your AI provider (OpenRouter · Ask). Only what you type is sent, not your tabs or history. Your provider may search the web to answer.";
+    assert.equal(S.enkiOptionText('OpenRouter', true), full);
+    assert.ok(!S.enkiOptionText('OpenRouter', true).includes('Needs a model'));
+    assert.equal(S.enkiOptionText('OpenRouter', false), full + ' Needs a model set up in Settings.');
+    assert.equal(S.providerShortName({ preset: 'ollama', model: 'llama3' }), 'Ollama');
+  });
+})().catch((e) => { console.error(e); process.exitCode = 1; });
