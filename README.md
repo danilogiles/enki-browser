@@ -206,6 +206,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 | Address bar search | DuckDuckGo, with no suggestions while typing (nothing leaves until you press Enter). Google, Bing and others are one click away in Settings → Search engine | `config/initial_preferences.json` |
 | Connections | `http://` upgraded to `https://`, with a warning where a site has no HTTPS | same |
 | Third-party cookies | Blocked | same |
+| Tracking parameters | Removed from links before the page loads (`utm_*`, `fbclid`, `gclid`, `msclkid` and others), the rest of the address kept | Enki Shield (`shield/rules/query-filter.json`) |
 | Startup | Your tabs come back, as you left them; a new tab is Enki Home. Off when *burn every time the browser closes* is on | `config/initial_preferences.json`; the launcher, for profiles made before 0.8.1 |
 | Fingerprinting | Tiny per-page noise in canvas and layout readings | ungoogled-chromium switches in `config/flags.txt` |
 | WebRTC | Public interface only (no local IP leak) | same |

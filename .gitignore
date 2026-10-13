@@ -2,3 +2,5 @@ node_modules/
 out/
 cache/
 *.exe
+# Chromium writes this into an unpacked extension that has static rulesets (tests load shield/ directly).
+shield/_metadata/

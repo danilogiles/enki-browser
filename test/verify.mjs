@@ -125,6 +125,11 @@ try {
   await page.waitForTimeout(1000);
   check("http:// is upgraded to https://", page.url().startsWith("https://"), page.url());
 
+  // ---- tracking parameters: removed before the page loads, the rest of the address kept
+  // (Enki Shield's rules/query-filter.json)
+  await page.goto(`${local}?utm_source=newsletter&id=7&fbclid=abc123&gclid=x`);
+  check("tracking parameters are removed from links (utm_*, fbclid, gclid…)", page.url() === `${local}?id=7`, page.url());
+
   // ---- tracker/ad blocking, observed as a failed request from an ordinary page
 // uBlock either refuses a request (ERR_BLOCKED_BY_CLIENT) or, for scripts whose absence would
   // break the page, answers it with a neutered stub from inside the extension. Both count; what
