@@ -208,6 +208,10 @@ export async function addExtensions(app) {
   const shieldDir = path.join(app, "extensions", "shield");
   cpSync(path.join(root, "shield"), shieldDir, { recursive: true });
   const shield = withKey(shieldDir, "shield-extension.pub");
+  // Shield's redirect rules send tracking links to its own page, which they must name by the
+  // extension's id; that id comes from the key just added, so the build writes it in.
+  const debounce = path.join(shieldDir, "rules", "debounce.json");
+  if (existsSync(debounce)) writeFileSync(debounce, readFileSync(debounce, "utf8").replaceAll("__SHIELD_ID__", shield.id));
   console.log(`  Enki Shield id: ${shield.id}`);
   patchBlocker(blockerDir, shield.id);
   // Its settings page shows the Enki Browser version it shipped with ("Check for updates").
