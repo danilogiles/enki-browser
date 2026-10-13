@@ -1,0 +1,410 @@
+{
+  "extName": {
+    "message": "Enki Shield"
+  },
+  "extDescription": {
+    "message": "Os Shields do Enki Browser: o que foi bloqueado em cada site, ajustes por site e um aviso antes de sites de phishing conhecidos. Tudo é verificado e guardado neste aparelho."
+  },
+  "actionTitle": {
+    "message": "Enki Shields"
+  },
+  "p_shieldsSite": {
+    "message": "Shields para este site"
+  },
+  "p_countMany": {
+    "message": "rastreadores, anúncios e outros bloqueados"
+  },
+  "p_countOne": {
+    "message": "rastreador, anúncio ou outro bloqueado"
+  },
+  "p_advanced": {
+    "message": "Opções avançadas"
+  },
+  "blockTrackers": {
+    "message": "Bloquear rastreadores e anúncios"
+  },
+  "p_level": {
+    "message": "Nível de bloqueio"
+  },
+  "httpsUpgrade": {
+    "message": "Usar HTTPS nas conexões"
+  },
+  "p_always": {
+    "message": "Sempre"
+  },
+  "p_blockScripts": {
+    "message": "Bloquear scripts"
+  },
+  "p_blockScriptsSite": {
+    "message": "Bloquear scripts neste site"
+  },
+  "p_fpTitle": {
+    "message": "Cada site recebe um pequeno ruído aleatório nas leituras de canvas e de layout, para que não sirvam para identificar este navegador."
+  },
+  "p_blockFp": {
+    "message": "Bloquear fingerprinting"
+  },
+  "p_standard": {
+    "message": "Padrão"
+  },
+  "p_cookies": {
+    "message": "Cookies"
+  },
+  "p_cookiesSite": {
+    "message": "Cookies neste site"
+  },
+  "p_cookies3p": {
+    "message": "Bloquear cookies de terceiros"
+  },
+  "p_cookiesAll": {
+    "message": "Bloquear todos os cookies"
+  },
+  "p_forget": {
+    "message": "Me esquecer quando eu fechar este site"
+  },
+  "p_forgetLabel": {
+    "message": "Esquecer este site quando a última aba dele fechar"
+  },
+  "p_shredTitle": {
+    "message": "Apagar os cookies e os dados deste site e fechar as abas dele"
+  },
+  "p_shred": {
+    "message": "Triturar este site"
+  },
+  "p_burnTitle": {
+    "message": "Fechar todas as abas e apagar histórico, cookies, dados de sites e cache"
+  },
+  "burnAll": {
+    "message": "🔥 Apagar todos os dados"
+  },
+  "burnAsk": {
+    "message": "Apagar tudo agora?"
+  },
+  "p_burnAsk": {
+    "message": "🔥 Apagar tudo agora?"
+  },
+  "p_deletes": {
+    "message": "✕ Apaga"
+  },
+  "p_deletesList": {
+    "message": "Histórico, cookies e dados de sites, cache, histórico de downloads, preenchimento automático (endereços e cartões salvos)"
+  },
+  "p_kept": {
+    "message": "✓ Mantém"
+  },
+  "p_keptList": {
+    "message": "Senhas, favoritos, e as conversas, configurações e chaves de API do Enki. As configurações dos Shields também."
+  },
+  "cancel": {
+    "message": "Cancelar"
+  },
+  "burn": {
+    "message": "Apagar"
+  },
+  "p_enterCancels": {
+    "message": "Enter cancela"
+  },
+  "p_lists": {
+    "message": "Listas de filtros"
+  },
+  "p_global": {
+    "message": "Configurações gerais"
+  },
+  "p_broken": {
+    "message": "Se este site parecer quebrado, tente desligar os Shields. O bloqueio continua ligado em todos os outros."
+  },
+  "checkUpdates": {
+    "message": "Procurar atualizações"
+  },
+  "terms": {
+    "message": "Termos"
+  },
+  "privacy": {
+    "message": "Privacidade"
+  },
+  "p_notWeb": {
+    "message": "Os Shields funcionam em sites. Esta página é do próprio navegador."
+  },
+  "p_up": {
+    "message": "Shields ligados para este site"
+  },
+  "p_down": {
+    "message": "Shields desligados para este site"
+  },
+  "p_burnSub": {
+    "message": "Todas as abas fecham. "
+  },
+  "cannotUndo": {
+    "message": "Não dá para desfazer."
+  },
+  "p_shredAsk": {
+    "message": "Apagar os cookies e os dados de $1 e fechar as abas dele?"
+  },
+  "p_shredGo": {
+    "message": "Triturar"
+  },
+  "burning": {
+    "message": "Apagando…"
+  },
+  "p_shredding": {
+    "message": "Triturando…"
+  },
+  "o_title": {
+    "message": "Configurações do Enki Shields"
+  },
+  "o_intro": {
+    "message": "Padrões para todos os sites. Para mudar um site só, use o botão Shields ao lado da barra de endereço."
+  },
+  "o_everywhere": {
+    "message": "Em todos os sites"
+  },
+  "o_level": {
+    "message": "Nível de bloqueio padrão"
+  },
+  "o_badge": {
+    "message": "Mostrar o número de bloqueios no botão Shields"
+  },
+  "o_badgeLabel": {
+    "message": "Mostrar o número de bloqueios"
+  },
+  "o_alwaysBrowser": {
+    "message": "Sempre · configurações do navegador"
+  },
+  "o_3p": {
+    "message": "Cookies de terceiros"
+  },
+  "o_blockedBrowser": {
+    "message": "Bloqueados · configurações do navegador"
+  },
+  "o_fp": {
+    "message": "Fingerprinting"
+  },
+  "o_fpState": {
+    "message": "Ruído padrão em todos os sites"
+  },
+  "o_phishing": {
+    "message": "Avisos de phishing"
+  },
+  "o_phishingState": {
+    "message": "Ligados, lista verificada neste aparelho"
+  },
+  "o_burn": {
+    "message": "Apagar dados"
+  },
+  "o_autoBurn": {
+    "message": "Apagar todos os dados quando eu fechar o navegador"
+  },
+  "o_autoBurnNote": {
+    "message": "Cookies e dados de sites são apagados quando a última janela fecha; histórico e cache quando o navegador abre de novo, e as abas não voltam. Senhas e favoritos são mantidos."
+  },
+  "o_autoBurnLabel": {
+    "message": "Apagar todos os dados quando o navegador fechar"
+  },
+  "o_burnNow": {
+    "message": "Apagar tudo agora"
+  },
+  "o_download": {
+    "message": "Baixar"
+  },
+  "o_restartUpdate": {
+    "message": "Reiniciar para atualizar"
+  },
+  "o_defaultBrowser": {
+    "message": "Navegador padrão"
+  },
+  "o_makeDefault": {
+    "message": "Tornar padrão"
+  },
+  "o_guide": {
+    "message": "Guia de primeira abertura"
+  },
+  "o_guideNote": {
+    "message": "Boas-vindas, navegador padrão, configuração da IA e resumo do Shield."
+  },
+  "o_guideAgain": {
+    "message": "Ver o guia de novo"
+  },
+  "o_video": {
+    "message": "Vídeo protegido"
+  },
+  "o_widevine": {
+    "message": "Widevine, para Crunchyroll, Spotify e outros sites de streaming"
+  },
+  "o_restartBrowser": {
+    "message": "Reiniciar o Enki Browser"
+  },
+  "o_turnOff": {
+    "message": "Desligar"
+  },
+  "o_turnOn": {
+    "message": "Ligar"
+  },
+  "o_wvAsk": {
+    "message": "Baixar o Widevine do Google?"
+  },
+  "o_wvConsent": {
+    "message": "O Widevine é o módulo de código fechado do Google que os sites de streaming usam para tocar vídeo protegido. O Enki Browser não o inclui: isto o baixa do Google (update.googleapis.com), confere a assinatura do Google e o mantém atualizado com cerca de um pedido ao Google por dia. Valem os termos do Google. Ele só roda quando um site toca vídeo protegido, e você pode desligá-lo aqui a qualquer momento."
+  },
+  "o_wvGo": {
+    "message": "Baixar do Google"
+  },
+  "o_sites": {
+    "message": "Sites com configuração própria"
+  },
+  "o_burnSub": {
+    "message": "Todas as abas fecham e estes dados de navegação são apagados. <strong>Não dá para desfazer.</strong>"
+  },
+  "o_deletes": {
+    "message": "Apaga"
+  },
+  "o_kept": {
+    "message": "Mantém"
+  },
+  "o_delTabs": {
+    "message": "Todas as abas abertas (fechadas)"
+  },
+  "o_delHistory": {
+    "message": "Histórico"
+  },
+  "o_delCookies": {
+    "message": "Cookies e dados de sites"
+  },
+  "o_delCache": {
+    "message": "Cache"
+  },
+  "o_delDownloads": {
+    "message": "Histórico de downloads"
+  },
+  "o_delAutofill": {
+    "message": "Preenchimento automático (endereços e cartões salvos)"
+  },
+  "o_keepPasswords": {
+    "message": "Senhas"
+  },
+  "o_keepBookmarks": {
+    "message": "Favoritos"
+  },
+  "o_keepEnki": {
+    "message": "Conversas, configurações e chaves de API do Enki"
+  },
+  "o_keepShields": {
+    "message": "Configurações dos Shields"
+  },
+  "o_enterEsc": {
+    "message": "<kbd>Enter</kbd> ou <kbd>Esc</kbd> cancela"
+  },
+  "o_none": {
+    "message": "Nenhum ainda."
+  },
+  "o_reset": {
+    "message": "Redefinir"
+  },
+  "o_scriptsBlocked": {
+    "message": "scripts bloqueados"
+  },
+  "o_cookiesBlocked": {
+    "message": "todos os cookies bloqueados"
+  },
+  "o_forgotten": {
+    "message": "esquecido ao fechar"
+  },
+  "u_version": {
+    "message": "Enki Browser $1"
+  },
+  "u_ready": {
+    "message": "O Enki Browser $1 foi baixado e verificado. Reinicie para usá-lo; todas as janelas e abas voltam."
+  },
+  "u_error": {
+    "message": "Não foi possível procurar atualizações: $1"
+  },
+  "u_off": {
+    "message": "As atualizações estão desligadas neste computador (um arquivo chamado no-update ao lado do EnkiBrowser.exe)."
+  },
+  "u_available": {
+    "message": "O Enki Browser $1 está disponível. Instale do mesmo jeito que instalou este; seu perfil é mantido."
+  },
+  "u_checkedNoRelease": {
+    "message": "Verificado agora · não foi possível encontrar a versão mais recente."
+  },
+  "u_checkedLatest": {
+    "message": "Verificado agora · $1 é a mais recente."
+  },
+  "u_checkedUpToDate": {
+    "message": "Verificado agora · você tem a versão mais recente."
+  },
+  "u_auto": {
+    "message": "As atualizações são baixadas sozinhas a cada duas horas, mais ou menos."
+  },
+  "u_manual": {
+    "message": "Esta cópia não se atualiza sozinha; procure aqui uma versão nova."
+  },
+  "d_isDefault": {
+    "message": "O Enki Browser é o seu navegador padrão."
+  },
+  "d_other": {
+    "message": "Outro navegador abre os links de outros apps."
+  },
+  "d_opened": {
+    "message": "Nas Configurações do Windows, escolha Enki Browser e depois “Definir como padrão”."
+  },
+  "d_failed": {
+    "message": "Não foi possível abrir as Configurações do Windows. Abra Configurações → Aplicativos → Aplicativos padrão e escolha Enki Browser."
+  },
+  "u_checking": {
+    "message": "Verificando… um download pode levar um minuto."
+  },
+  "w_otherOs": {
+    "message": "Pode ser ligado no Enki Browser para Windows; macOS e Linux vêm depois."
+  },
+  "w_error": {
+    "message": "Não foi possível terminar: $1"
+  },
+  "w_ready": {
+    "message": "O Widevine $1 foi baixado do Google e verificado. Reinicie o Enki Browser para usá-lo; suas abas voltam."
+  },
+  "w_on": {
+    "message": "Ligado · Widevine $1, mantido atualizado pelo Google."
+  },
+  "w_byHand": {
+    "message": "O Widevine $1 foi colocado aqui à mão; o Enki não o mantém atualizado."
+  },
+  "w_off": {
+    "message": "Desligado. Vídeo protegido não toca."
+  },
+  "w_keepUpdated": {
+    "message": "Manter atualizado"
+  },
+  "w_downloading": {
+    "message": "Baixando do Google e conferindo a assinatura… cerca de 20 MB."
+  },
+  "w_removed": {
+    "message": "Desligado. O Widevine foi removido deste computador."
+  },
+  "restarting": {
+    "message": "Reiniciando…"
+  },
+  "lvBasic": {
+    "message": "Básico"
+  },
+  "lvBasicHint": {
+    "message": "Só os anúncios e rastreadores mais comuns; menos sites quebrados."
+  },
+  "lvStandard": {
+    "message": "Padrão"
+  },
+  "lvStandardHint": {
+    "message": "Anúncios, rastreadores e incômodos, sem quebrar sites (padrão)."
+  },
+  "lvAggressive": {
+    "message": "Agressivo"
+  },
+  "lvAggressiveHint": {
+    "message": "Tudo o que o uBlock conhece, incluindo rastreadores do próprio site; pode quebrar alguns sites."
+  },
+  "u_restartHelp": {
+    "message": "Não reiniciou? Feche todas as janelas do Enki e abra de novo."
+  },
+  "u_tryAgain": {
+    "message": "Tentar de novo"
+  }
+}

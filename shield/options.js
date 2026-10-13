@@ -3,6 +3,9 @@ import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, s
 import { DOWNLOAD, check, compare, native, restart, restartWithFallback, status } from "./updates.js";
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
 import { showWidevine } from "./widevine.js";
+import { localize, t } from "./i18n.js";
+
+localize();
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,12 +29,12 @@ async function renderSites() {
   const forget = await forgetList();
   const hosts = [...new Set([...Object.keys(all), ...forget])].sort();
   const list = $("sites");
-  if (!hosts.length) { list.replaceChildren(Object.assign(document.createElement("li"), { textContent: "None yet." })); return; }
+  if (!hosts.length) { list.replaceChildren(Object.assign(document.createElement("li"), { textContent: t("o_none") })); return; }
   list.replaceChildren(...hosts.map((h) => {
     const s = all[h] ?? {};
-    const what = [s.scripts === "block" && "scripts blocked", s.cookies === "block" && "all cookies blocked", forget.includes(h) && "forgotten on close"].filter(Boolean).join(", ");
+    const what = [s.scripts === "block" && t("o_scriptsBlocked"), s.cookies === "block" && t("o_cookiesBlocked"), forget.includes(h) && t("o_forgotten")].filter(Boolean).join(", ");
     const li = document.createElement("li");
-    const reset = Object.assign(document.createElement("button"), { className: "link", textContent: "Reset" });
+    const reset = Object.assign(document.createElement("button"), { className: "link", textContent: t("o_reset") });
     reset.onclick = async () => { await setSite(h, { scripts: undefined, cookies: undefined }); await setForget(h, false); await renderSites(); };
     li.append(Object.assign(document.createElement("span"), { textContent: `${h} — ${what}` }), reset);
     return li;
@@ -69,7 +72,7 @@ document.addEventListener("keydown", (e) => {
 // (An "Also delete Enki chats" choice would be read here and sent with the message; not in 0.8.4.)
 burnGo.onclick = async () => {
   burnGo.disabled = burnCancel.disabled = true;
-  burnGo.textContent = "Burning…";
+  burnGo.textContent = t("burning");
   await chrome.runtime.sendMessage({ type: "shields:burn" }); // closes every tab, this one too
 };
 
@@ -80,27 +83,27 @@ const restartUpdate = $("restart-update");
 const downloadUpdate = $("download-update");
 downloadUpdate.href = DOWNLOAD;
 function showUpdates(s, checked) {
-  $("version").textContent = s.running ? `Enki Browser ${s.running}` : "Enki Browser";
+  $("version").textContent = s.running ? t("u_version", s.running) : "Enki Browser";
   restartUpdate.hidden = true;
   $("restart-help").hidden = true;
   downloadUpdate.hidden = true;
   if (s.updater && s.ready) {
-    updateState.textContent = `Enki Browser ${s.ready} is downloaded and verified. Restart to use it; every window and tab comes back.`;
+    updateState.textContent = t("u_ready", s.ready);
     restartUpdate.hidden = false;
   } else if (s.error) {
-    updateState.textContent = `Could not check for updates: ${s.error}`;
+    updateState.textContent = t("u_error", s.error);
   } else if (s.updater && s.updatesOff) {
-    updateState.textContent = "Updates are turned off on this computer (a file named no-update next to EnkiBrowser.exe).";
+    updateState.textContent = t("u_off");
   } else if (!s.updater && s.latest && s.running && compare(s.latest, s.running) > 0) {
-    updateState.textContent = `Enki Browser ${s.latest} is available. Install it the way you installed this one; your profile is kept.`;
+    updateState.textContent = t("u_available", s.latest);
     downloadUpdate.hidden = false;
   } else if (checked) {
     // Say that a check just happened: "You have the latest version" alone looked like nothing ran.
     const latest = s.updater ? s.running : s.latest;
-    updateState.textContent = !s.updater && !s.latest ? "Checked just now · could not find the latest release."
-      : latest ? `Checked just now · ${latest} is the latest.` : "Checked just now · you have the latest version.";
+    updateState.textContent = !s.updater && !s.latest ? t("u_checkedNoRelease")
+      : latest ? t("u_checkedLatest", latest) : t("u_checkedUpToDate");
   } else {
-    updateState.textContent = s.updater ? "Updates download by themselves every couple of hours." : "This copy does not update by itself; check here for a new release.";
+    updateState.textContent = t(s.updater ? "u_auto" : "u_manual");
   }
 }
 // Default browser (default-browser.js): only for an install Windows knows as a browser.
@@ -108,13 +111,11 @@ async function showDefault() {
   const s = await defaultStatus(native);
   $("default-row").hidden = !s?.registered;
   if (!s?.registered) return;
-  $("default-state").textContent = s.isDefault ? "Enki Browser is your default browser." : "Another browser opens links from other apps.";
+  $("default-state").textContent = t(s.isDefault ? "d_isDefault" : "d_other");
   $("make-default").hidden = s.isDefault;
 }
 $("make-default").onclick = async () => {
-  $("default-state").textContent = (await openDefaultApps(native))
-    ? "In Windows Settings, choose Enki Browser, then “Set default”."
-    : "Windows Settings could not be opened. Open Settings → Apps → Default apps and choose Enki Browser.";
+  $("default-state").textContent = t((await openDefaultApps(native)) ? "d_opened" : "d_failed");
 };
 window.addEventListener("focus", () => void showDefault());
 void showDefault();
@@ -122,7 +123,7 @@ showUpdates(await status(), false);
 document.documentElement.dataset.updates = "ready"; // tests wait for this before reading or clicking
 checkUpdates.onclick = async () => {
   checkUpdates.disabled = true;
-  updateState.textContent = "Checking… a download can take a minute.";
+  updateState.textContent = t("u_checking");
   try { showUpdates(await check(), true); } finally { checkUpdates.disabled = false; }
 };
 // Settings › About in the Enki panel and the Shields popup open this page at #check-updates:
@@ -137,8 +138,6 @@ restartUpdate.onclick = () => restartWithFallback({ button: restartUpdate, state
 
 // Re-open the first-run guide (welcome.html). Does not clear the once-only flag;
 // finishing or skipping still sends nothing out.
-// The label follows the guide's language (welcome.js); its Portuguese wording is in options.html.
-if (!navigator.language?.startsWith("pt")) $("show-guide").textContent = navigator.language?.startsWith("es") ? "Ver la guía otra vez" : "Show the guide again";
 $("show-guide").onclick = () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
 };

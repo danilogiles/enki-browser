@@ -170,13 +170,14 @@ function profile(reply) {
   check("the background script offers the guide on install and on start", /welcomeOnce\(/.test(bg) && /onStartup\.addListener\(offerDefault\)/.test(bg) && /onInstalled\.addListener\(offerDefault\)/.test(bg));
   const optionsHtml = readFileSync(path.join(root, "shield", "options.html"), "utf8");
   const optionsJs = readFileSync(path.join(root, "shield", "options.js"), "utf8");
-  check("Shield settings has Ver o guia de novo under Enki Browser", /id="show-guide"/.test(optionsHtml) && /Ver o guia de novo/.test(optionsHtml));
+  const messages = (lang) => JSON.parse(readFileSync(path.join(root, "shield", "_locales", lang, "messages.json"), "utf8"));
+  check("Shield settings has Ver o guia de novo under Enki Browser", /id="show-guide"[^>]*data-i18n="o_guideAgain"/.test(optionsHtml) && messages("pt_BR").o_guideAgain.message === "Ver o guia de novo" && messages("en").o_guideAgain.message === "Show the guide again");
   const about = readFileSync(path.join(root, "extension", "src", "sidepanel", "SettingsView.tsx"), "utf8");
   check("Settings › About has Ver o guia de novo (opens Shield welcome)", /Section title="About"/.test(about) && /Ver o guia de novo/.test(about) && /aacambieennepbgemjkpailjdkldbjjf\/welcome\.html/.test(about));
   check("Ver o guia de novo reopens welcome.html without clearing SEEN", /show-guide/.test(optionsJs) && /welcome\.html/.test(optionsJs) && !new RegExp(`remove.*${SEEN}|${SEEN}.*false`).test(optionsJs));
   check("Settings › About has Check for updates (opens Shield settings at #check-updates)", /Check for updates/.test(about) && /aacambieennepbgemjkpailjdkldbjjf\/options\.html#check-updates/.test(about));
   check("Shield settings start the check when opened at #check-updates", /location\.hash === "#check-updates"/.test(optionsJs) && /checkUpdates\.click\(\)/.test(optionsJs));
-  check("after a check the page says it checked just now", /Checked just now · \$\{latest\} is the latest\./.test(optionsJs));
+  check("after a check the page says it checked just now", /t\("u_checkedLatest", latest\)/.test(optionsJs) && messages("en").u_checkedLatest.message === "Checked just now · $1 is the latest.");
   const popupJs = readFileSync(path.join(root, "shield", "popup.js"), "utf8");
   check("the Shields popup's Check for updates link starts the check", /options\.html#check-updates/.test(popupJs));
   check("buddy.svg ships with the guide", (() => { try { readFileSync(path.join(root, "shield", "icons", "buddy.svg")); return true; } catch { return false; } })());
@@ -186,6 +187,31 @@ function profile(reply) {
   const welcomeJs = readFileSync(path.join(root, "shield", "welcome.js"), "utf8");
   const defJs = readFileSync(path.join(root, "shield", "default-browser.js"), "utf8");
   check("guide modules make zero network calls", !/\bfetch\s*\(/.test(welcomeJs) && !/\bfetch\s*\(/.test(defJs) && !/\bXMLHttpRequest\b/.test(welcomeJs));
+}
+
+// ---- Shields in English, Portuguese and Spanish (#20): the three message files say the same
+// things, every key the pages and scripts ask for exists, and $1 survives translation.
+{
+  const dir = path.join(root, "shield", "_locales");
+  const langs = ["en", "pt_BR", "es"];
+  const files = Object.fromEntries(langs.map((l) => [l, JSON.parse(readFileSync(path.join(dir, l, "messages.json"), "utf8"))]));
+  const keys = (l) => Object.keys(files[l]).sort().join(",");
+  check("Shield messages: en, pt_BR and es have the same keys", langs.every((l) => keys(l) === keys("en")), langs.map((l) => `${l} ${Object.keys(files[l]).length}`).join(", "));
+  const subs = (m) => (m.match(/\$\d/g) ?? []).sort().join();
+  const lost = langs.flatMap((l) => Object.keys(files.en).filter((k) => subs(files[l][k]?.message ?? "") !== subs(files.en[k].message)).map((k) => `${l}:${k}`));
+  check("Shield messages: every $1 is kept in translation", !lost.length, lost.join(", "));
+  const empty = langs.flatMap((l) => Object.entries(files[l]).filter(([, v]) => !v.message?.trim()).map(([k]) => `${l}:${k}`));
+  check("Shield messages: none is empty", !empty.length, empty.join(", "));
+  const read = (f) => readFileSync(path.join(root, "shield", f), "utf8");
+  const used = new Set([
+    ...["popup.html", "options.html"].flatMap((f) => [...read(f).matchAll(/data-i18n(?:-html|-aria|-title)?="(\w+)"/g)].map((m) => m[1])),
+    ...["popup.js", "options.js", "widevine.js", "sites.js", "updates.js", "menu.js"].flatMap((f) => [...read(f).matchAll(/\bt\("(\w+)"/g)].map((m) => m[1])),
+    ...[...read("manifest.json").matchAll(/__MSG_(\w+)__/g)].map((m) => m[1]),
+  ]);
+  const missing = [...used].filter((k) => !files.en[k]);
+  check("Shield messages: every key the pages, scripts and manifest use exists", !missing.length && used.size > 100, missing.join(", ") || `${used.size} used`);
+  const manifest = JSON.parse(read("manifest.json"));
+  check("Shield manifest is localized (default_locale en)", manifest.default_locale === "en" && manifest.name === "__MSG_extName__");
 }
 
 const failed = results.filter((r) => !r.ok);

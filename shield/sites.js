@@ -6,6 +6,7 @@
 // the site, reached through the small patch Enki Browser applies to it.
 
 import { isSealed, seal, unseal } from "./secrets.js";
+import { t } from "./i18n.js";
 
 export const SITES = "shields:sites";   // { [host]: { scripts?: "block", cookies?: "block" } }
 export const FORGET = "shields:forget"; // [host]
@@ -13,9 +14,9 @@ export const BADGE = "shields:badge";
 export const AUTO_BURN = "shields:auto-burn";
 
 export const LEVELS = [
-  { level: 1, label: "Basic", hint: "Only the most common ads and trackers; fewest site breakages." },
-  { level: 2, label: "Standard", hint: "Ads, trackers and annoyances, without breaking sites (default)." },
-  { level: 3, label: "Aggressive", hint: "Everything uBlock knows, including first-party trackers; may break some sites." },
+  { level: 1, label: t("lvBasic"), hint: t("lvBasicHint") },
+  { level: 2, label: t("lvStandard"), hint: t("lvStandardHint") },
+  { level: 3, label: t("lvAggressive"), hint: t("lvAggressiveHint") },
 ];
 
 let ids = null;
