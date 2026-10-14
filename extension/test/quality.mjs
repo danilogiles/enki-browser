@@ -253,6 +253,27 @@ try {
   const taskText = await panel.textContent("body");
   check("a saved task sends its prompt plus the extra words", taskText.includes("Say the standup words") && taskText.includes("extra bit"));
 
+  // "Save as task" from the chat: the request just made becomes a task, in the mode it was made in.
+  // (The /standup run above left the panel in Ask, the task's mode; this request is made in Act,
+  // chosen the way a person does, with the composer's Act button.)
+  await newChat();
+  await panel.click("button[title^='Act:']");
+  await panel.fill("textarea", "Summarise the open tab in three bullets"); await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
+  await panel.click("button[aria-label='More']");
+  await panel.click("[role=menuitem]:has-text('Save as task')");
+  await panel.waitForSelector("textarea[aria-label='Task prompt']", { timeout: 5000 });
+  const prefilled = await panel.inputValue("textarea[aria-label='Task prompt']");
+  check("Save as task opens the task form with the last request", prefilled === "Summarise the open tab in three bullets", prefilled);
+  check("…and the mode it was made in", (await panel.inputValue("select[aria-label='Task mode']")) === "act");
+  await panel.fill("input[aria-label='Task name']", "bullets");
+  await panel.click("button:has-text('Save task')");
+  await panel.click("button[title='Back']");
+  await newChat();
+  await panel.fill("textarea", "/bullets "); await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 }); await idle();
+  check("the task saved from the chat runs with /name", (await panel.textContent("body")).includes("Summarise the open tab in three bullets"));
+
   // Conversations, the chat list and saved tasks are stored encrypted, never as readable text.
   await panel.waitForTimeout(500);
   const sealed = await panel.evaluate(async () => chrome.storage.local.get(null));

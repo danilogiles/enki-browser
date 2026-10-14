@@ -20,7 +20,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function ConnectionsTab() {
+/** A task to start the form from: the request just made in the chat, in the mode it was made in. */
+export type TaskDraft = { prompt: string; mode: SavedTask["mode"] };
+
+export function ConnectionsTab({ taskDraft }: { taskDraft?: TaskDraft | null } = {}) {
   const [apps, setApps] = useState<Connection[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -138,14 +141,15 @@ export function ConnectionsTab() {
         )}
       </Section>
 
-      <SavedTasks />
+      <SavedTasks start={taskDraft} />
     </>
   );
 }
 
-function SavedTasks() {
+function SavedTasks({ start }: { start?: TaskDraft | null }) {
   const [tasks, setTasks] = useState<SavedTask[]>([]);
-  const [draft, setDraft] = useState<SavedTask | null>(null);
+  // Opened from "Save as task": the form is already filled in; only the name is left to choose.
+  const [draft, setDraft] = useState<SavedTask | null>(start ? { id: uid(), name: "", prompt: start.prompt, mode: start.mode } : null);
   useEffect(() => { void loadTasks().then(setTasks); }, []);
   const store = async (next: SavedTask[]) => { setTasks(next); await saveTasks(next); };
   return (
@@ -165,7 +169,7 @@ function SavedTasks() {
       ))}
       {draft ? (
         <div className="space-y-2 rounded-lg border border-ink-700 p-2.5">
-          <input placeholder="Name (e.g. standup)" aria-label="Task name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputCls} />
+          <input autoFocus={!!start} placeholder="Name (e.g. standup)" aria-label="Task name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputCls} />
           <select aria-label="Task mode" value={draft.mode} onChange={(e) => setDraft({ ...draft, mode: e.target.value as SavedTask["mode"] })} className={inputCls}>
             <option value="ask">Ask: read and answer</option>
             <option value="act">Act: navigate, click and type</option>
