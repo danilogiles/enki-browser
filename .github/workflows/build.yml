@@ -123,6 +123,7 @@ jobs:
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/shield-menu.mjs
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/omnibox.mjs
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/shield-params.mjs
+          ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/shield-gpc.mjs
       # Fresh profiles hide what an update breaks: the latest published release runs on a profile
       # first, then this build on the same one (extension workers, Ctrl+Shift+E, Act refusals).
       - name: Update from the latest release

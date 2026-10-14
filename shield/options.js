@@ -3,6 +3,7 @@ import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, s
 import { DOWNLOAD, check, compare, native, restart, restartWithFallback, status } from "./updates.js";
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
 import { showWidevine } from "./widevine.js";
+import { GPC, gpcOn } from "./gpc.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +20,15 @@ badge.onclick = async () => {
   const on = badge.getAttribute("aria-checked") !== "true";
   badge.setAttribute("aria-checked", String(on));
   await chrome.storage.local.set({ [BADGE]: on });
+};
+
+// Global Privacy Control (gpc.js applies it when this changes).
+const gpc = $("gpc");
+gpc.setAttribute("aria-checked", String(await gpcOn()));
+gpc.onclick = async () => {
+  const on = gpc.getAttribute("aria-checked") !== "true";
+  gpc.setAttribute("aria-checked", String(on));
+  await chrome.storage.local.set({ [GPC]: on });
 };
 
 async function renderSites() {

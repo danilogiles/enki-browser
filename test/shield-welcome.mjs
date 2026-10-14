@@ -161,8 +161,9 @@ function profile(reply) {
 // ---- wiring: no new permission, Chromium's own bar still off, background and About reopen
 {
   const manifest = JSON.parse(readFileSync(path.join(root, "shield", "manifest.json"), "utf8"));
-  // contextMenus: Check for updates in the Shields button's right-click menu (#61); the guide adds none.
-  const expected = ["declarativeNetRequest", "webNavigation", "webRequest", "tabs", "storage", "alarms", "contentSettings", "browsingData", "nativeMessaging", "contextMenus"];
+  // contextMenus: Check for updates in the Shields button's right-click menu (#61); scripting:
+  // Global Privacy Control's page script, registered only while its switch is on (#18). The guide adds none.
+  const expected = ["declarativeNetRequest", "webNavigation", "webRequest", "tabs", "storage", "alarms", "contentSettings", "browsingData", "nativeMessaging", "contextMenus", "scripting"];
   check("Enki Shield asks for no new permission", JSON.stringify(manifest.permissions) === JSON.stringify(expected) && !manifest.optional_permissions, manifest.permissions.join(", "));
   const flags = readFileSync(path.join(root, "config", "flags.txt"), "utf8");
   check("Chromium's default browser bar stays off (--no-default-browser-check)", /^--no-default-browser-check\s*$/m.test(flags));
