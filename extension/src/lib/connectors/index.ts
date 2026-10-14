@@ -30,13 +30,34 @@ export type Connection = {
 
 export type Preset = { id: string; name: string; url: string; auth: Connection["auth"]; hint: string };
 
-/** Official remote MCP servers that let any client sign in (checked 2026-10-04). */
+/**
+ * Official remote MCP servers that let any client sign in. Checked from the outside, without
+ * signing in: `initialize` answers 401 with a WWW-Authenticate header, and the authorization
+ * server's metadata offers dynamic client registration and PKCE S256 (2026-10-04, and the second
+ * group 2026-10-11). Left out for now: Asana, HubSpot and Box (no dynamic registration, so they
+ * need an app registered ahead), Figma (it registers clients but is known to accept only the ones
+ * it approves) and Zapier (each user's server has its own address).
+ */
 export const PRESETS: Preset[] = [
   { id: "atlassian", name: "Jira & Confluence", url: "https://mcp.atlassian.com/v1/mcp", auth: "oauth", hint: "Atlassian Cloud: issues, projects, pages" },
   { id: "linear", name: "Linear", url: "https://mcp.linear.app/mcp", auth: "oauth", hint: "Issues, projects, cycles" },
   { id: "notion", name: "Notion", url: "https://mcp.notion.com/mcp", auth: "oauth", hint: "Pages and databases" },
   { id: "sentry", name: "Sentry", url: "https://mcp.sentry.dev/mcp", auth: "oauth", hint: "Errors and issues" },
   { id: "github", name: "GitHub", url: "https://api.githubcopilot.com/mcp/", auth: "token", hint: "Needs a personal access token (github.com/settings/tokens)" },
+  { id: "monday", name: "monday.com", url: "https://mcp.monday.com/mcp", auth: "oauth", hint: "Boards, items and updates" },
+  { id: "intercom", name: "Intercom", url: "https://mcp.intercom.com/mcp", auth: "oauth", hint: "Conversations and contacts" },
+  { id: "canva", name: "Canva", url: "https://mcp.canva.com/mcp", auth: "oauth", hint: "Designs" },
+  { id: "webflow", name: "Webflow", url: "https://mcp.webflow.com/mcp", auth: "oauth", hint: "Sites, CMS collections, pages" },
+  { id: "stripe", name: "Stripe", url: "https://mcp.stripe.com", auth: "oauth", hint: "Payments, customers, invoices" },
+  { id: "paypal", name: "PayPal", url: "https://mcp.paypal.com/mcp", auth: "oauth", hint: "Invoices, orders, transactions" },
+  { id: "square", name: "Square", url: "https://mcp.squareup.com/mcp", auth: "oauth", hint: "Payments, orders, catalog" },
+  { id: "vercel", name: "Vercel", url: "https://mcp.vercel.com", auth: "oauth", hint: "Projects, deployments, logs" },
+  { id: "netlify", name: "Netlify", url: "https://netlify-mcp.netlify.app/mcp", auth: "oauth", hint: "Sites and deploys" },
+  { id: "cloudflare", name: "Cloudflare", url: "https://bindings.mcp.cloudflare.com/mcp", auth: "oauth", hint: "Workers, KV, R2 and D1" },
+  { id: "supabase", name: "Supabase", url: "https://mcp.supabase.com/mcp", auth: "oauth", hint: "Projects, databases, edge functions" },
+  { id: "neon", name: "Neon", url: "https://mcp.neon.tech/mcp", auth: "oauth", hint: "Postgres projects and branches" },
+  { id: "prisma", name: "Prisma Postgres", url: "https://mcp.prisma.io/mcp", auth: "oauth", hint: "Databases and backups" },
+  { id: "huggingface", name: "Hugging Face", url: "https://huggingface.co/mcp", auth: "none", hint: "Models, datasets, Spaces and papers; no sign-in for public ones" },
 ];
 
 const LIST = "enki:connections";

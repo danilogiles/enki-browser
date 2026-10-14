@@ -15,11 +15,22 @@ const { runTurn } = require('../src/lib/agent/loop.ts');
 const { DEFAULT_SETTINGS } = require('../src/lib/settings.ts');
 const { toTextProtocol } = require('../src/lib/providers/text-tools.ts');
 const { extractTextToolCalls } = require('../src/lib/agent/toolcall-text.ts');
+const { PRESETS } = require('../src/lib/connectors/index.ts');
 global.chrome = { runtime: { getManifest: () => ({ version: 'test' }) } };
 const user = (text) => ({ role: 'user', parts: [{ type: 'text', text }] });
 const call = { type: 'tool_call', id: 'c1', name: 'click', input: { ref: 'ref_1' } };
 let checks = 0;
 function check(name, fn) { fn(); checks++; console.log('PASS', name); }
+
+check('connection presets: unique ids, https addresses, a known sign-in, a hint', () => {
+  assert.equal(new Set(PRESETS.map((p) => p.id)).size, PRESETS.length);
+  assert.equal(new Set(PRESETS.map((p) => p.url)).size, PRESETS.length);
+  for (const p of PRESETS) {
+    assert.equal(new URL(p.url).protocol, 'https:', p.id);
+    assert.ok(['oauth', 'token', 'none'].includes(p.auth), p.id);
+    assert.ok(p.name && p.hint, p.id);
+  }
+});
 
 check('summary stays within budget and keeps complete tool exchanges', () => {
   const h = [];
