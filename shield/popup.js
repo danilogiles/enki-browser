@@ -1,5 +1,5 @@
 // The Shields panel: the button right of the address bar, as Brave's lion is.
-import { BADGE, LEVELS, blocker, blockerId, forgetList, setForget, setSite, sites } from "./sites.js";
+import { BADGE, LEVELS, blocker, blockerId, forgetList, inIncognito, setDown, setForget, setSite, sites } from "./sites.js";
 
 const $ = (id) => document.getElementById(id);
 const DOCS = "https://github.com/danilogiles/enki-browser/blob/main/";
@@ -74,6 +74,10 @@ $("toggle").onclick = async () => {
   const down = isOn($("toggle"));
   const level = down ? 0 : (await blocker("getDefaultFilteringMode")) ?? 2;
   await blocker("setFilteringMode", { hostname: host, level });
+  // params.js stops removing tracking parameters here too. From Incognito the worker keeps it in
+  // memory only; nothing is written to storage.
+  if (inIncognito()) await chrome.runtime.sendMessage({ what: "enki-shield:set-down", host, down });
+  else await setDown(host, down);
   await render();
   await reload();
 };

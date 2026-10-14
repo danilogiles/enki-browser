@@ -2,6 +2,7 @@ import "./shields.js";
 import "./burn.js";
 import "./menu.js";
 import "./omnibox.js";
+import "./params.js";
 import { welcomeOnce } from "./default-browser.js";
 import { native } from "./updates.js";
 // Enki Shield: warns before a known phishing site opens.
