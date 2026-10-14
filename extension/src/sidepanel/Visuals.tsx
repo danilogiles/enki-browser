@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 
-import { dataFromSpec, dataFromTable, parseMindmap, type DataSet, type Kind, type MapNode } from "../lib/visual-data";
+import { Check, Download, ImageDown } from "lucide-react";
+import { chartSvg, dataFromSpec, dataFromTable, niceTicks, parseMindmap, toCsv, type DataSet, type Kind, type MapNode } from "../lib/visual-data";
 
 const PALETTE = ["var(--color-enki-400)", "#a78bfa", "#f472b6", "#34d399", "#fbbf24", "#fb923c", "#60a5fa", "#94a3b8"];
 
@@ -27,19 +28,6 @@ const scalesDiffer = (d: DataSet) => {
   return d.series.length > 1 && Math.max(...peaks) / Math.min(...peaks) > 10;
 };
 
-/** Round axis steps (1, 2, 2.5, 5 × 10ⁿ) covering [min, max], with 0 included for all-positive data. */
-function niceTicks(min: number, max: number, count = 4): number[] {
-  if (min > 0 && min / max < 0.5) min = 0;
-  if (max === min) { max += Math.abs(max) || 1; min -= Math.abs(min) || 1; }
-  const raw = (max - min) / count;
-  const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw)!;
-  const ticks: number[] = [];
-  for (let t = Math.floor(min / step) * step; t <= max + step * 1e-9; t += step) ticks.push(Number(t.toPrecision(12)));
-  if (ticks[ticks.length - 1] < max) ticks.push(ticks[ticks.length - 1] + step);
-  return ticks;
-}
-
 // ---------- the chart card with its mini-tabs
 
 export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind; table?: ReactNode }) {
@@ -54,7 +42,8 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
     <figure className="enki-visual my-2 rounded-xl border border-ink-700 bg-ink-900/60 p-2.5">
       <div className="mb-2 flex items-center gap-2">
         {data.title && <figcaption className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-200">{data.title}</figcaption>}
-        <div role="tablist" aria-label="Chart type" className="ml-auto flex gap-0.5 rounded-lg bg-ink-800 p-0.5">
+        <ExportButtons data={data} shown={shown} kind={kind} />
+        <div role="tablist" aria-label="Chart type" className="flex gap-0.5 rounded-lg bg-ink-800 p-0.5">
           {kinds.map((k) => (
             <button key={k} role="tab" aria-selected={kind === k} onClick={() => setKind(k)}
               className={`rounded-md px-2 py-0.5 text-[11px] ${kind === k ? "bg-ink-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>
@@ -80,6 +69,55 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
         </div>
       )}
     </figure>
+  );
+}
+
+/**
+ * Copy image and CSV, so a chart can go into a document, a message or a spreadsheet. The picture
+ * is drawn apart from the panel (chartSvg: plain colours on white; the bars on screen are HTML)
+ * and put on the clipboard as PNG; the CSV is the data unformatted.
+ */
+function ExportButtons({ data, shown, kind }: { data: DataSet; shown: DataSet; kind: Kind }) {
+  const [done, setDone] = useState<"image" | "csv" | null>(null);
+  const flash = (what: "image" | "csv") => { setDone(what); setTimeout(() => setDone(null), 1500); };
+  const copyImage = async () => {
+    // The panel's palette has a theme variable in it; a picture needs the colour it stands for.
+    const style = getComputedStyle(document.documentElement);
+    const palette = PALETTE.map((c) => (c.startsWith("var(") ? style.getPropertyValue(c.slice(4, -1)).trim() || "#38bdf8" : c));
+    // The picture is what is on screen (one series at a time when their scales differ); the CSV has them all.
+    // One series of several on screen: the picture says which.
+    const pictured = data.series.length > 1 && shown.series.length === 1
+      ? { ...shown, title: [data.title, shown.series[0].name].filter(Boolean).join(" · ") } : shown;
+    const svg = chartSvg(pictured, kind, palette);
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    await img.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width * 2; canvas.height = img.height * 2; // sharp on high-density screens
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(2, 2);
+    ctx.drawImage(img, 0, 0);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no image"))), "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    flash("image");
+  };
+  const downloadCsv = () => {
+    const url = URL.createObjectURL(new Blob([toCsv(data)], { type: "text/csv;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `${(data.title || "chart").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 60) || "chart"}.csv` });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    flash("csv");
+  };
+  const cls = "rounded-md p-1 text-zinc-500 transition hover:bg-ink-800 hover:text-zinc-200";
+  return (
+    <div className="ml-auto flex gap-0.5">
+      <button type="button" className={cls} title="Copy image" aria-label="Copy image" onClick={() => void copyImage().catch(() => undefined)}>
+        {done === "image" ? <Check size={13} /> : <ImageDown size={13} />}
+      </button>
+      <button type="button" className={cls} title="Download CSV" aria-label="Download CSV" onClick={downloadCsv}>
+        {done === "csv" ? <Check size={13} /> : <Download size={13} />}
+      </button>
+    </div>
   );
 }
 
