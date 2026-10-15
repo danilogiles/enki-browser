@@ -270,6 +270,11 @@ export async function reconcileSearchSetup(
 
 export const SHIELD_EXTENSIONS_PAGE = `chrome://extensions/?id=${SHIELD_EXTENSION_ID}`;
 
+/** Bundled uBlock Origin Lite's id: fixed by config/ublock-extension.pub (build/common.mjs withKey). */
+export const UBLOCK_EXTENSION_ID = "nadeplcfbngnnnppbenfiicgnimdcaaj";
+/** Opened only when the person clicks "Open uBlock settings"; no management permission needed. */
+export const UBLOCK_EXTENSIONS_PAGE = `chrome://extensions/?id=${UBLOCK_EXTENSION_ID}`;
+
 /** The search URL people add in chrome://settings/searchEngines: Shield's page, which hands off to Enki. */
 export const SHIELD_SEARCH_URL = `chrome-extension://${SHIELD_EXTENSION_ID}/search.html?q=%s`;
 export const SEARCH_ENGINES_PAGE = "chrome://settings/searchEngines";

@@ -372,6 +372,13 @@ try {
   const pendBody = await pp.textContent("body");
   check("setup pending: Enki AI card is shown selected", await pp.getAttribute("[role=radio][data-engine=enki]", "aria-checked") === "true");
   check("setup pending: the 2-step checklist is visible", await pp.isVisible("text=Allow Enki Shield in Incognito") && await pp.isVisible("text=Make Enki your default search") && pendBody.includes("Finish setup (0 of 2 done)") && await pp.isVisible("text=Until then, searches go to DuckDuckGo."));
+  const navBefore = await context.pages().length;
+  const ubLine = "text=For ad blocking in private windows, also allow uBlock Origin Lite in Incognito.";
+  check("setup pending: the uncounted uBlock line and its button are visible", await pp.isVisible(ubLine) && await pp.isVisible("button:has-text('Open uBlock settings')"));
+  check("setup pending: the uBlock line has no checkbox and the count stays n of 2", await pp.locator("[data-testid=ublock-incognito] [aria-label='Not done'], [data-testid=ublock-incognito] [aria-label='Done'], [data-testid=ublock-incognito] input").count() === 0 && pendBody.includes("Finish setup (0 of 2 done)") && !pendBody.includes("of 3"));
+  check("setup pending: nothing opens uBlock's page before the click", context.pages().length === navBefore);
+  const ubOpened = await pp.evaluate(async () => { const urls = []; const orig = chrome.tabs.create; chrome.tabs.create = async (o) => { urls.push(o.url); return {}; }; document.querySelectorAll("button").forEach((b) => { if (b.textContent === "Open uBlock settings") b.click(); }); await new Promise((r) => setTimeout(r, 100)); chrome.tabs.create = orig; return urls; });
+  check("setup pending: clicking Open uBlock settings opens uBOL's details page", ubOpened.length === 1 && ubOpened[0] === "chrome://extensions/?id=nadeplcfbngnnnppbenfiicgnimdcaaj");
   const pendState = await seStored();
   check("setup pending: the saved engine stays DuckDuckGo and the request is pending", pendState["enki:searchEngine"] !== "enki" && pendState["enki:searchSetupPending"] === true);
   const aiPend = [];
@@ -387,10 +394,12 @@ try {
   await shieldSays({ allowed: true, searchSetupDone: false });
   await pp.waitForSelector("text=Finish setup (1 of 2 done)");
   check("setup pending: one step done still shows the checklist and keeps DuckDuckGo", (await seStored())["enki:searchEngine"] !== "enki" && await pp.isVisible("text=Make Enki your default search"));
+  check("setup pending: one step done keeps the uBlock line and the count is 1 of 2", await pp.isVisible(ubLine) && (await pp.textContent("body")).includes("Finish setup (1 of 2 done)"));
   await shieldSays({ allowed: true, searchSetupDone: true });
   await pp.waitForSelector("text=Finish setup", { state: "detached", timeout: 5000 });
   const doneState = await seStored();
   check("both steps done: the checklist hides and Enki AI is saved", await pp.locator("text=Allow Enki Shield in Incognito").count() === 0 && await pp.locator("text=Until then, searches go to DuckDuckGo.").count() === 0 && doneState["enki:searchEngine"] === "enki" && doneState["enki:searchSetupPending"] === undefined);
+  check("both steps done: the uBlock line and button hide", await pp.locator(ubLine).count() === 0 && await pp.locator("button:has-text('Open uBlock settings')").count() === 0);
   await pp.evaluate(async () => chrome.storage.local.set({ "enki:searchEngine": "ddg" }));
   await pp.close();
   console.log(`${checks}/${checks} checks passed`);

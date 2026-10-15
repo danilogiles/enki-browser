@@ -1,6 +1,6 @@
 {
   "name": "enki",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "description": "Enki - open-source AI browser assistant. Bring your own model, see the page, let it act.",
   "type": "module",

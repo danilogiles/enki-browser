@@ -20,7 +20,7 @@ import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "..
 import { ConnectionsTab } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
 import { SEARCH_SETTINGS_URL } from "../lib/legacy-search";
-import { chooseDdgEngine, chooseEnkiEngine, chooseOtherEngine, enkiOptionText, providerShortName, storedHasModel, SEARCH_OPTION_TEXT, getSearchEngine, onSearchEngineChange, reconcileSearchSetup, SETUP_PENDING_KEY, storageSetupIO, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
+import { chooseDdgEngine, chooseEnkiEngine, chooseOtherEngine, enkiOptionText, providerShortName, storedHasModel, SEARCH_OPTION_TEXT, getSearchEngine, onSearchEngineChange, reconcileSearchSetup, SETUP_PENDING_KEY, storageSetupIO, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, UBLOCK_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
 
 type Props = {
   settings: Settings;
@@ -782,6 +782,14 @@ function SearchEngineControl({ settings }: { settings: Settings }) {
             <p className="mt-1.5 text-zinc-400">Checks itself after your first search.</p>
           </SetupItem>
         </ol>
+      )}
+      {open && status && (
+        /* Not a step: no checkbox and not in the n-of-2 count. Opens only on click. */
+        <p data-testid="ublock-incognito" className="mt-2 text-xs text-zinc-500">
+          For ad blocking in private windows, also allow uBlock Origin Lite in Incognito.{" "}
+          <button type="button" onClick={() => void chrome.tabs.create({ url: UBLOCK_EXTENSIONS_PAGE })}
+            className="ml-1 text-[#38bdf8] hover:underline">Open uBlock settings</button>
+        </p>
       )}
             </div>
           )}

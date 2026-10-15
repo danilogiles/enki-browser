@@ -273,6 +273,19 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
   assert.equal(S6.SHIELD_SEARCH_URL, 'chrome-extension://aacambieennepbgemjkpailjdkldbjjf/search.html?q=%s');
   assert.equal(S6.SEARCH_ENGINES_PAGE, 'chrome://settings/searchEngines');
   assert.equal(S6.SHIELD_EXTENSIONS_PAGE, 'chrome://extensions/?id=aacambieennepbgemjkpailjdkldbjjf');
+  assert.equal(S6.UBLOCK_EXTENSIONS_PAGE, 'chrome://extensions/?id=nadeplcfbngnnnppbenfiicgnimdcaaj');
+  {
+    // The uBOL id must be the one the build gives the bundled uBlock (from config/ublock-extension.pub).
+    const fs = require('fs'), path = require('path'), crypto = require('crypto');
+    const key = fs.readFileSync(path.join(__dirname, '..', '..', 'config', 'ublock-extension.pub'), 'utf8').trim();
+    const hex = crypto.createHash('sha256').update(Buffer.from(key, 'base64')).digest('hex').slice(0, 32);
+    assert.equal(S6.UBLOCK_EXTENSION_ID, [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join(''));
+    // No new permission for the uBlock line (no "management"): the manifest list is unchanged.
+    const man = fs.readFileSync(path.join(__dirname, '..', 'manifest.config.ts'), 'utf8');
+    const perms = [...man.match(/\bpermissions:\s*\[([^\]]*)\]/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(perms, ['sidePanel', 'activeTab', 'tabs', 'scripting', 'storage', 'debugger', 'webNavigation']);
+    assert.ok(!man.includes('"management"'));
+  }
   console.log('PASS Enki AI only after both steps: pending flag, reconcile enables/pauses, DuckDuckGo clears; bad replies = no Shield');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
 
