@@ -352,6 +352,166 @@ function getRef(ref: string): Element {
   return el;
 }
 
+
+const SEARCH_NAME = /\b(search|buscar|pesquisar|procurar|busca|query|q)\b/i;
+const EMAIL_NAME = /\b(e-?mail|correo|mail)\b/i;
+const MESSAGE_BODY = /\b(message|body|compose|reply|comment|post|tweet|caption|description|mensagem|corpo|comentario|comentario|comentário|mensaje|cuerpo|respuesta)\b/i;
+const OTP_NAME = /\b(otp|one[- ]?time|2fa|mfa|verification code|security (?:code|answer|question)|pin|passcode|c[oó]digo|resposta de seguran[cç]a|respuesta de seguridad)\b/i;
+
+function formOf(el: Element): HTMLFormElement | null {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || el instanceof HTMLButtonElement) {
+    return el.form;
+  }
+  return el.closest("form");
+}
+
+function looksSearch(el: Element, role: string, name: string): boolean {
+  if (role === "searchbox") return true;
+  if (el instanceof HTMLInputElement && el.type === "search") return true;
+  if (SEARCH_NAME.test(name)) return true;
+  if (el instanceof HTMLInputElement && SEARCH_NAME.test(el.name || "") ) return true;
+  const form = formOf(el);
+  if (form) {
+    if (form.getAttribute("role") === "search") return true;
+    if (SEARCH_NAME.test(form.getAttribute("aria-label") ?? "") || SEARCH_NAME.test(form.id) || SEARCH_NAME.test(form.name)) return true;
+    const action = form.getAttribute("action") ?? "";
+    if (/search|buscar|pesquisar|query/i.test(action)) return true;
+  }
+  return false;
+}
+
+function looksEmail(el: Element, name: string): boolean {
+  if (el instanceof HTMLInputElement && el.type === "email") return true;
+  const auto = (el.getAttribute("autocomplete") ?? "").toLowerCase();
+  if (auto.includes("email") || auto === "username") return true;
+  return EMAIL_NAME.test(name) || (el instanceof HTMLInputElement && EMAIL_NAME.test(el.name || ""));
+}
+
+function looksMessageBody(el: Element, role: string, name: string): boolean {
+  if (el instanceof HTMLTextAreaElement) return true;
+  if ((el as HTMLElement).isContentEditable) return true;
+  if (role === "textbox" && MESSAGE_BODY.test(name)) return true;
+  if (el instanceof HTMLInputElement && MESSAGE_BODY.test(name) && el.type === "text") return true;
+  return false;
+}
+
+function looksPasswordAdjacent(el: Element, name: string): boolean {
+  if (OTP_NAME.test(name)) return true;
+  const auto = (el.getAttribute("autocomplete") ?? "").toLowerCase();
+  if (auto.includes("one-time") || auto === "one-time-code") return true;
+  const form = formOf(el);
+  if (!form) return false;
+  for (const input of form.querySelectorAll("input")) {
+    if (input === el) continue;
+    if (input.type === "password") return true;
+  }
+  return false;
+}
+
+function formHasMessageBody(form: HTMLFormElement | null): boolean {
+  if (!form) return false;
+  if (form.querySelector("textarea, [contenteditable=true]")) return true;
+  for (const el of form.querySelectorAll("input, textarea, [contenteditable=true], [role=textbox]")) {
+    const role = roleOf(el);
+    if (looksMessageBody(el, role, nameOf(el))) return true;
+  }
+  return false;
+}
+
+function formIsSearch(form: HTMLFormElement | null): boolean {
+  if (!form) return false;
+  if (form.getAttribute("role") === "search") return true;
+  if (SEARCH_NAME.test(form.getAttribute("aria-label") ?? "") || SEARCH_NAME.test(form.id) || SEARCH_NAME.test(form.name)) return true;
+  if (/search|buscar|pesquisar|query/i.test(form.getAttribute("action") ?? "")) return true;
+  // A form whose only text-like control is a search box.
+  const fields = [...form.querySelectorAll("input, textarea")].filter((el) => {
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
+    if (el instanceof HTMLInputElement && ["hidden", "submit", "button", "reset", "image", "checkbox", "radio", "file"].includes(el.type)) return false;
+    return true;
+  });
+  return fields.length === 1 && looksSearch(fields[0], roleOf(fields[0]), nameOf(fields[0]));
+}
+
+/**
+ * Where a submit really goes, for the confirm card. Reads the submitter's own formaction, else the
+ * form's action ATTRIBUTE (form.action can be clobbered by <input name="action">), resolved against
+ * baseURI. Missing or empty means unknown — the card never assumes "this site".
+ */
+function formDestination(el: Element, form: HTMLFormElement | null): string | undefined {
+  if (!form) return undefined;
+  // formaction only counts on a real submit button. For Enter in a text field (implicit
+  // submission) the browser uses the form's default button, so read that one's formaction;
+  // a formaction attribute on the text field itself is ignored by the browser and here too.
+  const submitter = isSubmitButton(el) ? el : defaultSubmitter(form);
+  const own = submitter?.getAttribute("formaction");
+  if (submitter && own && own.trim()) {
+    try { return new URL(submitter.formAction || own, submitter.baseURI).href; } catch { return undefined; }
+  }
+  const raw = HTMLFormElement.prototype.getAttribute.call(form, "action");
+  if (!raw || !raw.trim()) return undefined;
+  try { return new URL(raw, form.baseURI).href; } catch { return undefined; }
+}
+
+function isSubmitButton(el: Element | null | undefined): el is HTMLButtonElement | HTMLInputElement {
+  if (el instanceof HTMLButtonElement) return el.type === "submit"; // missing / invalid type is submit
+  if (el instanceof HTMLInputElement) return el.type === "submit" || el.type === "image";
+  return false;
+}
+
+/** The form's default button: its first submit button in tree order (read via the prototype, so
+ *  an <input name="elements"> cannot clobber the lookup). */
+function defaultSubmitter(form: HTMLFormElement): HTMLButtonElement | HTMLInputElement | null {
+  const getElements = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, "elements")?.get;
+  const list = getElements ? (getElements.call(form) as HTMLFormControlsCollection) : null;
+  for (const c of list ? [...list] : []) if (isSubmitButton(c)) return c;
+  return null;
+}
+
+const TEXT_INPUT_TYPES = new Set(["", "text", "search", "tel", "url", "number", "email", "password"]);
+
+/** A GET form whose only text-like control is `el`: Enter there runs a search. */
+function formGetSingleText(el: Element, form: HTMLFormElement | null): boolean {
+  if (!form) return false;
+  const method = (HTMLFormElement.prototype.getAttribute.call(form, "method") ?? "get").trim().toLowerCase();
+  if (method && method !== "get") return false;
+  const fields = [...form.querySelectorAll("input, textarea")].filter((f) =>
+    f instanceof HTMLTextAreaElement || (f instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(f.type.toLowerCase())));
+  return fields.length === 1 && fields[0] === el;
+}
+
+function enrich(el: Element, base: LocatedElement): LocatedElement {
+  const role = base.role;
+  const name = base.name;
+  const form = formOf(el);
+  const isSubmit =
+    (el instanceof HTMLInputElement && el.type === "submit") ||
+    (el instanceof HTMLButtonElement && (el.type === "submit" || !el.type) && !!form) ||
+    (el instanceof HTMLButtonElement && el.type === "submit");
+  const href = el instanceof HTMLAnchorElement ? el.href : el.getAttribute("href") ?? undefined;
+  const formAction = formDestination(el, form);
+  return {
+    ...base,
+    id: el.getAttribute("id") ?? undefined,
+    nameAttr: el.getAttribute("name") ?? undefined,
+    contentEditable: (el as HTMLElement).isContentEditable || undefined,
+    formGetSingleText: formGetSingleText(el, form) || undefined,
+    inputType: el instanceof HTMLInputElement ? el.type : undefined,
+    autocomplete: el.getAttribute("autocomplete") ?? undefined,
+    isSearch: looksSearch(el, role, name),
+    isEmail: looksEmail(el, name),
+    passwordAdjacent: looksPasswordAdjacent(el, name),
+    isMessageBody: looksMessageBody(el, role, name),
+    isFile: el instanceof HTMLInputElement && el.type === "file",
+    isSubmit: !!isSubmit,
+    inForm: !!form,
+    formIsSearch: formIsSearch(form),
+    formHasMessageBody: formHasMessageBody(form),
+    href: href || undefined,
+    formAction,
+    download: el.hasAttribute("download") || /\b(download|baixar|descargar)\b/i.test(name) && !!href,
+  };
+}
+
 function isPasswordField(el: Element): boolean {
   if (el instanceof HTMLInputElement) {
     if (el.type.toLowerCase() === "password") return true;
@@ -372,7 +532,7 @@ function locate(ref: string): LocatedElement {
   const isSubmit =
     (el instanceof HTMLInputElement && el.type === "submit") ||
     (el instanceof HTMLButtonElement && (el.type === "submit" || !el.type) && !!el.form);
-  return {
+  return enrich(el, {
     x: Math.round(r.left + r.width / 2),
     y: Math.round(r.top + r.height / 2),
     tag: el.tagName.toLowerCase(),
@@ -380,7 +540,7 @@ function locate(ref: string): LocatedElement {
     name,
     sensitive: SENSITIVE_ACTION.test(name) || (isSubmit && !/search|buscar|pesquisar/i.test(name)),
     isPassword: isPasswordField(el),
-  };
+  });
 }
 
 function describePoint(x: number, y: number): LocatedElement {
@@ -398,7 +558,7 @@ function describePoint(x: number, y: number): LocatedElement {
   const target = cur && cur !== document.body ? cur : el;
   const role = roleOf(target);
   const name = nameOf(target);
-  return {
+  return enrich(target, {
     x,
     y,
     tag: target.tagName.toLowerCase(),
@@ -406,7 +566,7 @@ function describePoint(x: number, y: number): LocatedElement {
     name,
     sensitive: SENSITIVE_ACTION.test(name),
     isPassword: isPasswordField(target),
-  };
+  });
 }
 
 /**
@@ -420,7 +580,7 @@ function focusedInfo(): LocatedElement | null {
   const r = el.getBoundingClientRect();
   const role = roleOf(el);
   const name = nameOf(el);
-  return {
+  return enrich(el, {
     x: Math.round(r.left + r.width / 2),
     y: Math.round(r.top + r.height / 2),
     tag: el.tagName.toLowerCase(),
@@ -428,7 +588,7 @@ function focusedInfo(): LocatedElement | null {
     name,
     sensitive: SENSITIVE_ACTION.test(name),
     isPassword: isPasswordField(el),
-  };
+  });
 }
 
 function focusEl(ref: string, clear: boolean): void {

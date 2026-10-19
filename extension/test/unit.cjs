@@ -281,6 +281,31 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     global.chrome = realChrome;
     checks++; console.log('PASS', "Act cannot click, type, press keys on or navigate to Shields' settings, its panel or chrome:// pages");
   }
+  {
+    // Empty new_tab opens the browser new-tab page, never a search engine.
+    const { BrowserExecutor } = require('../src/lib/tools/executor.ts');
+    const realChrome = global.chrome;
+    let created;
+    global.chrome = {
+      runtime: { getManifest: () => ({ content_scripts: [] }) },
+      tabs: {
+        get: async (id) => created && created.id === id ? created : { id: 1, url: 'https://start.test/', windowId: 1, active: true, title: 'Start' },
+        query: async () => [{ id: 1, url: 'https://start.test/', windowId: 1, active: true, title: 'Start' }],
+        create: async (opts) => { created = { id: 9, url: opts.url, windowId: opts.windowId, active: true, title: 'New Tab' }; return created; },
+        sendMessage: async () => ({ ok: true, data: true }),
+      },
+      scripting: { executeScript: async () => {} },
+      debugger: { onDetach: { addListener() {} }, attach: async () => {}, sendCommand: async () => {}, detach: async () => {} },
+    };
+    const ex = new BrowserExecutor(1);
+    const plan = await ex.prepare({ type: 'tool_call', id: 'c', name: 'new_tab', input: {} });
+    const out = await plan.run();
+    assert.equal(created.url, 'chrome://newtab/');
+    assert.match(out.content[0].text, /new tab/);
+    global.chrome = realChrome;
+    checks++; console.log('PASS', 'new_tab with no URL opens chrome://newtab/, not a search engine');
+  }
+
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');

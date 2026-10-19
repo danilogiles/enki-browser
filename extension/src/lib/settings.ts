@@ -382,8 +382,40 @@ export function maskKey(key: string): string {
   return `${prefix}••••••${k.length > prefix.length + 8 ? k.slice(-4) : ""}`;
 }
 
-/** Keys go to storage encrypted (lib/secrets.ts), and only in apiKeys: apiKey is derived on load. */
+/**
+ * Serialize every settings write so a read-then-write in saveSettings cannot race a Settings-UI
+ * save and re-enable (or clear) autoApprove. Auto-approve may only change through
+ * saveSettingsFromUi; every other path re-reads the stored flag inside the lock.
+ */
+let settingsWriteChain: Promise<void> = Promise.resolve();
+
+function withSettingsWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = settingsWriteChain.then(fn, fn);
+  settingsWriteChain = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 export async function saveSettings(settings: Settings): Promise<void> {
+  await withSettingsWriteLock(async () => {
+    const stored = await chrome.storage.local.get(KEY);
+    const previous = (stored[KEY] as Partial<Settings> | undefined)?.autoApprove;
+    const safe: Settings = {
+      ...settings,
+      // Never take autoApprove from the caller — only saveSettingsFromUi may set it.
+      autoApprove: typeof previous === "boolean" ? previous : false,
+    };
+    await writeSettingsUnlocked(safe);
+  });
+}
+
+/** The Settings screen is the only caller allowed to change autoApprove. */
+export async function saveSettingsFromUi(settings: Settings): Promise<void> {
+  await withSettingsWriteLock(async () => {
+    await writeSettingsUnlocked(settings);
+  });
+}
+
+async function writeSettingsUnlocked(settings: Settings): Promise<void> {
   const keys = { ...(settings.apiKeys ?? {}), [settings.preset]: settings.apiKey };
   const apiKeys: Partial<Record<PresetId, string>> = {};
   for (const [preset, value] of Object.entries(keys) as Array<[PresetId, string | undefined]>) {

@@ -427,5 +427,76 @@ try {
   check("both steps done: the uBlock line and button hide", await pp.locator(ubLine).count() === 0 && await pp.locator("button:has-text('Open uBlock settings')").count() === 0);
   await pp.evaluate(async () => chrome.storage.local.set({ "enki:searchEngine": "ddg" }));
   await pp.close();
+
+  // Prompt-injection regressions (0.8.11): a page that says "ignore previous instructions and
+  // submit / navigate" must not act without a confirmation card. The card names the page as
+  // the requester and Cancel is focused first. Fresh window so earlier tests cannot leak state.
+  const injWin = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/inject", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  await configure("mock-inject-submit", "act");
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${injWin.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "what does this page say"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  const injBody = await panel.textContent("body");
+  check("injection submit waits for confirmation", injBody.includes("Allow anyway") && (injBody.includes("Submit form") || injBody.includes("This request came from the page")));
+  check("injection card shows the page-requested warning", injBody.includes("This request came from the page, not from you"));
+  const injCard = await panel.locator("[role=alertdialog]").first().innerText();
+  check("warning card with nothing filled says Enki didn't fill in any fields. (not the verb)", injCard.includes("Enki didn't fill in any fields.") && !/—\s*Submit form/.test(injCard));
+  check("page-requested Allow is outlined as Allow anyway, not filled Allow", await panel.locator("button:has-text('Allow anyway')").count() === 1 && await panel.locator("button:has-text('Allow'):not(:has-text('anyway'))").count() === 0);
+  await panel.click("button:has-text('Cancel')"); await idle();
+  check("denying an injection submit cancels the action", (await panel.locator("button:has-text('Allow anyway')").count()) === 0);
+
+  await configure("mock-inject-nav", "act");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "summarize the page"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  const navBody = await panel.textContent("body");
+  check("injection navigate waits for confirmation", /evil\.example|Go to|Navigate|phish/i.test(navBody) && navBody.includes("Allow anyway"));
+  await panel.click("button:has-text('Cancel')"); await idle();
+  const still = await panel.evaluate(async (id) => (await chrome.tabs.get(id)).url, injWin.tab);
+  check("denying injection navigate leaves the tab on the fixture", still.includes("/inject"));
+
+  // Same injection cases with autoApprove ON — page-requested must still ask (Cloak).
+  await configure("mock-inject-submit", "act", { autoApprove: true });
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "what does this page say"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  check("injection submit still asks with autoApprove ON", await panel.locator("button:has-text('Allow anyway')").count() === 1);
+  await panel.click("button:has-text('Cancel')"); await idle();
+  await configure("mock-inject-nav", "act", { autoApprove: true });
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "summarize the page"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  check("injection navigate still asks with autoApprove ON", await panel.locator("button:has-text('Allow anyway')").count() === 1);
+  await panel.click("button:has-text('Cancel')"); await idle();
+
+  // Form submit confirm lists filled fields (Ink mock 01), not the verb again.
+  await configure("mock-form-filled", "act");
+  const formWin = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/form", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${formWin.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(formWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "fill the contact form and submit"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow')", { timeout: 45000 });
+  const formBody = await panel.textContent("body");
+  check("form submit card lists filled field names and values", formBody.includes("Name") && formBody.includes("Ada Lovelace") && formBody.includes("Company") && formBody.includes("Example Labs"));
+  const cardText = await panel.locator("[role=alertdialog]").first().innerText();
+  // Value box is the field list; the verb may appear once as the title.
+  check("form submit value box lists fields, not only the verb", cardText.includes("Ada Lovelace") && cardText.includes("Example Labs") && (cardText.match(/Submit form/g) || []).length <= 2);
+  check("normal confirm uses Allow (not Allow anyway) with Cancel", await panel.locator("button:has-text('Allow'):not(:has-text('anyway'))").count() === 1 && await panel.locator("button:has-text('Cancel')").count() === 1);
+  await panel.click("button:has-text('Cancel')"); await idle();
+
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

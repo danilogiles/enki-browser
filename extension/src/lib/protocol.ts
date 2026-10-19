@@ -36,6 +36,30 @@ export type LocatedElement = {
   sensitive: boolean;
   /** Whether this element is a password or credential input field. */
   isPassword?: boolean;
+  /** HTML input type, when the element is an <input>. */
+  inputType?: string;
+  autocomplete?: string;
+  isSearch?: boolean;
+  isEmail?: boolean;
+  /** Sitting next to a password field, or named like an OTP / security answer. */
+  passwordAdjacent?: boolean;
+  /** A message, reply, comment or post body. */
+  isMessageBody?: boolean;
+  isFile?: boolean;
+  isSubmit?: boolean;
+  inForm?: boolean;
+  formIsSearch?: boolean;
+  formHasMessageBody?: boolean;
+  href?: string;
+  formAction?: string;
+  download?: boolean;
+  /** Element id attribute, used for payment-field detection. */
+  id?: string;
+  /** Raw name attribute (payment detection never relies on the accessible name alone). */
+  nameAttr?: string;
+  contentEditable?: boolean;
+  /** In a GET form whose only text-like control is this element. */
+  formGetSingleText?: boolean;
 };
 
 export type ContentResponse<T = unknown> = { ok: true; data: T } | { ok: false; error: string };

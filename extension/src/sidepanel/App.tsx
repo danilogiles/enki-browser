@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ImagePart, Message, TextPart, ToolCallPart } from "../lib/types";
-import { loadSettings, onSettingsChange, presetOf, saveSettings, type Settings } from "../lib/settings";
+import { loadSettings, onSettingsChange, presetOf, saveSettings, saveSettingsFromUi, type Settings } from "../lib/settings";
 import { onHandoff, takeHandoff, type Handoff } from "../lib/handoff";
 import { createProvider } from "../lib/providers";
 import { BrowserExecutor, isRestrictedUrl } from "../lib/tools/executor";
 import { toolsForMode } from "../lib/tools/definitions";
 import { runTurn, type AgentEvent } from "../lib/agent/loop";
 import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
+import { fenceInline, newNonce } from "../lib/agent/untrusted";
+import type { ConfirmPayload } from "../lib/tools/executor";
 import { Chat, type Progress } from "./Chat";
 import { Composer } from "./Composer";
 import { SettingsView } from "./SettingsView";
@@ -86,7 +88,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   }, []);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [running, setRunning] = useState(false);
-  const [approval, setApproval] = useState<{ label: string; resolve: (ok: boolean) => void } | null>(null);
+  const [approval, setApproval] = useState<{ label: string; confirm?: ConfirmPayload; resolve: (ok: boolean) => void } | null>(null);
   // The active tab is tracked for the tab picker in the "more" menu; nothing else shows it now.
   const [, setTab] = useState<TabInfo | null>(null);
   const [usage, setUsage] = useState({ input: 0, output: 0 });
@@ -387,7 +389,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   );
 
   const requestApproval = useCallback(
-    (label: string, _call: ToolCallPart) =>
+    (label: string, _call: ToolCallPart, confirm?: ConfirmPayload) =>
       new Promise<boolean>((resolve) => {
         const signal = abortRef.current?.signal;
         const finish = (ok: boolean) => {
@@ -400,6 +402,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         signal?.addEventListener("abort", cancel, { once: true });
         setApproval({
           label,
+          confirm,
           resolve: finish,
         });
       }),
@@ -438,11 +441,28 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       if (current?.id) { executor.lockTab(current.id); setSelectedTab(current.id); }
       if (controller.signal.aborted) return;
       const restricted = !current || isRestrictedUrl(current.url);
+      const turnNonce = newNonce();
+      // Tab title and URL are web-derived: fence them so a page cannot smuggle instructions there.
       const context = asPage
         ? "[Current tab] none: this is one of Enki's own pages, not a site. There is no page to read; answer from your knowledge or, for anything current, from web_search and read_url."
-        : current ? `[Current tab] ${current.title ?? ""} — ${current.url ?? ""}${restricted ? " (browser-internal page)" : ""}` : "[No active tab]";
+        : current
+          ? `[Current tab] ${fenceInline(`${current.title ?? ""} — ${current.url ?? ""}`, { source: "tab", nonce: turnNonce })}${restricted ? " (browser-internal page)" : ""}`
+          : "[No active tab]";
       const hint = ex.hint ? `\n${ex.hint}` : "";
-      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}${hint}\n\n${text.trim()}` }];
+      // Act that follows an Ask answer in this chat: cross-origin navigation needs a confirm.
+      const hadAssistant = history.some((m) => m.role === "assistant");
+      const hadActTools = history.some((m) => m.role === "assistant" && m.parts.some((p) => p.type === "tool_call" && !["read_page","find","get_page_text","screenshot","list_tabs","web_search","read_url"].includes(p.name)));
+      const startedFromAsk = runMode === "act" && hadAssistant && !hadActTools;
+      const userRequest = text.trim();
+      executor.beginTurn({
+        nonce: turnNonce,
+        userRequest,
+        pageData: [],
+        startedFromAsk,
+        filled: [],
+        startUrl: current?.url,
+      });
+      const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}${hint}\n\n${userRequest}` }];
       let thumb: string | undefined;
       if (settings.vision && settings.attachScreenshot && !restricted) {
         // captureVisibleTab fails transiently while a page is still painting and is limited to two
@@ -471,7 +491,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       const effectiveMode = intent === "observe" ? "ask" : runMode;
       await runTurn({ provider: createProvider(settings), model: settings.model, mode: effectiveMode,
         system: buildSystemPrompt(effectiveMode, settings.customInstructions, settings.devMode && !!settings.unfiltered), history,
-        tools: [...toolsForMode(effectiveMode, settings.vision), ...connectorTools(apps)], executor, maxSteps: settings.maxSteps,
+        tools: [...toolsForMode(effectiveMode, settings.vision), ...connectorTools(apps, turnNonce)], executor, maxSteps: settings.maxSteps,
         autoApprove: settings.autoApprove, requestApproval,
         onEvent: (e) => { if (historyRef.current === history) handleEvent(e); },
         signal: controller.signal, contextBudgetTokens: settings.contextBudgetTokens,
@@ -601,7 +621,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       <SettingsView
         settings={settings}
         onSave={async (s) => {
-          await saveSettings(s);
+          await saveSettingsFromUi(s);
           setSettings(s);
           setView("chat");
         }}

@@ -12,6 +12,7 @@
  * browser: the newest one. The text of the conversation itself is never touched.
  */
 import type { Message, TextPart, ToolMessage, UserMessage } from "../types";
+import { truncateFenced } from "./untrusted";
 
 /** Tools whose output describes the page as it was at one instant. */
 const OBSERVATION_TOOLS = new Set(["read_page", "find", "get_page_text", "screenshot"]);
@@ -124,8 +125,11 @@ export function trimToolResults(history: Message[], budgetTokens: number, keepCh
       content: part.content.map((c) => {
         if (c.type !== "text" || c.text.length <= keepChars + 200) return c;
         trimmed++;
-        return { ...c, text: `${c.text.slice(0, keepChars)}
-[…cut to fit the context budget; call ${part.name} again if you need the rest]` };
+        return { ...c, text: truncateFenced(
+          c.text,
+          keepChars,
+          `[…cut to fit the context budget; call ${part.name} again if you need the rest]`,
+        ) };
       }),
     }));
   }
