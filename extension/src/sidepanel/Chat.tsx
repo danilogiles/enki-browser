@@ -226,6 +226,7 @@ function ApprovalCard({ label, confirm, onDecide }: {
   useEffect(() => { cancelRef.current?.focus(); }, []);
   const verb = confirm?.verb || label;
   const origin = confirm?.destinationUnknown ? t.approvalUnknownDestination : (confirm?.origin ?? "");
+  const originUnknown = !!confirm?.destinationUnknown;
   const value = confirm?.value ?? "";
   const filled = confirm?.filled;
   const pageRequested = !!confirm?.pageRequested;
@@ -258,7 +259,10 @@ function ApprovalCard({ label, confirm, onDecide }: {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold leading-snug text-zinc-50">{verb}</div>
           {origin && (
-            <div className="mt-0.5 font-mono text-[12px] leading-snug text-zinc-400 truncate" title={origin}>{origin}</div>
+            <div
+              className={`mt-0.5 font-mono text-[12px] leading-snug truncate ${originUnknown ? "text-amber-300/80" : "text-zinc-400"}`}
+              title={origin}
+            >{origin}</div>
           )}
         </div>
       </div>

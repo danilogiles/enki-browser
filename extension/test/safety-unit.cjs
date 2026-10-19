@@ -843,6 +843,7 @@ check('[B5] an unknown submit destination is shown as unknown, never as this sit
   assert.match(cs, /const formAction = formDestination\(el, form\);/);
   const chat = fs.readFileSync(path.join(__dirname, '../src/sidepanel/Chat.tsx'), 'utf8');
   assert.match(chat, /confirm\?\.destinationUnknown \? t\.approvalUnknownDestination/);
+  assert.match(chat, /originUnknown \? "text-amber-300\/80"/);
 });
 
 check('[INK] a submit with nothing filled says "Enki didn\'t fill in any fields.", not the verb', () => {

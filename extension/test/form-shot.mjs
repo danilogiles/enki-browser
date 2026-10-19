@@ -49,6 +49,26 @@ try {
   await panel.fill("textarea", "what does this page say"); await panel.press("textarea", "Enter");
   await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 30000 });
   await panel.locator("[role=alertdialog]").first().screenshot({ path: path.join(outDir, "confirm-page-requested-dark.png") });
+  // unknown-destination shot (image button in a search form)
+  await panel.click("button:has-text('Cancel')");
+  await panel.waitForFunction(() => !document.querySelector("button[title='Stop']"));
+  await panel.evaluate(async () => {
+    const s = (await chrome.storage.local.get("enki:settings"))["enki:settings"];
+    await chrome.storage.local.set({ "enki:settings": { ...s, model: "mock-image-search", autoApprove: false }, "enki:mode": "act" });
+  });
+  const img = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/image-search", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${img.wid}`);
+  await panel.waitForSelector("textarea");
+  await panel.click("button[title='More']"); await panel.click("button[title='New chat']");
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(img.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "search for cats"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow')", { timeout: 60000 });
+  const unk = await panel.textContent("[role=alertdialog]");
+  console.log("UNKNOWN", (unk || "").includes("Unknown destination"));
+  await panel.locator("[role=alertdialog]").first().screenshot({ path: path.join(outDir, "confirm-unknown-destination-dark.png") });
   console.log("SHOTS OK");
 } catch (e) {
   console.error("FAIL", e.message);
