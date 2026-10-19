@@ -20,16 +20,22 @@
 //                                            runners; set it by hand in containers without user namespaces)
 //   ENKI_OMNIBOX_APP=<dir>                   where each case's copy of the build goes (default
 //                                            $TMPDIR/enki-omnibox-app)
+//
+// Also runs test/network-hosts.mjs (0.8.11): its PRIVACY.md list checks with the rule checks, on
+// every OS, and its browser part after the address-bar cases, on the build itself. Here because
+// this is the Linux job's test that already drives the real address bar and reads the net log.
 import { execSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import { checkAllowlist, runNetworkHosts } from "./network-hosts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const build = process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser");
 // Without a build: the static rule and the helper agree, and only typed words match.
+let allowed; // PRIVACY.md's allowed hosts, for the network-hosts part at the end
 {
   const { TYPED_WORDS, enkiSearchFallback, enkiSearchFailed } = await import("../shield/omnibox.js");
   const rule = JSON.parse(readFileSync(path.join(root, "shield", "rules", "omnibox.json"), "utf8"))[0];
@@ -44,7 +50,9 @@ const build = process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enk
     && !enkiSearchFailed({ url: enkiUrl, status: "complete", title: "elon musk — Enki" });
   console.log(`${ok ? "PASS" : "FAIL"} rule: only addresses made of typed words go to DuckDuckGo`);
   console.log(`${fb ? "PASS" : "FAIL"} fallback: Enki's search page that failed to open goes to DuckDuckGo`);
-  if (!ok || !fb) process.exit(1);
+  let listed = true;
+  allowed = checkAllowlist((n, pass, d = "") => { listed &&= pass; console.log(`${pass ? "PASS" : "FAIL"} ${n}${d ? ` — ${d}` : ""}`); });
+  if (!ok || !fb || !listed || !allowed) process.exit(1);
   if (process.argv.includes("--unit")) process.exit(0);
 }
 if (process.platform !== "linux") { console.log(`SKIP omnibox address-bar cases on ${process.platform}: they need Linux with xdotool and an X display (rule checks above passed)`); process.exit(0); }
@@ -206,5 +214,7 @@ await run("incognito", { engine: "none", incognito: true, shieldIncognito: true 
 await run("incognito-no-shield", { engine: "none", incognito: true, shieldIncognito: false, knownLimit: true }, "DuckDuckGo");
 if (known.length) console.log(`known limit recorded (not a failure): ${known.length} observation(s)`);
 rmSync(APP, { recursive: true, force: true });
+// Every host the build tries to reach is in PRIVACY.md (fresh profile, no internet, net log).
+await runNetworkHosts(check, { build, allowed });
 console.log(results.every(Boolean) ? "omnibox: all passed" : "omnibox: FAILED");
 process.exit(results.every(Boolean) ? 0 : 1);

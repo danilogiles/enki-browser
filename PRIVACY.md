@@ -32,6 +32,31 @@ included (`extension/`).
 | Global Privacy Control: the `Sec-GPC: 1` header and `navigator.globalPrivacyControl` | Every website you visit | On every request, also on sites where Shields are down | It says only that you do not want your data sold or shared, nothing about you. Turn it off in Shields' settings (*Tell sites not to sell or share my data*) |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
 
+### Hosts Enki Browser contacts on its own
+
+The list below is the same information as the table above, as host names, so that a test can
+check it: `test/network-hosts.mjs` starts a built Enki Browser with a new profile, without the
+internet, and fails if the browser tries to reach any host that is not listed here (or if this
+list cannot be read). *background* means the browser may contact the host without you doing
+anything; *user* means only after an action of yours (a search from the address bar, a button
+in Settings, a question to Enki). Not listed, because you choose them: the websites you open, the
+AI provider you set up in Enki's Settings and the apps you connect to Enki.
+
+<!-- enki-allowed-hosts:begin -->
+```text
+# host                     when        why (see the table above)
+api.github.com             background  update check: about every two hours on Windows; on click on macOS and Linux
+github.com                 background  update download on Windows; the release page when you click Download
+malware-filter.gitlab.io   background  phishing list, twice a day
+malware-filter.pages.dev   background  phishing list (second address of the same list)
+duckduckgo.com             user        address-bar search, when you press Enter
+html.duckduckgo.com        user        web search Enki makes to answer you (if Brave Search does not answer)
+search.brave.com           user        web search Enki makes to answer you
+huggingface.co             user        the Whisper speech model, once, the first time you press Enki's microphone
+update.googleapis.com      user        protected video (Widevine), only after Download from Google (Windows)
+```
+<!-- enki-allowed-hosts:end -->
+
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:
 third-party cookies, known trackers and ads, the local network address WebRTC would reveal, and
 tracking parameters such as `utm_source` or `fbclid` in the addresses of pages you open (not on
