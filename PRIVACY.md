@@ -64,6 +64,22 @@ Nothing of this is synced or backed up by the project. Removing the browser and 
 folder (`%LOCALAPPDATA%\EnkiBrowser` on Windows, `~/Library/Application Support/Enki Browser` on
 macOS, `~/.config/enki-browser` on Linux) deletes it.
 
+## Built-in components
+
+Enki Browser ships three extensions. Each one is listed on `chrome://extensions` like any other
+extension, with its permissions; none is hidden. This table is checked against the shipped
+manifests by `test/components.mjs`, so it cannot drift from what the browser actually loads.
+
+| Component | What it does | Permissions | Sites it can access |
+|---|---|---|---|
+| Enki | The AI assistant: side panel, Enki Home and AI search | `sidePanel`, `activeTab`, `tabs`, `scripting`, `storage`, `debugger`, `webNavigation` | All sites, so it can read and act on the page you ask about. `debugger` is how Act clicks and types; Chromium shows its warning bar while it is in use |
+| Enki Shield | Shields: per-site switches, phishing warnings, tracking-parameter removal, Global Privacy Control, the address bar search rule and Check for updates | `declarativeNetRequest`, `webNavigation`, `webRequest`, `tabs`, `storage`, `alarms`, `contentSettings`, `browsingData`, `nativeMessaging`, `contextMenus`, `scripting` | All sites, to apply Shields on every page |
+| uBlock Origin Lite | Ad and tracker blocking, unmodified except for a small patch that lets Shields read and set a site's filtering mode | `activeTab`, `alarms`, `declarativeNetRequest`, `offscreen`, `scripting`, `storage`, `unlimitedStorage`, `userScripts` | All sites, to block ads and trackers |
+
+On Windows, Enki Shield is the only extension allowed to talk to the Enki Browser launcher (its
+native messaging host), and only for what the table above lists under Update checks, default
+browser status and protected video.
+
 ## Google services
 
 ungoogled-chromium removes Google's background services: no sign-in, sync, Safe Browsing

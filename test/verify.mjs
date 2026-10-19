@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import { checkComponents } from "./components.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const linux = process.platform === "linux";
@@ -104,6 +105,22 @@ try {
   check("the blocker is loaded", extIds.size >= 2, `${extIds.size} extensions running`);
 
   let page = await ctx.newPage();
+
+  // ---- built-in components: PRIVACY.md's table matches the shipped manifests, and the
+  // extensions page shows every one of them (none hidden, all on), and nothing else.
+  checkComponents(check, app);
+  const ublockId = JSON.parse(readFileSync(path.join(app, "extensions", "shield", "ids.json"), "utf8")).ublock;
+  await page.goto("chrome://extensions/");
+  const listed = await until(() => page.evaluate(() => {
+    const list = document.querySelector("extensions-manager")?.shadowRoot?.querySelector("extensions-item-list")?.shadowRoot;
+    const items = [...(list?.querySelectorAll("extensions-item") ?? [])];
+    const on = (i) => i.shadowRoot?.querySelector("#enableToggle")?.checked === true;
+    return items.length ? items.map((i) => ({ id: i.id, on: on(i) })) : null;
+  }), 10000);
+  const shown = new Map((listed ?? []).map((x) => [x.id, x.on]));
+  const builtIn = [version.enkiExtensionId, version.shieldExtensionId, ublockId];
+  check("chrome://extensions shows Enki, Enki Shield and uBlock Origin Lite, all on", builtIn.every((id) => shown.get(id) === true), JSON.stringify(listed));
+  check("chrome://extensions shows no other extension", shown.size === builtIn.length, [...shown.keys()].join(", "));
 
   // ---- search engine: read what the settings page shows the user
   await page.goto("chrome://settings/search");
