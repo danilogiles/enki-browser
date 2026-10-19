@@ -529,7 +529,10 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     const jsSubmitButton = isButtonish && (t.inForm || turn.filled.length > 0);
     if (t.isSubmit || (t.inForm && SENSITIVE_ACTION.test(name)) || jsSubmitButton) {
       // Same rule as Enter in the search box: only a same-site search the page did not ask for skips.
-      searchClickSkips = searchSubmitSkipsConfirm(action, true, pageRequested);
+      // It only ever drops the card for a bare submit: a button that is also a delete, purchase,
+      // send, upload, … or has a sensitive name (Transfer, Confirm) never skips.
+      searchClickSkips = cats.length === 0 && !SENSITIVE_ACTION.test(name)
+        && searchSubmitSkipsConfirm(action, true, pageRequested);
       if (!searchClickSkips) push(cats, "form_submit");
       searchAllowed = searchClickSkips;
     }

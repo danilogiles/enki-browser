@@ -711,6 +711,33 @@ check('[NO-SEARCH-GUESS] "Search members" in a multi-field POST form to /admin/u
   }
 });
 
+check('[SEARCH-BARE-SUBMIT] the search rule never skips a submit that is also delete, purchase or a sensitive name', () => {
+  const t = turn({ userRequest: 'tidy my saved items on shop.test' });
+  for (const [label, name, must] of [
+    ['Delete', 'Delete', ['form_submit', 'delete']],
+    ['Buy now', 'Buy now', ['form_submit', 'purchase']],
+    // Category but no SENSITIVE_ACTION name: only the cats.length === 0 part catches these.
+    ['Trash', 'Trash', ['form_submit', 'delete']],
+    ['Subscribe', 'Subscribe', ['form_submit', 'purchase']],
+    ['Export', 'Export', ['form_submit', 'download']],
+    ['Transfer', 'Transfer', ['form_submit']],
+    ['Confirm', 'Confirm', ['form_submit']],
+  ]) {
+    const c = clickOn(searchBtn('https://shop.test/search', { name }), 'https://shop.test/', t);
+    for (const cat of must) assert.ok(c.categories.includes(cat), `${label}: ${cat} missing from ${c.categories}`);
+    assert.equal(c.searchSubmitAllowed, false, label + ': search exception must not apply');
+    assert.ok(Array.isArray(c.filled), label + ': submit card carries the field list');
+    assert.equal(confirmDecision(c, true), 'ask', label + ' with autoApprove');
+    assert.equal(confirmDecision(c, false), 'ask', label);
+  }
+  // A plain Search / Go button in the same form still skips the card.
+  for (const name of ['Search', 'Go']) {
+    const ok = clickOn(searchBtn('https://shop.test/search', { name }), 'https://shop.test/', t);
+    assert.equal(ok.requiresConfirm, false, name + ': ' + ok.categories);
+    assert.equal(ok.searchSubmitAllowed, true, name);
+  }
+});
+
 check('[SEARCH-ORIGIN] the search exception compares full origins (scheme, host with www, port)', () => {
   for (const [page, dest] of [
     ['https://example.com/', 'http://example.com:8080/search'],
@@ -1092,6 +1119,15 @@ check('[SENSITIVE-INPUT] sensitive_input blocks auto-approve even next to a skip
       assert.equal(plan.sensitive, true, label + ' must ask');
       assert.ok(plan.confirm.categories.includes('form_submit'), label + ': ' + plan.confirm.categories);
       assert.equal(confirmDecision(plan.classification, true), 'ask', label + ' with autoApprove');
+    }
+    // A same-origin search form whose button is also sensitive keeps the DOM flag and asks.
+    for (const [name, cat] of [['Delete', 'delete'], ['Buy now', 'purchase'], ['Trash', 'delete'], ['Transfer', 'form_submit']]) {
+      mockChrome({ located: btn('https://shop.test/search', { name }) });
+      const plan = await newExec().prepare(call('click', { ref: 'ref_1' }));
+      assert.equal(plan.sensitive, true, name + ' must ask');
+      assert.ok(plan.confirm.categories.includes('form_submit'), name + ': ' + plan.confirm.categories);
+      assert.ok(plan.confirm.categories.includes(cat), name + ': ' + plan.confirm.categories);
+      assert.equal(confirmDecision(plan.classification, true), 'ask', name + ' with autoApprove');
     }
     // A non-submit DOM-flagged control still gets the backstop.
     mockChrome({ located: { x: 1, y: 1, tag: 'div', role: 'menuitem', name: 'Archive all', sensitive: true } });
