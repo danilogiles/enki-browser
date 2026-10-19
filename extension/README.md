@@ -8,7 +8,7 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 
 ## Features
 
-- **Ask mode**: chat with the page. Enki reads the DOM, the text, and a screenshot of what you see.
+- **Ask mode**: chat with the page. Enki reads the DOM and the text, plus a screenshot of what you see if you turn that on (off by default; it needs a model that supports images).
 - **Act mode**: give it a task. Enki navigates, clicks, types, scrolls and manages tabs, observing the page between steps.
 - **Current, sourced answers**: every message carries today's date, and Enki searches the web (Brave Search, then DuckDuckGo; no key needed) and reads the sources, even pages that build themselves with JavaScript, without leaving your tab. Answers cite their links.
 - **Charts and mind maps**: a table of numbers in an answer is drawn as a chart with Bar / Line / Pie / Table tabs; ```chart and ```mindmap blocks are drawn too.

@@ -363,5 +363,59 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     });
     global.chrome = realChrome;
   }
+  {
+    // The per-message screenshot is off by default (0.3.6), and turned off once for settings saved
+    // before, when every key, the old default (on) included, was written with the first save.
+    const S = require('../src/lib/settings.ts');
+    const saved = global.chrome;
+    let store = {};
+    let writes = 0;
+    global.chrome = { ...saved, storage: { local: {
+      get: async (k) => (k in store ? { [k]: structuredClone(store[k]) } : {}),
+      set: async (o) => { writes++; Object.assign(store, structuredClone(o)); },
+    }, onChanged: { addListener() {}, removeListener() {} } } };
+    check('the per-message screenshot is off by default', () => {
+      assert.equal(S.DEFAULT_SETTINGS.attachScreenshot, false);
+      assert.equal(S.migrateSettings(undefined).settings.attachScreenshot, false);
+      assert.equal(S.migrateSettings(undefined).migrated, false, 'a fresh profile has nothing to migrate');
+    });
+    let s = await S.loadSettings();
+    check('a fresh profile loads with the screenshot off and writes nothing', () => {
+      assert.equal(s.attachScreenshot, false);
+      assert.equal(writes, 0);
+    });
+    // Settings saved by Enki 0.3.5 or earlier: no settingsVersion, screenshot on.
+    store = { 'enki:settings': { preset: 'custom', baseUrl: 'http://127.0.0.1:9/v1', model: 'm', vision: true, attachScreenshot: true, theme: 'dark' } };
+    writes = 0;
+    s = await S.loadSettings();
+    check('the first load after the upgrade turns the screenshot off and records the migration', () => {
+      assert.equal(s.attachScreenshot, false);
+      assert.equal(writes, 1);
+      assert.equal(store['enki:settings'].attachScreenshot, false);
+      assert.equal(store['enki:settings'].settingsVersion, S.SETTINGS_VERSION);
+      assert.equal(store['enki:settings'].vision, true, 'other settings are kept');
+      assert.equal(store['enki:settings'].model, 'm');
+    });
+    writes = 0;
+    await S.loadSettings(); await S.loadSettings();
+    check('the migration runs once: later loads write nothing', () => assert.equal(writes, 0));
+    await S.saveSettings({ ...s, attachScreenshot: true });
+    writes = 0;
+    s = await S.loadSettings();
+    const again = await S.loadSettings();
+    check('turning the screenshot back on survives every later load', () => {
+      assert.equal(s.attachScreenshot, true);
+      assert.equal(again.attachScreenshot, true);
+      assert.equal(store['enki:settings'].attachScreenshot, true);
+      assert.equal(writes, 0);
+    });
+    check('settings from a newer version are not migrated back', () => {
+      const r = S.migrateSettings({ attachScreenshot: true, settingsVersion: S.SETTINGS_VERSION + 1 });
+      assert.equal(r.settings.attachScreenshot, true);
+      assert.equal(r.migrated, false);
+      assert.equal(r.settings.settingsVersion, S.SETTINGS_VERSION + 1);
+    });
+    global.chrome = saved;
+  }
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });

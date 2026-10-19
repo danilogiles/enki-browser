@@ -55,6 +55,8 @@ try {
           // is about screenshots reaching the provider.
           vision: true,
           attachScreenshot: true,
+          // Saved after the 0.3.6 migration, which would otherwise turn the screenshot off.
+          settingsVersion: 1,
           maxSteps: 10,
           customInstructions: "",
           saveConversations: false,

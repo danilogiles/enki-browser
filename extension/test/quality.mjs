@@ -27,7 +27,7 @@ try {
     await panel.evaluate(async ({ model, mode, extra }) => {
       await chrome.storage.local.set({ "enki:settings": { preset: "custom", baseUrl: "http://127.0.0.1:8787/v1", apiKey: "test",
         model, vision: false, attachScreenshot: false, autoApprove: false, maxSteps: 10, requestTimeoutSec: 6,
-        theme: "dark", customInstructions: "", saveConversations: true, acceptedTerms: "1", ...extra }, "enki:mode": mode });
+        theme: "dark", customInstructions: "", saveConversations: true, acceptedTerms: "1", settingsVersion: 1, ...extra }, "enki:mode": mode });
     }, { model, mode, extra });
     await panel.waitForTimeout(200);
   };
@@ -313,6 +313,31 @@ try {
   await newChat(); await send("which key");
   check("the provider receives the decrypted key, not the stored ciphertext", (await panel.textContent("body")).includes("auth-ends=1111 auth-encrypted=false"));
   await configure("mock-echo", "ask");
+
+  // The per-message screenshot (0.3.6): off by default, off once for settings saved before, and a
+  // later opt-in stays on. The camera button only shows with a model that takes images.
+  const shot = () => panel.getAttribute("button[title^='Screenshot']", "title");
+  const storedShot = () => panel.evaluate(async () => { const s = (await chrome.storage.local.get("enki:settings"))["enki:settings"]; return [s.attachScreenshot, s.settingsVersion]; });
+  await configure("mock-echo", "ask", { vision: true, attachScreenshot: undefined });
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']");
+  check("screenshot: off by default with a model that takes images", /^Screenshot off/.test(await shot()));
+  await configure("mock-echo", "ask", { vision: true, attachScreenshot: true, settingsVersion: undefined });
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  check("screenshot: settings saved by 0.3.5 with it on are turned off once, on the first load", /^Screenshot off/.test(await shot()) && JSON.stringify(await storedShot()) === "[false,1]", JSON.stringify(await storedShot()));
+  await panel.click("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  check("screenshot: the camera button turns it back on", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  check("screenshot: the opt-in survives reloads (the migration does not run again)", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  await panel.click("button[title='Settings']"); await panel.click("button:has-text('Behavior')");
+  const shotSwitch = panel.getByRole("switch", { name: "Attach a screenshot to every message" });
+  check("screenshot: the Settings switch agrees and says it is off by default", await shotSwitch.getAttribute("aria-checked") === "true" && (await panel.textContent("body")).includes("Off by default."));
+  await panel.getByRole("switch", { name: "Model supports images" }).click();
+  check("screenshot: a text-only model disables the switch and shows it off", await shotSwitch.isDisabled() && await shotSwitch.getAttribute("aria-checked") === "false");
+  await panel.click("button[title='Back']");
+  await configure("mock-echo", "ask");
+  await panel.reload(); await panel.waitForSelector("textarea");
+  check("screenshot: no camera button with a text-only model", await panel.locator("button[title^='Screenshot']").count() === 0);
 
   // First use: a notice links the terms and the privacy policy until "Got it".
   await configure("mock-echo", "ask", { acceptedTerms: undefined });

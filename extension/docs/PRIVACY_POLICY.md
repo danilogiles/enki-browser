@@ -24,7 +24,7 @@ We believe privacy is a fundamental human right. Enki operates on a **Local-Firs
 ### 2.2 Web Page Content & DOM Data
 - **When Processed:** Enki only reads web page content (text, DOM structure, or screenshots) when you explicitly initiate an **Ask** or **Act** action.
 - **Safety Filters:** Enki refuses to type into password and credential inputs (`type="password"`, or fields whose `autocomplete` marks them as a password or card security code), and requires your explicit confirmation before irreversible actions such as sending, purchasing, publishing or deleting.
-- **What is sent:** Page context reaches the model as an accessibility outline of the visible page, its readable text, and (only when image support is enabled) a screenshot of the visible tab area. Enki does not read your browsing history, saved passwords, cookies, or autofill store.
+- **What is sent:** Page context reaches the model as an accessibility outline of the visible page, its readable text, and (only when image support is enabled) a screenshot of the visible tab area: with every message only if you turn on *Attach a screenshot to every message*, which is off by default since Enki 0.3.6, otherwise only when Enki takes one to see the page. Enki does not read your browsing history, saved passwords, cookies, or autofill store.
 - **Transmission:** The extracted page context is packaged into the prompt sent directly to your designated LLM provider. No page content is cached externally.
 
 ### 2.3 Browser Automation & Chrome DevTools Protocol (`debugger`)

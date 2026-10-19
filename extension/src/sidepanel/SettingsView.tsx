@@ -396,7 +396,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               />
               <Toggle
                 label="Attach a screenshot to every message"
-                hint="Lets Enki see what you see. Costs a few hundred tokens per message."
+                hint="Off by default. Lets Enki see what you see: a picture of the tab goes to your AI provider with each message, and costs a few hundred tokens."
                 checked={draft.vision && draft.attachScreenshot}
                 disabled={!draft.vision}
                 onChange={(v) => set("attachScreenshot", v)}
