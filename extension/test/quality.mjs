@@ -498,5 +498,35 @@ try {
   check("normal confirm uses Allow (not Allow anyway) with Cancel", await panel.locator("button:has-text('Allow'):not(:has-text('anyway'))").count() === 1 && await panel.locator("button:has-text('Cancel')").count() === 1);
   await panel.click("button:has-text('Cancel')"); await idle();
 
+  // Image buttons (Cloak, 0.8.11): a same-site search form whose <input type=image> has
+  // formaction=https://evil.test/img must ask, even with autoApprove ON, and show the destination
+  // as unknown. Control: the same form without the image button searches without a card.
+  await configure("mock-image-search", "act", { autoApprove: true });
+  const imgWin = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/image-search", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${imgWin.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(imgWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "search the catalog for red shoes"); await panel.press("textarea", "Enter");
+  const imgCard = await panel.waitForSelector("[role=alertdialog]", { timeout: 25000 }).then(() => panel.locator("[role=alertdialog]").first().innerText()).catch(() => "");
+  check("image-button search form asks with autoApprove ON", imgCard.length > 0, imgCard.slice(0, 120));
+  check("image-button search form shows the destination as unknown", imgCard.includes("Unknown destination"));
+  check("image-button search form never names evil.test or this site as the destination", !imgCard.includes("evil.test") && !imgCard.includes("127.0.0.1:8787"));
+  if (imgCard) { await panel.click("button:has-text('Cancel')"); }
+  await idle();
+  const imgUrl = await panel.evaluate(async (id) => (await chrome.tabs.get(id)).url, imgWin.tab);
+  check("cancelling the image-button search leaves the tab on the form", imgUrl.includes("/image-search"));
+  await panel.evaluate(async (id) => { await chrome.tabs.update(id, { url: "http://127.0.0.1:8787/image-search?plain=1" }); }, imgWin.tab);
+  await panel.waitForFunction(async (id) => (await chrome.tabs.get(id)).status === "complete", imgWin.tab, { timeout: 10000 });
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(imgWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "search the catalog for red shoes"); await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.innerText.includes("Searched.") || !!document.querySelector("[role=alertdialog]"), null, { timeout: 25000 });
+  check("control: the same-site search form without an image button searches without a card", await panel.locator("[role=alertdialog]").count() === 0);
+  await idle();
+
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

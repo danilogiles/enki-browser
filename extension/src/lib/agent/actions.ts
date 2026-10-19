@@ -32,7 +32,6 @@ export type ElementFacts = {
   name?: string;
   inputType?: string;
   autocomplete?: string;
-  isSearch?: boolean;
   isEmail?: boolean;
   /** In a form with a password field, a one-time code, PIN or security answer. */
   passwordAdjacent?: boolean;
@@ -41,7 +40,6 @@ export type ElementFacts = {
   isFile?: boolean;
   isSubmit?: boolean;
   inForm?: boolean;
-  formIsSearch?: boolean;
   formHasMessageBody?: boolean;
   /** Resolved address of a link, or the form's action. */
   href?: string;
@@ -55,6 +53,8 @@ export type ElementFacts = {
   contentEditable?: boolean;
   /** In a GET form whose only text-like control is this one (a search form). */
   formGetSingleText?: boolean;
+  /** For a submit / Search button: the form's only text-like control, if it has exactly one. */
+  formSearchField?: ElementFacts | null;
 };
 
 /** Kind of field Act filled — drives the form_submit auto-approve rule. */
@@ -135,6 +135,8 @@ export type Classification = {
   sameOrigin: boolean;
   /** A submit whose destination could not be read: shown as unknown, treated as cross-site. */
   destinationUnknown?: boolean;
+  /** The shared search-box rule let this submit (click, Enter, or type+submit) through. */
+  searchSubmitAllowed?: boolean;
   /** A filled field was email, message/post body, or account/settings. */
   formHasSensitiveFilled: boolean;
   /** Structured rows for the confirm card (form submit). */
@@ -164,6 +166,22 @@ export function siteOf(url: string | undefined): string {
   try { host = new URL(url).hostname.toLowerCase(); } catch { return ""; }
   if (host.startsWith("www.")) host = host.slice(4);
   return host;
+}
+
+/**
+ * Same ORIGIN for the search exception: scheme and port must match exactly; only the host may
+ * differ by a leading "www.". So https://shop.test and https://www.shop.test match, while
+ * http://shop.test, https://shop.test:8443 and http://example.com:8080 never match an https page.
+ */
+export function sameOriginWww(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false;
+  let ua: URL, ub: URL;
+  try { ua = new URL(a); ub = new URL(b); } catch { return false; }
+  if (ua.protocol !== "https:" && ua.protocol !== "http:") return false;
+  if (ua.protocol !== ub.protocol) return false;
+  if (ua.port !== ub.port) return false;
+  const host = (u: URL) => u.hostname.toLowerCase().replace(/^www\./, "");
+  return host(ua) === host(ub);
 }
 
 /** True when both URLs share a hostname under the www-strip rule above. */
@@ -273,14 +291,14 @@ export function isSearchBox(t: ElementFacts | null | undefined, lookupFailed = f
 }
 
 /**
- * The search form's real destination is known and on this site (exact host, or after stripping a
- * leading "www."). The destination is the default submitter's formaction or the form's action
+ * The search form's real destination is known and on this page's ORIGIN (same scheme and port,
+ * same host or the host with a leading "www." stripped). The destination is the default submitter's formaction or the form's action
  * attribute, resolved against baseURI by the content script (the B5 resolver). No form at all
  * (a JS role=searchbox) or an unreadable action is unknown, and unknown is never this site.
  */
 export function searchDestinationSameSite(t: ElementFacts | null | undefined, currentUrl: string | undefined): boolean {
   if (!t?.inForm || !t.formAction) return false;
-  return sameSite(t.formAction, currentUrl);
+  return sameOriginWww(t.formAction, currentUrl);
 }
 
 /**
@@ -289,15 +307,29 @@ export function searchDestinationSameSite(t: ElementFacts | null | undefined, cu
  * to another site, or trigger an action through its URL.
  */
 export function searchEnterSkipsConfirm(
-  isSearch: boolean,
+  targetIsSearchBox: boolean,
   t: ElementFacts | null | undefined,
   currentUrl: string | undefined,
   pageRequested: boolean,
 ): boolean {
-  if (!isSearch) return false;
+  if (!targetIsSearchBox) return false;
   if (!searchDestinationSameSite(t, currentUrl)) return false; // limit 1: same-site destination
   if (pageRequested) return false; // limit 2: never for page-requested actions
   return true;
+}
+
+/**
+ * One rule for Act clicking a search form's submit / Search button and Act pressing Enter (or
+ * type with submit) in its box (Helm, 0.8.11). The search box is the target itself for Enter,
+ * and the form's only text field for a click on the submitter. The destination is the target's
+ * formAction either way: the clicked submitter's formaction, or the default submitter's for Enter.
+ */
+export function searchSubmitSkipsConfirm(action: ActionFacts, viaSubmitter: boolean, pageRequested: boolean): boolean {
+  const t = action.target;
+  if (!t) return false;
+  const box = viaSubmitter ? t.formSearchField : t;
+  const lookupFailed = !viaSubmitter && !!action.focusLookupFailed;
+  return searchEnterSkipsConfirm(isSearchBox(box, lookupFailed), t, action.currentUrl, pageRequested);
 }
 
 // ---------- vocabulary (English, Portuguese, Spanish) ----------
@@ -478,6 +510,8 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
   );
   // Enter / Space on a button or link carries the click categories (so the card names "Delete").
   const treatAsClick = action.tool === "click" || (isActivateKey && isButtonish);
+  let searchClickSkips = false;
+  let searchAllowed = false;
 
   if (treatAsClick && t) {
     if (t.isFile || UPLOAD.test(name)) push(cats, "file_upload");
@@ -494,26 +528,33 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     // the control is in a form or Act has already filled fields this task.
     const jsSubmitButton = isButtonish && (t.inForm || turn.filled.length > 0);
     if (t.isSubmit || (t.inForm && SENSITIVE_ACTION.test(name)) || jsSubmitButton) {
-      if (!t.formIsSearch) push(cats, "form_submit");
+      // Same rule as Enter in the search box: only a same-site search the page did not ask for skips.
+      searchClickSkips = searchSubmitSkipsConfirm(action, true, pageRequested);
+      if (!searchClickSkips) push(cats, "form_submit");
+      searchAllowed = searchClickSkips;
     }
-    if (destOrigin && currentOrigin && destOrigin !== currentOrigin && !namedByUser(dest, turn.userRequest)) {
+    // A search click the shared rule let through already has a same-site destination (www rule).
+    if (!searchClickSkips && destOrigin && currentOrigin && destOrigin !== currentOrigin && !namedByUser(dest, turn.userRequest)) {
       push(cats, "cross_origin_navigation");
     }
-    if (t.sensitive && !cats.length) push(cats, "sensitive_click");
+    if (t.sensitive && !cats.length && !searchClickSkips) push(cats, "sensitive_click");
   }
 
   // press_key fails closed: only a plain text field takes keys without asking. Enter in a plain
-  // field is a submit, except in a same-site search box the page did not ask for. Tab / Escape
-  // only move focus or dismiss.
+  // field, or in ANY field inside a form (email, textarea, …), is a submit: form_submit always, so
+  // the card shows the field list and destination, with send_message on top for a message body.
+  // The one exception is a same-origin search box the page did not ask for. Tab / Escape only
+  // move focus or dismiss.
   if (action.tool === "press_key") {
     const lookupFailed = !!action.focusLookupFailed;
     const plain = isPlainTextField(t, lookupFailed);
     const focusOnly = /^(tab|escape|esc)$/.test(keyBase);
     if (!plain && !focusOnly) push(cats, "sensitive_input");
-    const searchSkips = searchEnterSkipsConfirm(isSearchBox(t, lookupFailed), t, action.currentUrl, pageRequested);
-    if (plain && /^(enter|return)$/.test(keyBase) && !searchSkips) {
-      push(cats, t?.formHasMessageBody ? "send_message" : "form_submit");
-    }
+    const isEnter = /^(enter|return)$/.test(keyBase);
+    const searchSkips = isEnter && searchSubmitSkipsConfirm(action, false, pageRequested);
+    if (isEnter && (plain || !!t?.inForm) && !searchSkips) push(cats, "form_submit");
+    if (isEnter && !searchSkips && (t?.formHasMessageBody || t?.isMessageBody)) push(cats, "send_message");
+    if (searchSkips) searchAllowed = true;
   }
 
   if (action.tool === "type" && t) {
@@ -521,9 +562,12 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     if (t.contentEditable) push(cats, "sensitive_input");
     if (t.isEmail || t.passwordAdjacent || t.isMessageBody) push(cats, "sensitive_input");
     if (action.submit) {
+      // type with submit presses Enter: the same rule as press_key Enter. form_submit always
+      // (unless the search-box rule allows it), send_message on top, never instead.
+      const typeSearchSkips = searchSubmitSkipsConfirm(action, false, pageRequested);
+      if (!typeSearchSkips) push(cats, "form_submit");
       if (t.isMessageBody || t.formHasMessageBody || SEND.test(name)) push(cats, "send_message");
-      // type with submit presses Enter, so the same two search-box limits apply.
-      else if (!searchEnterSkipsConfirm(!!(t.isSearch || t.formIsSearch), t, action.currentUrl, pageRequested)) push(cats, "form_submit");
+      if (typeSearchSkips) searchAllowed = true;
     }
   }
 
@@ -578,6 +622,7 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     incognito,
     sameOrigin,
     destinationUnknown,
+    searchSubmitAllowed: searchAllowed && cats.length === 0,
     formHasSensitiveFilled,
     filled,
   };

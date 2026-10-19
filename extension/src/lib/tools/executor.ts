@@ -155,18 +155,20 @@ export class BrowserExecutor {
     if (!el) return null;
     return {
       role: el.role, tag: el.tag, name: el.name, inputType: el.inputType, autocomplete: el.autocomplete,
-      isSearch: el.isSearch, isEmail: el.isEmail, passwordAdjacent: el.passwordAdjacent,
+      isEmail: el.isEmail, passwordAdjacent: el.passwordAdjacent,
       isMessageBody: el.isMessageBody, isFile: el.isFile, isSubmit: el.isSubmit, inForm: el.inForm,
-      formIsSearch: el.formIsSearch, formHasMessageBody: el.formHasMessageBody,
+      formHasMessageBody: el.formHasMessageBody,
       href: el.href, formAction: el.formAction, download: el.download, sensitive: el.sensitive,
       isPassword: el.isPassword, id: el.id, nameAttr: el.nameAttr, contentEditable: el.contentEditable,
-      formGetSingleText: el.formGetSingleText,
+      formGetSingleText: el.formGetSingleText, formSearchField: el.formSearchField,
     };
   }
   private planFrom(action: ActionFacts, alwaysAsk = false): { label: string; sensitive: boolean; alwaysAsk?: boolean; confirm?: ConfirmPayload; classification?: Classification } {
     const c = classifyAction(action, this.turnContext());
     // Content-script sensitive flag is a backstop: never drop a confirm the DOM already flagged.
-    if (!c.requiresConfirm && action.target?.sensitive) {
+    // The DOM flags every submit; only the shared search-box rule (searchSubmitSkipsConfirm, the
+    // same one Enter uses) may clear that flag. Every other submit already carries form_submit.
+    if (!c.requiresConfirm && action.target?.sensitive && !c.searchSubmitAllowed) {
       c.categories.push("sensitive_click");
       c.primary = c.primary ?? "sensitive_click";
       c.requiresConfirm = true;
@@ -696,7 +698,9 @@ export class BrowserExecutor {
             } else {
               throw new Error("Cannot type without a ref on this page (debugger unavailable).");
             }
-            if (this.turn && target && !target.isSearch) {
+            // Every typed field is listed on a later submit card, search boxes included: a card for a
+            // cross-site search must show the query it would send.
+            if (this.turn && target) {
               const shown = value.length > 120 ? value.slice(0, 120) + "…" : value;
               const onSettings = /\/(settings|preferences|prefs|account|accounts|profile|security|privacy|billing|password|passwords|configura|conta|cuenta|ajustes|perfil|admin)(?=[\/?#]|$)/i.test(tab.url ?? "")
                 || /\b(save changes|update (?:profile|account|settings|email|password)|change (?:password|email|username)|two-factor|2fa|privacy settings)\b/i.test(target.name ?? "");
