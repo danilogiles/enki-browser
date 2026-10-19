@@ -415,6 +415,51 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
       assert.equal(r.migrated, false);
       assert.equal(r.settings.settingsVersion, S.SETTINGS_VERSION + 1);
     });
+    // Stored values that are not what Enki wrote: a junk version counts as 0 (migrate once, store
+    // 1), anything but a plain object counts as nothing stored, and unknown keys are dropped.
+    const M = S.migrateSettings;
+    check('a string settingsVersion counts as 0: migrated once, then 1', () => {
+      const r = M({ attachScreenshot: true, settingsVersion: '1' });
+      assert.equal(r.migrated, true); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, 1);
+    });
+    check('a NaN or Infinity settingsVersion counts as 0', () => {
+      for (const v of [NaN, Infinity, -Infinity, null, {}]) {
+        const r = M({ attachScreenshot: true, settingsVersion: v });
+        assert.equal(r.migrated, true, String(v)); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, 1);
+        assert.ok(Number.isFinite(r.settings.settingsVersion));
+      }
+    });
+    check('stored settings that are an array, a string, a number or null give the defaults', () => {
+      for (const v of [[{ attachScreenshot: true }], 'attachScreenshot', 42, null, true]) {
+        const r = M(v);
+        assert.equal(r.migrated, false, JSON.stringify(v));
+        assert.deepEqual({ ...r.settings, settingsVersion: undefined }, { ...S.DEFAULT_SETTINGS, settingsVersion: undefined });
+        assert.ok(!('0' in r.settings) && !('length' in r.settings));
+      }
+    });
+    check('only known keys are merged from storage', () => {
+      const r = M({ model: 'm', junk: 1, __proto__x: 2, constructor: 'x', apiKeys: 'not-an-object', settingsVersion: 1 });
+      assert.equal(r.settings.model, 'm');
+      assert.ok(!('junk' in r.settings) && !('__proto__x' in r.settings) && !Object.hasOwn(r.settings, 'constructor'));
+      assert.ok(!Object.hasOwn(r.settings, 'apiKeys'), 'apiKeys that is not an object is dropped');
+    });
+    store = { 'enki:settings': 'garbage' };
+    writes = 0;
+    s = await S.loadSettings();
+    check('a stored string loads as the defaults without throwing', () => { assert.equal(s.attachScreenshot, false); assert.equal(s.model, S.DEFAULT_SETTINGS.model); assert.equal(writes, 0); });
+    store = { 'enki:settings': { model: 'm', vision: true, attachScreenshot: true, settingsVersion: 'oops', junk: 'x' } };
+    writes = 0;
+    s = await S.loadSettings();
+    check('a junk version is repaired: screenshot off, version 1 stored, junk keys gone', () => {
+      assert.equal(s.attachScreenshot, false); assert.equal(writes, 1);
+      assert.equal(store['enki:settings'].settingsVersion, 1); assert.ok(!('junk' in store['enki:settings']));
+    });
+    await S.saveSettings({ ...s, attachScreenshot: true });
+    writes = 0;
+    s = await S.loadSettings(); await S.loadSettings();
+    check('after a junk version is repaired, a later opt-in survives every load', () => {
+      assert.equal(s.attachScreenshot, true); assert.equal(store['enki:settings'].attachScreenshot, true); assert.equal(writes, 0);
+    });
     global.chrome = saved;
   }
   console.log(`${checks}/${checks} checks passed`);

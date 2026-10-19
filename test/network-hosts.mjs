@@ -11,7 +11,7 @@
 // log, and prints every host it saw.
 //
 //   ENKI_LINUX_DIR=… xvfb-run -a node test/network-hosts.mjs   default build: out/linux/enki-browser
-//   node test/network-hosts.mjs --unit                          only the PRIVACY.md list checks (any OS)
+//   node test/network-hosts.mjs --unit                          only the list and host-parser checks (any OS)
 //   ENKI_NO_SANDBOX=1 …                                         containers without user namespaces only
 //   ENKI_NETWORK_IDLE_MS=20000 …                                the idle wait (default 20 s)
 //
@@ -70,22 +70,48 @@ export function checkAllowlist(check) {
   return hosts;
 }
 
-const LOCAL = /^(127\.\d+\.\d+\.\d+|localhost|\[?::1\]?)$/;
-/** A URL, "scheme://host:port", "host:port" or a bare host → its host name, or null for local and non-network ones. */
-function hostOf(value) {
-  if (typeof value !== "string" || !value) return null;
+// This machine only: the local test servers listen on 127.0.0.1. Any other address is reported.
+const LOCAL = new Set(["127.0.0.1", "::1", "localhost"]);
+const NETWORK_SCHEME = /^(https?|wss?|ftp):$/;
+/**
+ * A URL, "scheme://host:port", "host:port", "[v6]:port" or a bare host → its host name, lower-case,
+ * IPv6 without brackets. null only for this machine and for non-network URLs (chrome:, data:…).
+ * Everything else is returned as found, single-label names, IP addresses and unparseable values
+ * included, so that it is checked against the list rather than dropped.
+ */
+export function hostOf(value) {
+  if (typeof value !== "string") return null;
+  const v = value.trim();
+  if (!v || v === "null") return null;
   let host;
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v) && !/^[^:/]+:\d+$/.test(v)) {
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) return null; // about:blank, data:, blob:… carry no host
     let u;
-    try { u = new URL(value); } catch { return null; }
-    if (!/^(https?|wss?|ftp):$/.test(u.protocol)) return null;
+    try { u = new URL(v); } catch { return v.toLowerCase(); }
+    if (!NETWORK_SCHEME.test(u.protocol)) return null;
     host = u.hostname;
-  } else if (/^[a-z0-9.-]+(:\d+)?$/i.test(value)) host = value.replace(/:\d+$/, "");
-  else return null;
-  host = host.toLowerCase().replace(/\.$/, "");
-  if (LOCAL.test(host)) return null;
-  // An IP address other than this machine's is reported as it is (and is never in the list).
-  return /[.:]/.test(host) ? host : null;
+  } else {
+    const m = /^\[([^\]]*)\](?::\d+)?$/.exec(v) ?? /^([^:/\s]+)(?::\d+)?$/.exec(v);
+    // A bare IPv6 address has several colons and no brackets.
+    host = m ? m[1] : /^[0-9a-f]*:[0-9a-f:.]*$/i.test(v) ? v : v.split("/")[0];
+  }
+  host = host.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (!host || LOCAL.has(host)) return null;
+  return host;
+}
+
+/** hostOf's own checks: nothing that could be a host is dropped. */
+export function checkHostParser(check) {
+  const cases = [
+    ["https://api.github.com/repos/x", "api.github.com"], ["https://Malware-Filter.GitLab.io:443", "malware-filter.gitlab.io"],
+    ["duckduckgo.com:443", "duckduckgo.com"], ["duckduckgo.com", "duckduckgo.com"], ["intranet", "intranet"], ["https://intranet/", "intranet"],
+    ["intranet:8080", "intranet"], ["[2001:db8::1]:443", "2001:db8::1"], ["[2001:db8::1]", "2001:db8::1"], ["https://[2001:db8::1]:8443/x", "2001:db8::1"],
+    ["2001:db8::1", "2001:db8::1"], ["10.0.0.5:80", "10.0.0.5"], ["http://192.168.1.1/", "192.168.1.1"], ["127.0.0.2:80", "127.0.0.2"],
+    ["127.0.0.1:9336", null], ["http://127.0.0.1:1234/one", null], ["[::1]:80", null], ["http://[::1]/", null], ["localhost:80", null],
+    ["chrome-extension://abc/x.html", null], ["about:blank", null], ["data:text/plain,x", null], ["", null], ["null", null],
+  ];
+  const wrong = cases.filter(([v, want]) => hostOf(v) !== want).map(([v, want]) => `${v} → ${hostOf(v)} (want ${want})`);
+  check("network hosts: single-label names and IP addresses are reported, only this machine is left out", wrong.length === 0, wrong.join("; "));
 }
 
 const HOST_KEYS = new Set(["url", "original_url", "location", "host", "destination", "logical_destination", "server_host_port", "host_port", "origin"]);
@@ -119,9 +145,28 @@ export async function runNetworkHosts(check, { build = process.env.ENKI_LINUX_DI
   if (process.platform !== "linux") { console.log(`SKIP network hosts: the browser part runs on Linux (${process.platform})`); return; }
   if (!process.env.DISPLAY) { check("network hosts: an X display (run under xvfb-run -a)", false); return; }
   if (!existsSync(path.join(build, "enki-browser"))) { check("network hosts: a built Enki Browser", false, `${build} has no enki-browser launcher`); return; }
-  const tmp = mkdtempSync(path.join(os.tmpdir(), "enki-network-hosts-"));
-  const netlog = path.join(tmp, "netlog.json");
   const port = 9336;
+  if (!(await portFree(port))) { check(`network hosts: DevTools port ${port} is free`, false, `something already listens on 127.0.0.1:${port} (a browser left over from an earlier run?); stop it and run again`); return; }
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "enki-network-hosts-"));
+  // The profile and the net log go whatever happens below.
+  try { await session(check, { build, allowed, tmp, port }); } finally { rmSync(tmp, { recursive: true, force: true }); }
+}
+
+/** Whether nothing listens on 127.0.0.1:port, waiting up to 10 s for a previous browser to let go. */
+async function portFree(port) {
+  for (let i = 0; i < 40; i++) {
+    const free = await new Promise((r) => {
+      const srv = net.createServer().once("error", () => r(false)).once("listening", () => srv.close(() => r(true)));
+      srv.listen(port, "127.0.0.1");
+    });
+    if (free) return true;
+    await sleep(250);
+  }
+  return false;
+}
+
+async function session(check, { build, allowed, tmp, port }) {
+  const netlog = path.join(tmp, "netlog.json");
 
   // Every host name lands here: TLS is refused after reading the name it asked for (SNI), plain
   // http gets an empty answer. What reached it is printed with the net log's list.
@@ -227,14 +272,13 @@ export async function runNetworkHosts(check, { build = process.env.ENKI_LINUX_DI
     if (searched) check("network hosts: the search reached duckduckgo.com, after the user's Enter", (hosts.get("duckduckgo.com") ?? -1) >= userAt);
   } catch (e) {
     check("network hosts: the net log can be read", false, e.message);
-  } finally {
-    rmSync(tmp, { recursive: true, force: true });
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const results = [];
   const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };
+  checkHostParser(check);
   if (process.argv.includes("--unit")) checkAllowlist(check);
   else await runNetworkHosts(check);
   const failed = results.filter((r) => !r).length;

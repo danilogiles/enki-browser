@@ -30,7 +30,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
-import { checkAllowlist, runNetworkHosts } from "./network-hosts.mjs";
+import { checkAllowlist, checkHostParser, runNetworkHosts } from "./network-hosts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const build = process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser");
@@ -51,7 +51,9 @@ let allowed; // PRIVACY.md's allowed hosts, for the network-hosts part at the en
   console.log(`${ok ? "PASS" : "FAIL"} rule: only addresses made of typed words go to DuckDuckGo`);
   console.log(`${fb ? "PASS" : "FAIL"} fallback: Enki's search page that failed to open goes to DuckDuckGo`);
   let listed = true;
-  allowed = checkAllowlist((n, pass, d = "") => { listed &&= pass; console.log(`${pass ? "PASS" : "FAIL"} ${n}${d ? ` — ${d}` : ""}`); });
+  const listCheck = (n, pass, d = "") => { listed &&= pass; console.log(`${pass ? "PASS" : "FAIL"} ${n}${d ? ` — ${d}` : ""}`); };
+  checkHostParser(listCheck);
+  allowed = checkAllowlist(listCheck);
   if (!ok || !fb || !listed || !allowed) process.exit(1);
   if (process.argv.includes("--unit")) process.exit(0);
 }

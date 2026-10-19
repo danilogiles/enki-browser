@@ -310,18 +310,44 @@ export function usesTextTools(settings: Settings): boolean {
   return settings.textTools ?? !!preset.textTools;
 }
 
+/** Every key Settings may hold: the defaults' plus the optional ones. Nothing else is read from storage. */
+const SETTINGS_KEYS: ReadonlySet<string> = new Set<string>([
+  ...Object.keys(DEFAULT_SETTINGS),
+  "apiKeys", "customTheme", "textTools", "unfiltered", "acceptedTerms", "settingsVersion",
+]);
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  Object.prototype.toString.call(v) === "[object Object]";
+
+/**
+ * What storage held → known settings keys only. Anything that is not a plain object (null, a
+ * string, an array, a number) counts as nothing stored, and unknown keys are dropped.
+ */
+function storedSettings(raw: unknown): Partial<Settings> | undefined {
+  if (!isPlainObject(raw)) return undefined;
+  const known: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) if (SETTINGS_KEYS.has(k)) known[k] = v;
+  if ("apiKeys" in known && !isPlainObject(known.apiKeys)) delete known.apiKeys;
+  return known as Partial<Settings>;
+}
+
 /** Stored settings with the defaults filled in and the one-time migrations applied (SETTINGS_VERSION). */
-export function migrateSettings(raw: Partial<Settings> | undefined): { settings: Settings; migrated: boolean } {
+export function migrateSettings(input: unknown): { settings: Settings; migrated: boolean } {
+  const raw = storedSettings(input);
   const s: Settings = { ...DEFAULT_SETTINGS, ...raw };
   // Nothing stored yet: the defaults are already current, and there is nothing to write back.
-  const from = raw ? raw.settingsVersion ?? 0 : SETTINGS_VERSION;
+  // A missing or invalid version (a string, NaN, Infinity) counts as 0: the migrations run once
+  // and the current version is stored, so a later opt-in is never undone.
+  const v = raw?.settingsVersion;
+  const from = raw ? (typeof v === "number" && Number.isFinite(v) ? v : 0) : SETTINGS_VERSION;
   if (from < 1) s.attachScreenshot = false;
   s.settingsVersion = Math.max(from, SETTINGS_VERSION);
   return { settings: s, migrated: from < SETTINGS_VERSION };
 }
 
 /** Stored settings → what the app uses: defaults filled in, keys per provider, keys decrypted. */
-async function fromStored(raw: Partial<Settings> | undefined): Promise<{ settings: Settings; hadPlainKeys: boolean; migrated: boolean }> {
+async function fromStored(input: unknown): Promise<{ settings: Settings; hadPlainKeys: boolean; migrated: boolean }> {
+  const raw = storedSettings(input);
   const { settings: s, migrated } = migrateSettings(raw);
   // 24000 was the old default, kept by everyone who never touched it: give them the new one.
   if (s.contextBudgetTokens === 24000) s.contextBudgetTokens = DEFAULT_SETTINGS.contextBudgetTokens;
