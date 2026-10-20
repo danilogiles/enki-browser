@@ -19,6 +19,8 @@ import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
 import { legalLinks } from "../lib/legal";
+import { SEARCH_SETTINGS_URL } from "../lib/legacy-search";
+import { chooseDdgEngine, chooseEnkiEngine, chooseOtherEngine, enkiOptionText, providerShortName, storedHasModel, SEARCH_OPTION_TEXT, getSearchEngine, onSearchEngineChange, reconcileSearchSetup, SETUP_PENDING_KEY, storageSetupIO, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, UBLOCK_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
 
 type Props = {
   settings: Settings;
@@ -131,6 +133,8 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
         </button>
         <span className="font-semibold">Settings</span>
       </header>
+
+      <SearchEngineControl settings={settings} />
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
@@ -632,5 +636,197 @@ function CustomColors({ selected, value, onChange }: { selected: boolean; value:
         {selected ? "Reset to the sober dark start" : "Use your own colors"}
       </button>
     </div>
+  );
+}
+
+/**
+ * "Search engine: Enki AI | DuckDuckGo" (0.8.9, Ink's v2 mocks 09-settings-states and 05's
+ * checklist). Same setting as Shields' switch (lib/search.ts), applied at once. Enki AI is saved
+ * only when Shield confirms incognito access; the default-search step is guidance and never blocks.
+ */
+function SearchEngineControl({ settings }: { settings: Settings }) {
+  const hasModel = storedHasModel(settings);
+  const provider = providerShortName(settings);
+  const [engine, setEngine] = useState<SearchEngine | undefined>();
+  const [changed, setChanged] = useState(false);
+  /** undefined: not asked yet; null: Shield off or not answering. */
+  const [status, setStatus] = useState<ShieldStatus | null | undefined>(undefined);
+  /** Enki AI was requested and waits for both setup steps (enki:searchSetupPending). */
+  const [pending, setPending] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const send = (id: string, msg: unknown) => chrome.runtime.sendMessage(id, msg);
+  useEffect(() => {
+    void getSearchEngine().then(setEngine);
+    void storageSetupIO.getPending().then((p) => { setPending(p); setOpen(p); });
+    const offEngine = onSearchEngineChange(setEngine);
+    const onPending = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "local" && SETUP_PENDING_KEY in changes) setPending(changes[SETUP_PENDING_KEY].newValue === true);
+    };
+    chrome.storage.onChanged.addListener(onPending);
+    return () => { offEngine(); chrome.storage.onChanged.removeListener(onPending); };
+  }, []);
+  // Ask Shield again when Settings opens and whenever the panel comes back into focus, then
+  // finish a pending request (both steps done) or pause Enki AI (incognito access removed).
+  useEffect(() => {
+    const refresh = async () => {
+      const st = await queryShieldStatus(send);
+      setStatus(st);
+      const r = await reconcileSearchSetup(st, await getSearchEngine(), storageSetupIO, storedHasModel(settings));
+      if (r === "enabled") { setEngine("enki"); setPending(false); setOpen(false); setChanged(true); }
+      if (r === "paused") { setEngine("ddg"); setPending(true); setOpen(true); setChanged(false); }
+    };
+    const onFocus = () => void refresh();
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    void refresh();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisible); };
+  }, []);
+  useEffect(() => {
+    if (!changed) return;
+    const t = setTimeout(() => setChanged(false), 2000);
+    return () => clearTimeout(t);
+  }, [changed]);
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(SHIELD_SEARCH_URL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard refused: the URL is in the field to copy by hand */ }
+  };
+  const current = engine ?? "ddg";
+  const shieldOff = status === null;
+  const choose = async (v: SearchEngine) => {
+    // Selecting never touches the network beyond asking Shield (a local extension message).
+    if (v === "enki") {
+      if (shieldOff || current === "enki") return;
+      const r = await chooseEnkiEngine({ ...storageSetupIO, send, hasModel });
+      setStatus(r.status);
+      if (r.result === "enabled") { setEngine("enki"); setPending(false); setOpen(false); setChanged(true); }
+      else if (r.result === "pending") { setEngine("ddg"); setPending(true); setOpen(true); setChanged(false); }
+      return;
+    }
+    if (current === v && !pending) return;
+    if (v === "other") await chooseOtherEngine(storageSetupIO);
+    else await chooseDdgEngine(storageSetupIO);
+    setEngine(v);
+    setPending(false);
+    setOpen(false);
+    setChanged(true);
+  };
+  const doneCount = status ? Number(status.allowed) + Number(status.searchSetupDone) : 0;
+  const showSetup = !!status && pending && current !== "enki";
+  /** The card shows the person's choice: Enki AI picked but setup unfinished is shown selected with
+   *  its checklist, while the address bar keeps using DuckDuckGo until both steps are done. */
+  const shown: SearchEngine = pending && current !== "enki" && hasModel && !shieldOff ? "enki" : current;
+  const option = (v: SearchEngine, label: ReactNode, text: string, extra?: ReactNode) => (
+    <div key={v} className={`rounded-xl border p-3 ${shown === v ? "border-[#38bdf8] bg-[#38bdf8]/10" : "border-ink-700"}`}>
+      <button type="button" role="radio" aria-checked={shown === v} data-engine={v} disabled={v === "enki" && (shieldOff || !hasModel)} onClick={() => void choose(v)}
+        className="flex w-full items-start gap-2 text-left disabled:opacity-45">
+        <span className={`mt-0.5 inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 ${shown === v ? "border-[#38bdf8] bg-[#38bdf8]" : "border-[#5f6468]"}`} />
+        <span className="min-w-0">
+          <span className="block text-[13px] font-semibold text-zinc-100">{label}</span>
+          <span className={`block text-xs ${v === "enki" && !hasModel ? "text-zinc-500" : "text-zinc-400"}`}>{text}</span>
+        </span>
+      </button>
+      {extra}
+    </div>
+  );
+  return (
+    <div className="border-b border-ink-700 px-4 py-3 text-sm">
+      <div className="font-semibold text-zinc-200">Search engine</div>
+      <p className="mb-2 text-xs text-zinc-400">Choose where your address-bar searches go.</p>
+      <div role="radiogroup" aria-label="Search engine" className="space-y-2">
+        {option("ddg", <>DuckDuckGo <span className="ml-1 rounded border border-[#38bdf8]/60 px-1 text-[10px] font-semibold text-[#38bdf8]">Default</span></>, SEARCH_OPTION_TEXT.ddg)}
+        {option("enki", "Enki AI", enkiOptionText(provider, hasModel), <>
+          {!hasModel && (
+          <p className="mt-2 ml-5 text-xs text-zinc-200">
+            Set up a model first{" "}
+            <button type="button" disabled={shieldOff} onClick={() => void choose("enki")} className="ml-1 text-[#38bdf8] hover:underline disabled:opacity-45">Open Settings</button>
+          </p>
+          )}
+          {showSetup && (
+            <div className="mt-2 ml-5 border-t border-ink-700 pt-2">
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="block text-xs text-[#38bdf8] hover:underline">
+          Finish setup ({doneCount} of 2 done) {open ? "⌄" : "›"}
+        </button>
+        <p className="mt-1 text-xs text-zinc-400">Until then, searches go to DuckDuckGo.</p>
+      {open && status && (
+        <ol className="mt-2 space-y-3 rounded-xl border border-ink-700 bg-ink-800/60 p-3 text-xs">
+          <SetupItem done={status.allowed} title="Allow Enki Shield in Incognito">
+            <p className="text-zinc-400">So private windows always search with DuckDuckGo.</p>
+            <button type="button" onClick={() => void chrome.tabs.create({ url: SHIELD_EXTENSIONS_PAGE })}
+              className="mt-1.5 h-7 rounded-lg border border-ink-700 px-3 text-zinc-200 hover:bg-ink-800">Open Shield details</button>
+          </SetupItem>
+          <SetupItem done={status.searchSetupDone} title="Make Enki your default search">
+            <ol className="ml-4 list-decimal space-y-1 leading-relaxed text-zinc-200">
+              <li>
+                Open{" "}
+                <button type="button" onClick={() => void chrome.tabs.create({ url: SEARCH_ENGINES_PAGE })} title="Open search engine settings"
+                  className="rounded bg-[#2a2c2c] px-1 font-mono text-[11px] text-[#38bdf8] hover:underline">{SEARCH_ENGINES_PAGE}</button>
+              </li>
+              <li>Next to Site search, click Add</li>
+              <li>
+                Name: Enki · Shortcut: enki · URL:
+                <span className="mt-1 flex items-center gap-2">
+                  <input readOnly aria-label="Search URL" value={SHIELD_SEARCH_URL} onFocus={(e) => e.currentTarget.select()}
+                    className="h-7 min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-2 font-mono text-[11px] text-zinc-200" />
+                  <button type="button" onClick={() => void copyUrl()} className="h-7 shrink-0 rounded-lg border border-ink-700 px-3 text-zinc-200 hover:bg-ink-800">
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </span>
+              </li>
+              <li>Click Add, then ⋮ next to Enki › Make default</li>
+            </ol>
+            <p className="mt-1.5 text-zinc-400">Checks itself after your first search.</p>
+          </SetupItem>
+        </ol>
+      )}
+      {open && status && (
+        /* Not a step: no checkbox and not in the n-of-2 count. Opens only on click. */
+        <p data-testid="ublock-incognito" className="mt-2 text-xs text-zinc-500">
+          For ad blocking in private windows, also allow uBlock Origin Lite in Incognito.{" "}
+          <button type="button" onClick={() => void chrome.tabs.create({ url: UBLOCK_EXTENSIONS_PAGE })}
+            className="ml-1 text-[#38bdf8] hover:underline">Open uBlock settings</button>
+        </p>
+      )}
+            </div>
+          )}
+        </>)}
+        {option("other", "Other search engine", SEARCH_OPTION_TEXT.other, shown === "other" && (
+          <div className="mt-2 ml-5 border-t border-ink-700 pt-2 text-xs">
+            <p className="text-zinc-300">{SEARCH_OPTION_TEXT.otherHowTo}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {/* Opens only on this click: the page fetches other engines' icons as it loads. */}
+              <button type="button" onClick={() => void chrome.tabs.create({ url: SEARCH_SETTINGS_URL })}
+                className="h-7 rounded-lg border border-ink-700 px-3 font-semibold text-zinc-200 hover:bg-ink-800">Open search engine settings</button>
+              <span className="text-zinc-500">{SEARCH_OPTION_TEXT.otherIcons}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {shieldOff && <p role="alert" className="mt-2 text-xs text-zinc-400">Turn on Enki Shield to use AI search</p>}
+      {!shieldOff && changed && <p role="status" className="mt-2 text-xs text-zinc-400">Search engine changed</p>}
+      {!shieldOff && current === "enki" && <p className="mt-2 text-xs text-zinc-200">Tip: start with @enki or @ddg to choose for one search</p>}
+    </div>
+  );
+}
+
+function SetupItem({ done, title, children }: { done: boolean; title: string; children: ReactNode }) {
+  return (
+    <li className="flex gap-2.5">
+      <span aria-label={done ? "Done" : "Not done"}
+        className={`mt-0.5 inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold ${done ? "border-[#22c55e] bg-[#22c55e] text-[#06131c]" : "border-[#5f6468]"}`}>
+        {done ? "✓" : ""}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold text-zinc-200">
+          {title}
+          {done && <span className="ml-2 text-xs font-semibold text-[#22c55e]">Done</span>}
+        </div>
+        {children}
+      </div>
+    </li>
   );
 }

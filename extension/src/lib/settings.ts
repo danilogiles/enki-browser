@@ -277,7 +277,8 @@ export const DEFAULT_SETTINGS: Settings = {
   actModel: "",
 };
 
-const KEY = "enki:settings";
+export const SETTINGS_KEY = "enki:settings";
+const KEY = SETTINGS_KEY;
 
 export function presetOf(id: PresetId): Preset {
   return PRESETS.find((p) => p.id === id) ?? PRESETS[PRESETS.length - 1];
