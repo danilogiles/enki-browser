@@ -1,6 +1,13 @@
 Early alpha. Read *Known gaps* in the README first.
 
-**Fixed in 0.8.9:** in some profiles, a search typed in the address bar was treated as a website address and failed. Searches of two or more words now go to your search engine, or to DuckDuckGo if none is set. In Incognito this needs Shield allowed in Incognito.
+**New in 0.8.10: AI search.** In the side panel, Settings now lets you choose where searches typed in the address bar go:
+- **DuckDuckGo (Default):** searches go to DuckDuckGo, under its privacy policy. Enki doesn't see them. This stays the default until you choose otherwise.
+- **Enki AI:** searches go to your AI provider. Only what you type is sent, not your tabs or history. Your provider may search the web to answer. A search is sent only when you press Enter, and suggestions are off. Until setup is finished, searches go to DuckDuckGo.
+- **Other:** searches go straight to that engine, under its own privacy policy. Enki doesn't see them. Use *Open search engine settings* to pick it.
+
+**Also new:** Global Privacy Control is on by default, Shield skips AMP pages, tracking parameters are removed from links, and Shield and the side panel are now in Portuguese and Spanish.
+
+**Private windows:** Private windows don't block ads or trackers unless you allow uBlock Origin Lite in Incognito. To turn it on, go to the extensions page, open uBlock Origin Lite's *Details*, and switch on *Allow in Incognito*. While Enki AI setup is still pending, the side panel also offers *Open uBlock settings* as a shortcut.
 
 **Known issue:** video that needs DRM (Netflix, Crunchyroll, Disney+) does not play yet, because the Widevine component is not included. An opt-in download is planned; until then, watch those in another browser.
 
