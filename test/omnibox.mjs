@@ -26,6 +26,7 @@
 // this is the Linux job's test that already drives the real address bar and reads the net log.
 import { execSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,13 +85,54 @@ async function stopApp(child) {
   try { process.kill(-child.pid, "SIGKILL"); } catch {}
   await Promise.race([gone, sleep(3000)]);
 }
-async function portFree() {
-  for (let i = 0; i < 40; i++) {
-    if (!(await fetch(`http://127.0.0.1:${port}/json/version`).then(() => true, () => false))) return true;
-    await sleep(250);
+const alive = (c) => c.exitCode === null && c.signalCode === null;
+// Polls `test` until it gives a value or `ms` runs out (then undefined): every wait below ends on a
+// real signal or on this deadline, never on a fixed sleep.
+async function until(test, ms, every = 250) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const v = await test();
+    if (v) return v;
+    if (Date.now() >= end) return undefined;
+    await sleep(every);
   }
-  return false;
 }
+// One DevTools HTTP answer from 127.0.0.1:9334, or a rejection (nothing there, an error status,
+// or no answer within 2 s).
+const devtools = (p) => fetch(`http://127.0.0.1:${port}${p}`, { signal: AbortSignal.timeout(2000) })
+  .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
+const PORT_FREE_MS = 10000;
+const DEVTOOLS_MS = 30000;
+/** Whether nothing listens on 127.0.0.1:9334, waiting up to 10 s for a previous browser to let go. */
+async function portFree() {
+  const bindable = () => new Promise((r) => {
+    const srv = net.createServer().once("error", () => r(false)).once("listening", () => srv.close(() => r(true)));
+    srv.listen(port, "127.0.0.1");
+  });
+  return !!(await until(bindable, PORT_FREE_MS));
+}
+/** Why the port is not free, for the failure message: who answers there, if it is a browser. */
+async function portHolder() {
+  const v = await devtools("/json/version").catch(() => null);
+  return `something still listens on 127.0.0.1:${port} after ${PORT_FREE_MS / 1000} s${v?.Browser ? ` (DevTools of ${v.Browser}: a browser left over from an earlier run?)` : ""}; stop it and run again`;
+}
+/**
+ * Polls DevTools' /json/version on the port until the browser answers, it exits, or 30 s pass.
+ * The port was free right before the launch, so the browser that answers is this one.
+ * Returns { version } or { error } with a message that says which of the three happened.
+ */
+async function devToolsUp(child, tail) {
+  const r = await until(async () => (!alive(child) ? { exited: true } : await devtools("/json/version").then((v) => (v?.webSocketDebuggerUrl ? { version: v } : null), () => null)), DEVTOOLS_MS);
+  if (r?.version) return r;
+  const why = r?.exited ? `exited (${child.exitCode ?? child.signalCode}) before DevTools answered on port ${port}`
+    : `no answer from http://127.0.0.1:${port}/json/version within ${DEVTOOLS_MS / 1000} s`;
+  const t = tail();
+  return { error: `${why}${t ? ` — ${t}` : ""}` };
+}
+/** Whether Shield's service worker is up (a DevTools target), i.e. Shield is loaded in this profile. */
+const shieldWorkerUp = () => devtools("/json/list")
+  .then((t) => t.some((x) => x.type === "service_worker" && x.url.startsWith(`chrome-extension://${version.shieldExtensionId}/`)), () => false);
+const EXTENSION_MS = 20000;
 const results = [];
 const known = [];
 const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };
@@ -121,20 +163,26 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
   const userData = path.join(tmp, "data");
   let stderr = "";
   const launch = (a) => { const c = launchApp(a, userData); c.stderr.on("data", (d) => { stderr = (stderr + d).slice(-4000); }); return c; };
-  if (!(await portFree())) { check(`${name}: debugging port ${port} is free`, false, "a browser from an earlier run still holds it"); return; }
+  const tail = () => stderr.trim().split("\n").slice(-3).join(" | ");
+  const fail = (what, detail) => { check(`${name}: ${what}`, false, detail); rmSync(tmp, { recursive: true, force: true }); };
+  if (!(await portFree())) return fail(`debugging port ${port} is free`, await portHolder());
   if (incognito) {
     // First run creates the profile; then "Allow in Incognito" is set (or left off) for Shield the
     // way a person's click stores it on Linux: Preferences only, Secure Preferences untouched.
+    // The first run ends once Shield's service worker is up (Shield registered in the new
+    // profile), and its exit writes the profile; the second launch waits for the port to be free.
     const first = launch(args.filter((a) => !a.startsWith("--log-net-log")));
     const pf = path.join(userData, "Default", "Preferences");
-    for (let i = 0; i < 60 && !existsSync(pf) && first.exitCode === null && first.signalCode === null; i++) await sleep(500);
-    await sleep(4000); // extensions registered in the new profile
-    await stopApp(first); await portFree();
+    let firstUp;
+    try {
+      firstUp = await devToolsUp(first, tail);
+      if (firstUp.version && !(await until(shieldWorkerUp, EXTENSION_MS))) firstUp = { error: `Shield's service worker did not start within ${EXTENSION_MS / 1000} s` };
+    } finally { await stopApp(first); }
+    if (firstUp.error) return fail("first run registered Shield", firstUp.error);
+    if (!(await portFree())) return fail(`debugging port ${port} is free after the first run`, await portHolder());
     let pr = null;
     try { pr = JSON.parse(readFileSync(pf, "utf8")); } catch (e) {
-      check(`${name}: first run created the profile`, false, `${e.message}${stderr ? ` — ${stderr.trim().split("\n").slice(-3).join(" | ")}` : ""}`);
-      rmSync(tmp, { recursive: true, force: true });
-      return;
+      return fail("first run created the profile", `${e.message}${stderr ? ` — ${tail()}` : ""}`);
     }
     const sid = version.shieldExtensionId;
     ((pr.extensions ??= {}).settings ??= {})[sid] = { ...(pr.extensions.settings[sid] ?? {}), incognito: shieldIncognito };
@@ -143,27 +191,27 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
   const child = launch(args);
   let browser;
   try {
-    for (let i = 0; i < 60 && !browser; i++) {
-      browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`).catch(() => null);
-      if (!browser) {
-        if (child.exitCode !== null || child.signalCode !== null) break; // it will not come up
-        await sleep(500);
-      }
-    }
-    if (!browser) {
-      // Not a pass and not a crash: say why, and fail the case's checks.
-      const why = child.exitCode !== null || child.signalCode !== null ? `exited (${child.exitCode ?? child.signalCode})` : "no DevTools answer in 30 s";
-      check(`${name}: browser started`, false, `${why}${stderr ? ` — ${stderr.trim().split("\n").slice(-3).join(" | ")}` : ""}`);
-      return;
-    }
+    // Not a pass and not a crash: say why, and fail the case's checks.
+    const up = await devToolsUp(child, tail);
+    if (up.error) { check(`${name}: browser started`, false, up.error); return; }
+    browser = await chromium.connectOverCDP(up.version.webSocketDebuggerUrl, { timeout: 10000 }).catch((e) => { check(`${name}: DevTools connection`, false, e.message.split("\n")[0]); return null; });
+    if (!browser) return;
     const ctx = browser.contexts()[0];
     await new Promise((r) => setTimeout(r, 4000)); // extensions up, first-run tabs open
     const page = await ctx.newPage();
     await page.bringToFront();
     if (incognito) {
-      const sw = ctx.serviceWorkers().find((w) => w.url().startsWith(`chrome-extension://${version.shieldExtensionId}/`));
-      const allowed = sw ? await sw.evaluate(() => chrome.extension.isAllowedIncognitoAccess()) : null;
-      check(`${name}: Shield ${shieldIncognito ? "is" : "is not"} allowed in Incognito (test profile)`, allowed === shieldIncognito, String(allowed));
+      // Before the Incognito window opens: Shield's own answer, from its service worker, polled
+      // until the worker is up and reports the setting the profile was given (or 20 s pass).
+      let allowed = "Shield's service worker did not start";
+      const settled = await until(async () => {
+        const sw = ctx.serviceWorkers().find((w) => w.url().startsWith(`chrome-extension://${version.shieldExtensionId}/`));
+        if (!sw) return false;
+        allowed = await sw.evaluate(() => chrome.extension.isAllowedIncognitoAccess()).catch((e) => `isAllowedIncognitoAccess failed: ${e.message.split("\n")[0]}`);
+        return allowed === shieldIncognito;
+      }, EXTENSION_MS);
+      check(`${name}: Shield ${shieldIncognito ? "is" : "is not"} allowed in Incognito (test profile)`, !!settled, `${String(allowed)}${settled ? "" : ` after ${EXTENSION_MS / 1000} s`}`);
+      if (!settled) return; // typing into Incognito now would test the wrong setting
     }
     const navs = []; // main-frame addresses that committed (a redirected request never commits)
     const watch = (pg) => pg.on("framenavigated", (f) => { if (f === pg.mainFrame()) navs.push(f.url()); });
