@@ -132,11 +132,19 @@ try {
   await home.press("textarea", "Enter");
   const opened = await home.evaluate(() => window.__opened);
   check("Enki Home opens the side panel for Act", opened.length === 1 && typeof opened[0].windowId === "number");
-  // The open panel hears the handoff through storage.onChanged; no reload needed.
+  // `panel` controls the test window, not Home's. Before the fix it took the request anyway (Act
+  // typed in a new window ran in another window's panel). It must stay with Home's own window.
+  await panel.waitForTimeout(800);
+  check("Act typed on Home does not run in another window's panel", !(await panel.textContent("body")).includes("hello from enki home")
+    && await home.evaluate(async () => (await chrome.storage.session.get("enki:handoff"))["enki:handoff"]?.windowId === window.__opened[0].windowId));
+  // The panel for Home's own window (a tab here, pointed at it with ?window=) is the one that sends it.
+  const homeUrl = panel.url();
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${opened[0].windowId}`);
   await panel.waitForFunction(() => document.body.innerText.includes("Echo:") && document.body.innerText.includes("hello from enki home"), null, { timeout: 15000 });
   await idle();
   check("the panel sends the Enki Home request to the model", (await panel.textContent("body")).includes("hello from enki home"));
   check("an Enki Home request is sent only once", await home.evaluate(async () => !(await chrome.storage.session.get("enki:handoff"))["enki:handoff"]));
+  await panel.goto(homeUrl); await panel.waitForSelector("textarea");
   await home.fill("textarea", "example.com");
   await home.press("textarea", "Enter");
   await home.waitForURL(/^https:\/\/example\.com\/?$/, { timeout: 15000 });

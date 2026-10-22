@@ -526,14 +526,18 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   // A request typed on Enki Home arrives here. It waits for the panel to be ready and idle, in
   // the mode the user picked there, and for a usable provider — without one it opens Settings
   // and is sent as soon as they are saved.
-  const [handoff, setHandoff] = useState<Handoff | null>(
+  const [handoff, setHandoff] = useState<Omit<Handoff, "windowId"> | null>(
     PAGE_QUERY ? { text: PAGE_QUERY, mode: "ask", at: Date.now() }
       : seed ? { text: seed, mode: "ask", at: Date.now() } : null);
   useEffect(() => {
     // A handoff is a request typed on Enki Home FOR THE PANEL. A page never claims one: the
     // answer page has its own question, and Home answering in place already has what it typed.
     if (asPage) return;
-    const grab = () => void takeHandoff().then((h) => h && setHandoff(h));
+    // Only a request typed in this panel's own window (see lib/handoff.ts). Resolved the same way
+    // as the window the panel controls: `?window=` when opened as a tab, else the docking window.
+    const override = Number(new URLSearchParams(location.search).get("window"));
+    const own = override ? Promise.resolve<number | undefined>(override) : chrome.windows.getCurrent().then((w) => w.id);
+    const grab = () => void own.then(takeHandoff).then((h) => h && setHandoff(h));
     grab();
     return onHandoff(grab);
   }, []);

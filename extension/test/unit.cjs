@@ -487,5 +487,36 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     });
     global.chrome = saved;
   }
+  {
+    // Enki Home -> panel handoff is addressed to one window (wrong-window Act fix). Every panel in
+    // every window hears the storage change; only the one controlling that window may take it.
+    const saved = global.chrome;
+    const store = {};
+    global.chrome = { ...saved, storage: { session: {
+      get: async (k) => (k in store ? { [k]: store[k] } : {}),
+      set: async (o) => { Object.assign(store, o); },
+      remove: async (k) => { delete store[k]; },
+    } } };
+    const { putHandoff, takeHandoff } = require('../src/lib/handoff.ts');
+    const NORMAL = 11, OTHER = 12, INCOGNITO = 99;
+    await putHandoff('find computers', 'act', NORMAL);
+    assert.equal(await takeHandoff(OTHER), null);
+    assert.equal(await takeHandoff(undefined), null);
+    assert.ok(store['enki:handoff'], 'a request for another window is left for its own panel');
+    const got = await takeHandoff(NORMAL);
+    assert.equal(got && got.text, 'find computers');
+    assert.equal(await takeHandoff(NORMAL), null);
+    checks++; console.log('PASS [HANDOFF-WINDOW] an Act request from Home is taken only by its own window\'s panel, once');
+    store['enki:handoff'] = { text: 'no window', mode: 'act', at: Date.now() };
+    for (const w of [NORMAL, OTHER, INCOGNITO, undefined]) assert.equal(await takeHandoff(w), null);
+    checks++; console.log('PASS [HANDOFF-NO-WINDOW] an Act request without a window is taken by no panel');
+    await putHandoff('incognito task', 'act', INCOGNITO);
+    assert.equal(await takeHandoff(NORMAL), null);
+    assert.equal((await takeHandoff(INCOGNITO)).text, 'incognito task');
+    await putHandoff('normal task', 'act', NORMAL);
+    assert.equal(await takeHandoff(INCOGNITO), null);
+    checks++; console.log('PASS [HANDOFF-INCOGNITO] requests never cross between an Incognito window and a normal one');
+    global.chrome = saved;
+  }
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });
