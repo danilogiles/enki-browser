@@ -1,11 +1,10 @@
 Early alpha. Read *Known gaps* in the README first.
 
-**New in 0.8.10: AI search.** In the side panel, Settings now lets you choose where searches typed in the address bar go:
-- **DuckDuckGo (Default):** searches go to DuckDuckGo, under its privacy policy. Enki doesn't see them. This stays the default until you choose otherwise.
-- **Enki AI:** searches go to your AI provider. Only what you type is sent, not your tabs or history. Your provider may search the web to answer. A search is sent only when you press Enter, and suggestions are off. Until setup is finished, searches go to DuckDuckGo.
-- **Other:** searches go straight to that engine, under its own privacy policy. Enki doesn't see them. Use *Open search engine settings* to pick it.
+**New in 0.8.11: safer Act.** Text from web pages now reaches your AI model clearly marked as page content, so the model can tell it apart from what you wrote. This lowers the risk of a page giving Act instructions; Act still asks before sensitive steps. Act asks before it submits a form, sends a message or does other sensitive steps, and when a form's destination can't be told, the confirm card says so in amber. A search box on the same site still goes through without asking.
 
-**Also new:** Global Privacy Control is on by default, Shield skips AMP pages, tracking parameters are removed from links, and Shield and the side panel are now in Portuguese and Spanish.
+**Fixed:** Act started from Enki Home now runs in the window you typed it in, not in another open window's side panel.
+
+**Also new:** *Attach a screenshot to every message* is now off by default and is turned off once for profiles that had it on; you can turn it back on in Settings. Enki still takes a screenshot when it needs to see the page. Charts and mind maps in Enki's answers work with the keyboard and screen readers. The privacy policy (Version 6) now lists every host the browser contacts on its own and the exact permissions of its built-in extensions, and a test checks both.
 
 **Private windows:** Private windows don't block ads or trackers unless you allow uBlock Origin Lite in Incognito. To turn it on, go to the extensions page, open uBlock Origin Lite's *Details*, and switch on *Allow in Incognito*. While Enki AI setup is still pending, the side panel also offers *Open uBlock settings* as a shortcut.
 

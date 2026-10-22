@@ -1,6 +1,6 @@
 # Enki Browser Privacy Policy
 
-**Version 5 · Effective 9 October 2026**
+**Version 6 · Effective 22 October 2026**
 
 Enki Browser is an open-source web browser built on ungoogled-chromium, with the Enki AI
 assistant, uBlock Origin Lite and Enki Shield built in. This policy describes what the browser
