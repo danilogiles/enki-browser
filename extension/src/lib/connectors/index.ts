@@ -10,6 +10,7 @@
  * `enki:connection-auth`, never in settings exports or diagnostics.
  */
 import type { ToolDefinition } from "../types";
+import { fence, newNonce, neutralize } from "../agent/untrusted";
 import { McpClient, McpHttpError, type CallResult, type McpTool } from "./mcp";
 import { refresh, signIn, type Auth } from "./oauth";
 import { decrypt, encrypt } from "../secrets";
@@ -96,6 +97,24 @@ function clientFor(conn: Connection): McpClient {
   return c;
 }
 
+/**
+ * An MCP server's input schema reaches the model as tool parameters, so its free-text fields
+ * (description, title, examples) are server-authored text: neutralized and capped. Structure
+ * (types, names, required) is kept.
+ */
+export function sanitizeSchema(value: unknown, depth = 0): unknown {
+  if (depth > 12) return undefined;
+  if (Array.isArray(value)) return value.map((v) => sanitizeSchema(v, depth + 1));
+  if (!value || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if ((k === "description" || k === "title") && typeof v === "string") out[k] = neutralize(v).slice(0, 300);
+    else if (k === "examples" || k === "$comment") continue;
+    else out[k] = sanitizeSchema(v, depth + 1);
+  }
+  return out;
+}
+
 const toTool = (t: McpTool, previous?: ConnectorTool): ConnectorTool => ({
   name: t.name,
   title: t.title ?? t.annotations?.title ?? t.name,
@@ -150,13 +169,19 @@ export function toolName(conn: Connection, tool: ConnectorTool): string {
   return `${slug(conn.name)}__${tool.name}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 }
 
-export function connectorTools(list: Connection[]): ToolDefinition[] {
+export function connectorTools(list: Connection[], nonce?: string): ToolDefinition[] {
+  const n = nonce || newNonce();
   return list.filter((c) => c.enabled && c.status === "connected").flatMap((c) =>
-    c.tools.map((t) => ({
-      name: toolName(c, t),
-      description: `[${c.name}] ${t.description || t.title}${t.readOnly ? "" : " (Changes data in the user's account; the user confirms first.)"}`,
-      inputSchema: t.inputSchema as ToolDefinition["inputSchema"],
-    })),
+    c.tools.map((t) => {
+      const raw = `${t.description || t.title}`;
+      const fenced = fence(raw, { source: "connector_description", nonce: n, maxChars: 800 });
+      const suffix = t.readOnly ? "" : " (Changes data in the user's account; the user confirms first.)";
+      return {
+        name: toolName(c, t),
+        description: `[${neutralize(c.name)}] ${fenced}${suffix}`,
+        inputSchema: sanitizeSchema(t.inputSchema) as ToolDefinition["inputSchema"],
+      };
+    }),
   );
 }
 

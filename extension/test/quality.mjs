@@ -27,7 +27,7 @@ try {
     await panel.evaluate(async ({ model, mode, extra }) => {
       await chrome.storage.local.set({ "enki:settings": { preset: "custom", baseUrl: "http://127.0.0.1:8787/v1", apiKey: "test",
         model, vision: false, attachScreenshot: false, autoApprove: false, maxSteps: 10, requestTimeoutSec: 6,
-        theme: "dark", customInstructions: "", saveConversations: true, acceptedTerms: "1", ...extra }, "enki:mode": mode });
+        theme: "dark", customInstructions: "", saveConversations: true, acceptedTerms: "1", settingsVersion: 1, ...extra }, "enki:mode": mode });
     }, { model, mode, extra });
     await panel.waitForTimeout(200);
   };
@@ -132,11 +132,19 @@ try {
   await home.press("textarea", "Enter");
   const opened = await home.evaluate(() => window.__opened);
   check("Enki Home opens the side panel for Act", opened.length === 1 && typeof opened[0].windowId === "number");
-  // The open panel hears the handoff through storage.onChanged; no reload needed.
+  // `panel` controls the test window, not Home's. Before the fix it took the request anyway (Act
+  // typed in a new window ran in another window's panel). It must stay with Home's own window.
+  await panel.waitForTimeout(800);
+  check("Act typed on Home does not run in another window's panel", !(await panel.textContent("body")).includes("hello from enki home")
+    && await home.evaluate(async () => (await chrome.storage.session.get("enki:handoff"))["enki:handoff"]?.windowId === window.__opened[0].windowId));
+  // The panel for Home's own window (a tab here, pointed at it with ?window=) is the one that sends it.
+  const homeUrl = panel.url();
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${opened[0].windowId}`);
   await panel.waitForFunction(() => document.body.innerText.includes("Echo:") && document.body.innerText.includes("hello from enki home"), null, { timeout: 15000 });
   await idle();
   check("the panel sends the Enki Home request to the model", (await panel.textContent("body")).includes("hello from enki home"));
   check("an Enki Home request is sent only once", await home.evaluate(async () => !(await chrome.storage.session.get("enki:handoff"))["enki:handoff"]));
+  await panel.goto(homeUrl); await panel.waitForSelector("textarea");
   await home.fill("textarea", "example.com");
   await home.press("textarea", "Enter");
   await home.waitForURL(/^https:\/\/example\.com\/?$/, { timeout: 15000 });
@@ -183,6 +191,27 @@ try {
   await panel.click("[role=tab]:has-text('Table')");
   check("the Table tab shows the numbers as written", (await panel.locator("figure.enki-visual table").textContent()).includes("1.200.000"));
   check("the mind map has every node", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
+  // Keyboard and screen readers (#34): arrow keys move between tabs, each tab names its panel,
+  // the chart has its numbers in words, and foldable mind map nodes are buttons.
+  await panel.focus("[role=tab][aria-selected=true]");
+  await panel.keyboard.press("ArrowLeft");
+  const tabsA11y = await panel.evaluate(() => {
+    const sel = document.querySelector("[role=tab][aria-selected=true]");
+    const tabpanel = document.getElementById(sel?.getAttribute("aria-controls") ?? "");
+    return { selected: sel?.textContent, focused: document.activeElement === sel, panel: tabpanel?.getAttribute("role"),
+      stops: [...document.querySelectorAll("[role=tab]")].filter((t) => t.tabIndex === 0).length };
+  });
+  check("Left arrow moves from Table to Pie, focus follows, aria-controls names the tab panel",
+    tabsA11y.selected === "Pie" && tabsA11y.focused && tabsA11y.panel === "tabpanel" && tabsA11y.stops === 1, JSON.stringify(tabsA11y));
+  await panel.keyboard.press("Home");
+  check("the chart has a text alternative with its numbers",
+    /^Bar chart: Votes: Ana 1.200.000; Bruno 1.140.000\. %: Ana 51.2; Bruno 48.8/.test((await panel.locator("[role=tabpanel] .sr-only").textContent())?.replace(/[,.\u202f\u00a0]/g, ".") ?? ""));
+  const node = panel.locator("svg[aria-label^='Mind map'] [role=button]").last(); // the root, drawn last
+  check("foldable mind map nodes are focusable buttons", await panel.locator("svg[aria-label^='Mind map'] [role=button][tabindex='0'][aria-expanded=true]").count() === 3);
+  await node.focus(); await panel.keyboard.press("Enter");
+  check("Enter folds a mind map node", await node.getAttribute("aria-expanded") === "false" && await panel.locator("svg[aria-label^='Mind map'] rect").count() === 1);
+  await panel.keyboard.press(" ");
+  check("Space opens it again", await panel.locator("svg[aria-label^='Mind map'] rect").count() === 6);
 
   // The web: a page that builds its content with JavaScript is rendered in a background tab,
   // read, and closed again; the user's tab never moves.
@@ -314,6 +343,31 @@ try {
   check("the provider receives the decrypted key, not the stored ciphertext", (await panel.textContent("body")).includes("auth-ends=1111 auth-encrypted=false"));
   await configure("mock-echo", "ask");
 
+  // The per-message screenshot (0.3.6): off by default, off once for settings saved before, and a
+  // later opt-in stays on. The camera button only shows with a model that takes images.
+  const shot = () => panel.getAttribute("button[title^='Screenshot']", "title");
+  const storedShot = () => panel.evaluate(async () => { const s = (await chrome.storage.local.get("enki:settings"))["enki:settings"]; return [s.attachScreenshot, s.settingsVersion]; });
+  await configure("mock-echo", "ask", { vision: true, attachScreenshot: undefined });
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']");
+  check("screenshot: off by default with a model that takes images", /^Screenshot off/.test(await shot()));
+  await configure("mock-echo", "ask", { vision: true, attachScreenshot: true, settingsVersion: undefined });
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  check("screenshot: settings saved by 0.3.5 with it on are turned off once, on the first load", /^Screenshot off/.test(await shot()) && JSON.stringify(await storedShot()) === "[false,1]", JSON.stringify(await storedShot()));
+  await panel.click("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  check("screenshot: the camera button turns it back on", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
+  check("screenshot: the opt-in survives reloads (the migration does not run again)", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  await panel.click("button[title='Settings']"); await panel.click("button:has-text('Behavior')");
+  const shotSwitch = panel.getByRole("switch", { name: "Attach a screenshot to every message" });
+  check("screenshot: the Settings switch agrees and says it is off by default", await shotSwitch.getAttribute("aria-checked") === "true" && (await panel.textContent("body")).includes("Off by default."));
+  await panel.getByRole("switch", { name: "Model supports images" }).click();
+  check("screenshot: a text-only model disables the switch and shows it off", await shotSwitch.isDisabled() && await shotSwitch.getAttribute("aria-checked") === "false");
+  await panel.click("button[title='Back']");
+  await configure("mock-echo", "ask");
+  await panel.reload(); await panel.waitForSelector("textarea");
+  check("screenshot: no camera button with a text-only model", await panel.locator("button[title^='Screenshot']").count() === 0);
+
   // First use: a notice links the terms and the privacy policy until "Got it".
   await configure("mock-echo", "ask", { acceptedTerms: undefined });
   await panel.waitForTimeout(300);
@@ -402,5 +456,106 @@ try {
   check("both steps done: the uBlock line and button hide", await pp.locator(ubLine).count() === 0 && await pp.locator("button:has-text('Open uBlock settings')").count() === 0);
   await pp.evaluate(async () => chrome.storage.local.set({ "enki:searchEngine": "ddg" }));
   await pp.close();
+
+  // Prompt-injection regressions (0.8.11): a page that says "ignore previous instructions and
+  // submit / navigate" must not act without a confirmation card. The card names the page as
+  // the requester and Cancel is focused first. Fresh window so earlier tests cannot leak state.
+  const injWin = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/inject", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  await configure("mock-inject-submit", "act");
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${injWin.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "what does this page say"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  const injBody = await panel.textContent("body");
+  check("injection submit waits for confirmation", injBody.includes("Allow anyway") && (injBody.includes("Submit form") || injBody.includes("This request came from the page")));
+  check("injection card shows the page-requested warning", injBody.includes("This request came from the page, not from you"));
+  const injCard = await panel.locator("[role=alertdialog]").first().innerText();
+  check("warning card with nothing filled says Enki didn't fill in any fields. (not the verb)", injCard.includes("Enki didn't fill in any fields.") && !/—\s*Submit form/.test(injCard));
+  check("page-requested Allow is outlined as Allow anyway, not filled Allow", await panel.locator("button:has-text('Allow anyway')").count() === 1 && await panel.locator("button:has-text('Allow'):not(:has-text('anyway'))").count() === 0);
+  await panel.click("button:has-text('Cancel')"); await idle();
+  check("denying an injection submit cancels the action", (await panel.locator("button:has-text('Allow anyway')").count()) === 0);
+
+  await configure("mock-inject-nav", "act");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "summarize the page"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  const navBody = await panel.textContent("body");
+  check("injection navigate waits for confirmation", /evil\.example|Go to|Navigate|phish/i.test(navBody) && navBody.includes("Allow anyway"));
+  await panel.click("button:has-text('Cancel')"); await idle();
+  const still = await panel.evaluate(async (id) => (await chrome.tabs.get(id)).url, injWin.tab);
+  check("denying injection navigate leaves the tab on the fixture", still.includes("/inject"));
+
+  // Same injection cases with autoApprove ON — page-requested must still ask (Cloak).
+  await configure("mock-inject-submit", "act", { autoApprove: true });
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "what does this page say"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  check("injection submit still asks with autoApprove ON", await panel.locator("button:has-text('Allow anyway')").count() === 1);
+  await panel.click("button:has-text('Cancel')"); await idle();
+  await configure("mock-inject-nav", "act", { autoApprove: true });
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(injWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "summarize the page"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow anyway')", { timeout: 25000 });
+  check("injection navigate still asks with autoApprove ON", await panel.locator("button:has-text('Allow anyway')").count() === 1);
+  await panel.click("button:has-text('Cancel')"); await idle();
+
+  // Form submit confirm lists filled fields (Ink mock 01), not the verb again.
+  await configure("mock-form-filled", "act");
+  const formWin = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/form", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${formWin.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(formWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "fill the contact form and submit"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow')", { timeout: 45000 });
+  const formBody = await panel.textContent("body");
+  check("form submit card lists filled field names and values", formBody.includes("Name") && formBody.includes("Ada Lovelace") && formBody.includes("Company") && formBody.includes("Example Labs"));
+  const cardText = await panel.locator("[role=alertdialog]").first().innerText();
+  // Value box is the field list; the verb may appear once as the title.
+  check("form submit value box lists fields, not only the verb", cardText.includes("Ada Lovelace") && cardText.includes("Example Labs") && (cardText.match(/Submit form/g) || []).length <= 2);
+  check("normal confirm uses Allow (not Allow anyway) with Cancel", await panel.locator("button:has-text('Allow'):not(:has-text('anyway'))").count() === 1 && await panel.locator("button:has-text('Cancel')").count() === 1);
+  await panel.click("button:has-text('Cancel')"); await idle();
+
+  // Image buttons (Cloak, 0.8.11): a same-site search form whose <input type=image> has
+  // formaction=https://evil.test/img must ask, even with autoApprove ON, and show the destination
+  // as unknown. Control: the same form without the image button searches without a card.
+  await configure("mock-image-search", "act", { autoApprove: true });
+  const imgWin = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/image-search", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${imgWin.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(imgWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "search the catalog for red shoes"); await panel.press("textarea", "Enter");
+  const imgCard = await panel.waitForSelector("[role=alertdialog]", { timeout: 25000 }).then(() => panel.locator("[role=alertdialog]").first().innerText()).catch(() => "");
+  check("image-button search form asks with autoApprove ON", imgCard.length > 0, imgCard.slice(0, 120));
+  check("image-button search form shows the destination as unknown", imgCard.includes("Unknown destination"));
+  check("image-button search form never names evil.test or this site as the destination", !imgCard.includes("evil.test") && !imgCard.includes("127.0.0.1:8787"));
+  if (imgCard) { await panel.click("button:has-text('Cancel')"); }
+  await idle();
+  const imgUrl = await panel.evaluate(async (id) => (await chrome.tabs.get(id)).url, imgWin.tab);
+  check("cancelling the image-button search leaves the tab on the form", imgUrl.includes("/image-search"));
+  await panel.evaluate(async (id) => { await chrome.tabs.update(id, { url: "http://127.0.0.1:8787/image-search?plain=1" }); }, imgWin.tab);
+  await panel.waitForFunction(async (id) => (await chrome.tabs.get(id)).status === "complete", imgWin.tab, { timeout: 10000 });
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(imgWin.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "search the catalog for red shoes"); await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.innerText.includes("Searched.") || !!document.querySelector("[role=alertdialog]"), null, { timeout: 25000 });
+  check("control: the same-site search form without an image button searches without a card", await panel.locator("[role=alertdialog]").count() === 0);
+  await idle();
+
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

@@ -281,6 +281,31 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     global.chrome = realChrome;
     checks++; console.log('PASS', "Act cannot click, type, press keys on or navigate to Shields' settings, its panel or chrome:// pages");
   }
+  {
+    // Empty new_tab opens the browser new-tab page, never a search engine.
+    const { BrowserExecutor } = require('../src/lib/tools/executor.ts');
+    const realChrome = global.chrome;
+    let created;
+    global.chrome = {
+      runtime: { getManifest: () => ({ content_scripts: [] }) },
+      tabs: {
+        get: async (id) => created && created.id === id ? created : { id: 1, url: 'https://start.test/', windowId: 1, active: true, title: 'Start' },
+        query: async () => [{ id: 1, url: 'https://start.test/', windowId: 1, active: true, title: 'Start' }],
+        create: async (opts) => { created = { id: 9, url: opts.url, windowId: opts.windowId, active: true, title: 'New Tab' }; return created; },
+        sendMessage: async () => ({ ok: true, data: true }),
+      },
+      scripting: { executeScript: async () => {} },
+      debugger: { onDetach: { addListener() {} }, attach: async () => {}, sendCommand: async () => {}, detach: async () => {} },
+    };
+    const ex = new BrowserExecutor(1);
+    const plan = await ex.prepare({ type: 'tool_call', id: 'c', name: 'new_tab', input: {} });
+    const out = await plan.run();
+    assert.equal(created.url, 'chrome://newtab/');
+    assert.match(out.content[0].text, /new tab/);
+    global.chrome = realChrome;
+    checks++; console.log('PASS', 'new_tab with no URL opens chrome://newtab/, not a search engine');
+  }
+
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');
@@ -362,6 +387,136 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
       assert.ok(log.some((l) => l.startsWith('sidePanel.open 99')), log.join(', '));
     });
     global.chrome = realChrome;
+  }
+  {
+    // The per-message screenshot is off by default (0.3.6), and turned off once for settings saved
+    // before, when every key, the old default (on) included, was written with the first save.
+    const S = require('../src/lib/settings.ts');
+    const saved = global.chrome;
+    let store = {};
+    let writes = 0;
+    global.chrome = { ...saved, storage: { local: {
+      get: async (k) => (k in store ? { [k]: structuredClone(store[k]) } : {}),
+      set: async (o) => { writes++; Object.assign(store, structuredClone(o)); },
+    }, onChanged: { addListener() {}, removeListener() {} } } };
+    check('the per-message screenshot is off by default', () => {
+      assert.equal(S.DEFAULT_SETTINGS.attachScreenshot, false);
+      assert.equal(S.migrateSettings(undefined).settings.attachScreenshot, false);
+      assert.equal(S.migrateSettings(undefined).migrated, false, 'a fresh profile has nothing to migrate');
+    });
+    let s = await S.loadSettings();
+    check('a fresh profile loads with the screenshot off and writes nothing', () => {
+      assert.equal(s.attachScreenshot, false);
+      assert.equal(writes, 0);
+    });
+    // Settings saved by Enki 0.3.5 or earlier: no settingsVersion, screenshot on.
+    store = { 'enki:settings': { preset: 'custom', baseUrl: 'http://127.0.0.1:9/v1', model: 'm', vision: true, attachScreenshot: true, theme: 'dark' } };
+    writes = 0;
+    s = await S.loadSettings();
+    check('the first load after the upgrade turns the screenshot off and records the migration', () => {
+      assert.equal(s.attachScreenshot, false);
+      assert.equal(writes, 1);
+      assert.equal(store['enki:settings'].attachScreenshot, false);
+      assert.equal(store['enki:settings'].settingsVersion, S.SETTINGS_VERSION);
+      assert.equal(store['enki:settings'].vision, true, 'other settings are kept');
+      assert.equal(store['enki:settings'].model, 'm');
+    });
+    writes = 0;
+    await S.loadSettings(); await S.loadSettings();
+    check('the migration runs once: later loads write nothing', () => assert.equal(writes, 0));
+    await S.saveSettings({ ...s, attachScreenshot: true });
+    writes = 0;
+    s = await S.loadSettings();
+    const again = await S.loadSettings();
+    check('turning the screenshot back on survives every later load', () => {
+      assert.equal(s.attachScreenshot, true);
+      assert.equal(again.attachScreenshot, true);
+      assert.equal(store['enki:settings'].attachScreenshot, true);
+      assert.equal(writes, 0);
+    });
+    check('settings from a newer version are not migrated back', () => {
+      const r = S.migrateSettings({ attachScreenshot: true, settingsVersion: S.SETTINGS_VERSION + 1 });
+      assert.equal(r.settings.attachScreenshot, true);
+      assert.equal(r.migrated, false);
+      assert.equal(r.settings.settingsVersion, S.SETTINGS_VERSION + 1);
+    });
+    // Stored values that are not what Enki wrote: a junk version counts as 0 (migrate once, store
+    // 1), anything but a plain object counts as nothing stored, and unknown keys are dropped.
+    const M = S.migrateSettings;
+    check('a string settingsVersion counts as 0: migrated once, then 1', () => {
+      const r = M({ attachScreenshot: true, settingsVersion: '1' });
+      assert.equal(r.migrated, true); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, 1);
+    });
+    check('a NaN or Infinity settingsVersion counts as 0', () => {
+      for (const v of [NaN, Infinity, -Infinity, null, {}]) {
+        const r = M({ attachScreenshot: true, settingsVersion: v });
+        assert.equal(r.migrated, true, String(v)); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, 1);
+        assert.ok(Number.isFinite(r.settings.settingsVersion));
+      }
+    });
+    check('stored settings that are an array, a string, a number or null give the defaults', () => {
+      for (const v of [[{ attachScreenshot: true }], 'attachScreenshot', 42, null, true]) {
+        const r = M(v);
+        assert.equal(r.migrated, false, JSON.stringify(v));
+        assert.deepEqual({ ...r.settings, settingsVersion: undefined }, { ...S.DEFAULT_SETTINGS, settingsVersion: undefined });
+        assert.ok(!('0' in r.settings) && !('length' in r.settings));
+      }
+    });
+    check('only known keys are merged from storage', () => {
+      const r = M({ model: 'm', junk: 1, __proto__x: 2, constructor: 'x', apiKeys: 'not-an-object', settingsVersion: 1 });
+      assert.equal(r.settings.model, 'm');
+      assert.ok(!('junk' in r.settings) && !('__proto__x' in r.settings) && !Object.hasOwn(r.settings, 'constructor'));
+      assert.ok(!Object.hasOwn(r.settings, 'apiKeys'), 'apiKeys that is not an object is dropped');
+    });
+    store = { 'enki:settings': 'garbage' };
+    writes = 0;
+    s = await S.loadSettings();
+    check('a stored string loads as the defaults without throwing', () => { assert.equal(s.attachScreenshot, false); assert.equal(s.model, S.DEFAULT_SETTINGS.model); assert.equal(writes, 0); });
+    store = { 'enki:settings': { model: 'm', vision: true, attachScreenshot: true, settingsVersion: 'oops', junk: 'x' } };
+    writes = 0;
+    s = await S.loadSettings();
+    check('a junk version is repaired: screenshot off, version 1 stored, junk keys gone', () => {
+      assert.equal(s.attachScreenshot, false); assert.equal(writes, 1);
+      assert.equal(store['enki:settings'].settingsVersion, 1); assert.ok(!('junk' in store['enki:settings']));
+    });
+    await S.saveSettings({ ...s, attachScreenshot: true });
+    writes = 0;
+    s = await S.loadSettings(); await S.loadSettings();
+    check('after a junk version is repaired, a later opt-in survives every load', () => {
+      assert.equal(s.attachScreenshot, true); assert.equal(store['enki:settings'].attachScreenshot, true); assert.equal(writes, 0);
+    });
+    global.chrome = saved;
+  }
+  {
+    // Enki Home -> panel handoff is addressed to one window (wrong-window Act fix). Every panel in
+    // every window hears the storage change; only the one controlling that window may take it.
+    const saved = global.chrome;
+    const store = {};
+    global.chrome = { ...saved, storage: { session: {
+      get: async (k) => (k in store ? { [k]: store[k] } : {}),
+      set: async (o) => { Object.assign(store, o); },
+      remove: async (k) => { delete store[k]; },
+    } } };
+    const { putHandoff, takeHandoff } = require('../src/lib/handoff.ts');
+    const NORMAL = 11, OTHER = 12, INCOGNITO = 99;
+    await putHandoff('find computers', 'act', NORMAL);
+    assert.equal(await takeHandoff(OTHER), null);
+    assert.equal(await takeHandoff(undefined), null);
+    assert.ok(store['enki:handoff'], 'a request for another window is left for its own panel');
+    const got = await takeHandoff(NORMAL);
+    assert.equal(got && got.text, 'find computers');
+    assert.equal(await takeHandoff(NORMAL), null);
+    checks++; console.log('PASS [HANDOFF-WINDOW] an Act request from Home is taken only by its own window\'s panel, once');
+    store['enki:handoff'] = { text: 'no window', mode: 'act', at: Date.now() };
+    for (const w of [NORMAL, OTHER, INCOGNITO, undefined]) assert.equal(await takeHandoff(w), null);
+    checks++; console.log('PASS [HANDOFF-NO-WINDOW] an Act request without a window is taken by no panel');
+    await putHandoff('incognito task', 'act', INCOGNITO);
+    assert.equal(await takeHandoff(NORMAL), null);
+    assert.equal((await takeHandoff(INCOGNITO)).text, 'incognito task');
+    await putHandoff('normal task', 'act', NORMAL);
+    assert.equal(await takeHandoff(INCOGNITO), null);
+    checks++; console.log('PASS [HANDOFF-INCOGNITO] requests never cross between an Incognito window and a normal one');
+    global.chrome = saved;
   }
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });

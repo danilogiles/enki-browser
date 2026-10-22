@@ -4,6 +4,7 @@
  * It never talks to any LLM itself.
  */
 import type {
+  SearchFieldFacts,
   ContentRequest,
   ContentResponse,
   LocatedElement,
@@ -352,6 +353,187 @@ function getRef(ref: string): Element {
   return el;
 }
 
+
+const EMAIL_NAME = /\b(e-?mail|correo|mail)\b/i;
+const MESSAGE_BODY = /\b(message|body|compose|reply|comment|post|tweet|caption|description|mensagem|corpo|comentario|comentario|comentário|mensaje|cuerpo|respuesta)\b/i;
+const OTP_NAME = /\b(otp|one[- ]?time|2fa|mfa|verification code|security (?:code|answer|question)|pin|passcode|c[oó]digo|resposta de seguran[cç]a|respuesta de seguridad)\b/i;
+
+function formOf(el: Element): HTMLFormElement | null {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || el instanceof HTMLButtonElement) {
+    return el.form;
+  }
+  return el.closest("form");
+}
+
+function looksEmail(el: Element, name: string): boolean {
+  if (el instanceof HTMLInputElement && el.type === "email") return true;
+  const auto = (el.getAttribute("autocomplete") ?? "").toLowerCase();
+  if (auto.includes("email") || auto === "username") return true;
+  return EMAIL_NAME.test(name) || (el instanceof HTMLInputElement && EMAIL_NAME.test(el.name || ""));
+}
+
+function looksMessageBody(el: Element, role: string, name: string): boolean {
+  if (el instanceof HTMLTextAreaElement) return true;
+  if ((el as HTMLElement).isContentEditable) return true;
+  if (role === "textbox" && MESSAGE_BODY.test(name)) return true;
+  if (el instanceof HTMLInputElement && MESSAGE_BODY.test(name) && el.type === "text") return true;
+  return false;
+}
+
+function looksPasswordAdjacent(el: Element, name: string): boolean {
+  if (OTP_NAME.test(name)) return true;
+  const auto = (el.getAttribute("autocomplete") ?? "").toLowerCase();
+  if (auto.includes("one-time") || auto === "one-time-code") return true;
+  const form = formOf(el);
+  if (!form) return false;
+  for (const input of form.querySelectorAll("input")) {
+    if (input === el) continue;
+    if (input.type === "password") return true;
+  }
+  return false;
+}
+
+function formHasMessageBody(form: HTMLFormElement | null): boolean {
+  if (!form) return false;
+  if (form.querySelector("textarea, [contenteditable=true]")) return true;
+  for (const el of form.querySelectorAll("input, textarea, [contenteditable=true], [role=textbox]")) {
+    const role = roleOf(el);
+    if (looksMessageBody(el, role, nameOf(el))) return true;
+  }
+  return false;
+}
+
+/**
+ * Where a submit really goes, for the confirm card. Reads the submitter's own formaction, else the
+ * form's action ATTRIBUTE (form.action can be clobbered by <input name="action">), resolved against
+ * baseURI. Missing or empty means unknown — the card never assumes "this site".
+ */
+function formDestination(el: Element, form: HTMLFormElement | null): string | undefined {
+  if (!form) return undefined;
+  if (formHasImageButton(form)) return undefined; // unknown: never shown or treated as this site
+  // formaction only counts on a real submit button. For Enter in a text field (implicit
+  // submission) the browser uses the form's default button, so read that one's formaction;
+  // a formaction attribute on the text field itself is ignored by the browser and here too.
+  const submitter = isSubmitButton(el) ? el : defaultSubmitter(form);
+  const own = submitter?.getAttribute("formaction");
+  if (submitter && own && own.trim()) {
+    try { return new URL(submitter.formAction || own, submitter.baseURI).href; } catch { return undefined; }
+  }
+  const raw = HTMLFormElement.prototype.getAttribute.call(form, "action");
+  if (!raw || !raw.trim()) return undefined;
+  try { return new URL(raw, form.baseURI).href; } catch { return undefined; }
+}
+
+function isSubmitButton(el: Element | null | undefined): el is HTMLButtonElement | HTMLInputElement {
+  if (el instanceof HTMLButtonElement) return el.type === "submit"; // missing / invalid type is submit
+  if (el instanceof HTMLInputElement) return el.type === "submit" || el.type === "image";
+  return false;
+}
+
+/** Owner form of a control, read through the prototype so page script cannot fake it. */
+function ownerForm(el: HTMLButtonElement | HTMLInputElement): HTMLFormElement | null {
+  const proto = el instanceof HTMLButtonElement ? HTMLButtonElement.prototype : HTMLInputElement.prototype;
+  const get = Object.getOwnPropertyDescriptor(proto, "form")?.get;
+  return get ? (get.call(el) as HTMLFormElement | null) : el.form;
+}
+
+/** Every submit-capable control owned by `form`, in document tree order. form.elements leaves out
+ *  input[type=image], and controls can sit outside the <form> via form="id", so search the whole
+ *  document and keep the ones whose owner is this form. */
+function submittersOf(form: HTMLFormElement): Array<HTMLButtonElement | HTMLInputElement> {
+  const all = document.querySelectorAll<HTMLButtonElement | HTMLInputElement>("button, input[type=submit], input[type=image]");
+  return [...all].filter((c) => ownerForm(c) === form && isSubmitButton(c));
+}
+
+/** The form's default button: its first submit button in tree order. */
+function defaultSubmitter(form: HTMLFormElement): HTMLButtonElement | HTMLInputElement | null {
+  return submittersOf(form)[0] ?? null;
+}
+
+/** A form with an image button: its submit adds x/y coordinates and the image's own formaction,
+ *  and which control fires is easy to steer, so its destination is treated as unknown. */
+function formHasImageButton(form: HTMLFormElement): boolean {
+  return submittersOf(form).some((c) => c instanceof HTMLInputElement && c.type === "image");
+}
+
+const TEXT_INPUT_TYPES = new Set(["", "text", "search", "tel", "url", "number", "email", "password"]);
+
+/** A GET form whose only text-like control is `el`: Enter there runs a search. */
+function formGetSingleText(el: Element, form: HTMLFormElement | null): boolean {
+  if (!form) return false;
+  const method = (HTMLFormElement.prototype.getAttribute.call(form, "method") ?? "get").trim().toLowerCase();
+  if (method && method !== "get") return false;
+  const fields = [...form.querySelectorAll("input, textarea")].filter((f) =>
+    f instanceof HTMLTextAreaElement || (f instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(f.type.toLowerCase())));
+  return fields.length === 1 && fields[0] === el;
+}
+
+function isTextLike(f: Element): f is HTMLInputElement | HTMLTextAreaElement {
+  return f instanceof HTMLTextAreaElement || (f instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(f.type.toLowerCase()));
+}
+
+/**
+ * For a control in a form that is not the form's text field (a Search / submit button): facts
+ * about the form's only text-like control, so a click on the button is judged by the same
+ * search-box rule as Enter in the box. More than one text field (or none) means not a search form.
+ */
+function formSearchFieldOf(el: Element, form: HTMLFormElement | null): SearchFieldFacts | undefined {
+  if (!form || isTextLike(el)) return undefined;
+  const fields = [...form.querySelectorAll("input, textarea")].filter(isTextLike);
+  if (fields.length !== 1) return undefined;
+  const f = fields[0];
+  const role = roleOf(f);
+  const name = nameOf(f);
+  return {
+    tag: f.tagName.toLowerCase(),
+    role,
+    name,
+    inputType: f instanceof HTMLInputElement ? f.type : undefined,
+    autocomplete: f.getAttribute("autocomplete") ?? undefined,
+    isEmail: looksEmail(f, name),
+    passwordAdjacent: looksPasswordAdjacent(f, name),
+    isMessageBody: looksMessageBody(f, role, name),
+    isPassword: isPasswordField(f),
+    id: f.getAttribute("id") ?? undefined,
+    nameAttr: f.getAttribute("name") ?? undefined,
+    contentEditable: f.isContentEditable || undefined,
+    inForm: true,
+    formGetSingleText: formGetSingleText(f, form) || undefined,
+  };
+}
+
+function enrich(el: Element, base: LocatedElement): LocatedElement {
+  const role = base.role;
+  const name = base.name;
+  const form = formOf(el);
+  const isSubmit =
+    (el instanceof HTMLInputElement && el.type === "submit") ||
+    (el instanceof HTMLButtonElement && (el.type === "submit" || !el.type) && !!form) ||
+    (el instanceof HTMLButtonElement && el.type === "submit");
+  const href = el instanceof HTMLAnchorElement ? el.href : el.getAttribute("href") ?? undefined;
+  const formAction = formDestination(el, form);
+  return {
+    ...base,
+    id: el.getAttribute("id") ?? undefined,
+    nameAttr: el.getAttribute("name") ?? undefined,
+    contentEditable: (el as HTMLElement).isContentEditable || undefined,
+    formGetSingleText: formGetSingleText(el, form) || undefined,
+    formSearchField: formSearchFieldOf(el, form),
+    inputType: el instanceof HTMLInputElement ? el.type : undefined,
+    autocomplete: el.getAttribute("autocomplete") ?? undefined,
+    isEmail: looksEmail(el, name),
+    passwordAdjacent: looksPasswordAdjacent(el, name),
+    isMessageBody: looksMessageBody(el, role, name),
+    isFile: el instanceof HTMLInputElement && el.type === "file",
+    isSubmit: !!isSubmit,
+    inForm: !!form,
+    formHasMessageBody: formHasMessageBody(form),
+    href: href || undefined,
+    formAction,
+    download: el.hasAttribute("download") || /\b(download|baixar|descargar)\b/i.test(name) && !!href,
+  };
+}
+
 function isPasswordField(el: Element): boolean {
   if (el instanceof HTMLInputElement) {
     if (el.type.toLowerCase() === "password") return true;
@@ -372,15 +554,17 @@ function locate(ref: string): LocatedElement {
   const isSubmit =
     (el instanceof HTMLInputElement && el.type === "submit") ||
     (el instanceof HTMLButtonElement && (el.type === "submit" || !el.type) && !!el.form);
-  return {
+  return enrich(el, {
     x: Math.round(r.left + r.width / 2),
     y: Math.round(r.top + r.height / 2),
     tag: el.tagName.toLowerCase(),
     role,
     name,
-    sensitive: SENSITIVE_ACTION.test(name) || (isSubmit && !/search|buscar|pesquisar/i.test(name)),
+    // Every submit is flagged. Only the shared search-box rule in the classifier (the same one
+    // Enter uses) may clear it, for a same-origin search the page did not ask for.
+    sensitive: SENSITIVE_ACTION.test(name) || isSubmit,
     isPassword: isPasswordField(el),
-  };
+  });
 }
 
 function describePoint(x: number, y: number): LocatedElement {
@@ -398,7 +582,7 @@ function describePoint(x: number, y: number): LocatedElement {
   const target = cur && cur !== document.body ? cur : el;
   const role = roleOf(target);
   const name = nameOf(target);
-  return {
+  return enrich(target, {
     x,
     y,
     tag: target.tagName.toLowerCase(),
@@ -406,7 +590,7 @@ function describePoint(x: number, y: number): LocatedElement {
     name,
     sensitive: SENSITIVE_ACTION.test(name),
     isPassword: isPasswordField(target),
-  };
+  });
 }
 
 /**
@@ -420,7 +604,7 @@ function focusedInfo(): LocatedElement | null {
   const r = el.getBoundingClientRect();
   const role = roleOf(el);
   const name = nameOf(el);
-  return {
+  return enrich(el, {
     x: Math.round(r.left + r.width / 2),
     y: Math.round(r.top + r.height / 2),
     tag: el.tagName.toLowerCase(),
@@ -428,7 +612,7 @@ function focusedInfo(): LocatedElement | null {
     name,
     sensitive: SENSITIVE_ACTION.test(name),
     isPassword: isPasswordField(el),
-  };
+  });
 }
 
 function focusEl(ref: string, clear: boolean): void {

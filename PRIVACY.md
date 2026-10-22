@@ -20,7 +20,7 @@ included (`extension/`).
 
 | What | Sent to | When | Your control |
 |---|---|---|---|
-| Your message to Enki, the page context Enki reads (page text, an outline of the page, and a screenshot only if image support is on), and Enki's earlier messages in that chat | The AI provider **you** choose in Enki's Settings (for example NVIDIA, Anthropic, OpenAI, Google, OpenRouter, a local Ollama or OmniRoute) | Only when you send a message, run a saved task, or search from the address bar with Enki | Pick the provider, use a local model, or don't use Enki. That provider's own privacy policy governs what it does with the request |
+| Your message to Enki, the page context Enki reads (page text, an outline of the page, and a screenshot only if image support is on: with every message only if you turn on *Attach a screenshot to every message*, which is off by default since Enki Browser 0.8.11, otherwise only when Enki takes one to see the page), and Enki's earlier messages in that chat | The AI provider **you** choose in Enki's Settings (for example NVIDIA, Anthropic, OpenAI, Google, OpenRouter, a local Ollama or OmniRoute) | Only when you send a message, run a saved task, or search from the address bar with Enki | Pick the provider, use a local model, or don't use Enki. That provider's own privacy policy governs what it does with the request |
 | What you type in the address bar, when you chose **Ask Enki** as the search engine (or start with `@enki`) | The AI provider **you** chose in Enki's Settings, and nothing else: no open tab, page content, history or Enki chats go with it. If the provider uses its own web search, the query may be passed to its search partner, and the answer page says so | Only after you press Enter; nothing is sent while you type. The answer page is part of Enki on your computer (`search.html`) and never goes through a server of ours. Answers are not saved as Enki chats; the query is in browser history like any search | Choose *Search engine: Enki AI \| DuckDuckGo* in Enki's Settings (or Shields' settings), or start a search with `@ddg`. Until you choose, with no model set up, after an auth or rate-limit error, and in incognito, searches go to DuckDuckGo with only the query (`q`) |
 | Web searches Enki makes to answer you | Brave Search, then DuckDuckGo if Brave does not answer | When Enki decides a question needs current information | Only the search words are sent, without cookies |
 | Pages Enki reads for you (`read_url`) | The website itself | When Enki reads a source | Like opening the page yourself, without your cookies for that request |
@@ -31,6 +31,31 @@ included (`extension/`).
 | Protected video (Widevine), only if you turn it on (Windows) | Google (`update.googleapis.com` and Google's download servers) | When you click *Download from Google* in Shields' settings, then about once a day to keep it current. The request names the module, your Windows version and Enki Browser's Chromium version; no cookies, nothing about you or the sites you visit | *Turn off* in Shields' settings removes the module and stops the requests. Google's terms apply to the module |
 | Global Privacy Control: the `Sec-GPC: 1` header and `navigator.globalPrivacyControl` | Every website you visit | On every request, also on sites where Shields are down | It says only that you do not want your data sold or shared, nothing about you. Turn it off in Shields' settings (*Tell sites not to sell or share my data*) |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
+
+### Hosts Enki Browser contacts on its own
+
+The list below is the same information as the table above, as host names, so that a test can
+check it: `test/network-hosts.mjs` starts a built Enki Browser with a new profile, without the
+internet, and fails if the browser tries to reach any host that is not listed here (or if this
+list cannot be read). *background* means the browser may contact the host without you doing
+anything; *user* means only after an action of yours (a search from the address bar, a button
+in Settings, a question to Enki). Not listed, because you choose them: the websites you open, the
+AI provider you set up in Enki's Settings and the apps you connect to Enki.
+
+<!-- enki-allowed-hosts:begin -->
+```text
+# host                     when        why (see the table above)
+api.github.com             background  update check: about every two hours on Windows; on click on macOS and Linux
+github.com                 background  update download on Windows; the release page when you click Download
+malware-filter.gitlab.io   background  phishing list, twice a day
+malware-filter.pages.dev   background  phishing list (second address of the same list)
+duckduckgo.com             user        address-bar search, when you press Enter
+html.duckduckgo.com        user        web search Enki makes to answer you (if Brave Search does not answer)
+search.brave.com           user        web search Enki makes to answer you
+huggingface.co             user        the Whisper speech model, once, the first time you press Enki's microphone
+update.googleapis.com      user        protected video (Widevine), only after Download from Google (Windows)
+```
+<!-- enki-allowed-hosts:end -->
 
 Websites you visit receive what any browser sends them, minus what Enki Browser blocks:
 third-party cookies, known trackers and ads, the local network address WebRTC would reveal, and
@@ -63,6 +88,22 @@ and tabs.
 Nothing of this is synced or backed up by the project. Removing the browser and its profile
 folder (`%LOCALAPPDATA%\EnkiBrowser` on Windows, `~/Library/Application Support/Enki Browser` on
 macOS, `~/.config/enki-browser` on Linux) deletes it.
+
+## Built-in components
+
+Enki Browser ships three extensions. Each one is listed on `chrome://extensions` like any other
+extension, with its permissions; none is hidden. This table is checked against the shipped
+manifests by `test/components.mjs`, so it cannot drift from what the browser actually loads.
+
+| Component | What it does | Permissions | Sites it can access |
+|---|---|---|---|
+| Enki | The AI assistant: side panel, Enki Home and AI search | `sidePanel`, `activeTab`, `tabs`, `scripting`, `storage`, `debugger`, `webNavigation` | All sites, so it can read and act on the page you ask about. `debugger` is how Act clicks and types; Chromium shows its warning bar while it is in use |
+| Enki Shield | Shields: per-site switches, phishing warnings, tracking-parameter removal, Global Privacy Control, the address bar search rule and Check for updates | `declarativeNetRequest`, `webNavigation`, `webRequest`, `tabs`, `storage`, `alarms`, `contentSettings`, `browsingData`, `nativeMessaging`, `contextMenus`, `scripting` | All sites, to apply Shields on every page |
+| uBlock Origin Lite | Ad and tracker blocking, unmodified except for a small patch that lets Shields read and set a site's filtering mode | `activeTab`, `alarms`, `declarativeNetRequest`, `offscreen`, `scripting`, `storage`, `unlimitedStorage`, `userScripts` | All sites, to block ads and trackers |
+
+On Windows, Enki Shield is the only extension allowed to talk to the Enki Browser launcher (its
+native messaging host), and only for what the table above lists under Update checks, default
+browser status and protected video.
 
 ## Google services
 

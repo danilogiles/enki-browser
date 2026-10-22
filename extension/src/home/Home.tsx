@@ -144,8 +144,11 @@ export function Home() {
     // A question typed here starts a new chat, as in Comet; earlier ones are in the list.
     if (m === "ask") { setConv({ chat: null, seed: q, key: `new-${Date.now()}` }); setText(""); return; }
     // Act drives tabs, including this one — it belongs in the panel. See the note above.
+    // The request is addressed to this window, so a panel open in another window cannot take it.
+    const wid = windowId.current;
     openPanel();
-    void putHandoff(q, m);
+    void (wid !== undefined ? Promise.resolve(wid) : chrome.windows.getCurrent().then((w) => w.id))
+      .then((id) => { if (id !== undefined) return putHandoff(q, m, id); });
     setText("");
   };
 

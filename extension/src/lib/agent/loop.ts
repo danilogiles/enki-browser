@@ -7,10 +7,12 @@ import type {
   ToolDefinition,
   ToolResultPart,
 } from "../types";
-import type { BrowserExecutor, ToolOutput } from "../tools/executor";
+import type { BrowserExecutor, ConfirmPayload, ToolOutput } from "../tools/executor";
 import { log } from "../debug";
 import { budgetHistory, trimToolResults, compactHistory, estimateTokens, historySize } from "./context";
 import { CLAIMS_NO_TOOLS, extractTextToolCalls } from "./toolcall-text";
+import { confirmDecision } from "./actions";
+import { fence, fenceError, neutralize, redactForLog } from "./untrusted";
 
 export type AgentEvent =
   | { type: "status"; message: string; step: number; model?: string }
@@ -25,7 +27,7 @@ export type AgentEvent =
   /** Something worth telling the user that is not an error. */
   | { type: "notice"; message: string }
   | { type: "tool_start"; call: ToolCallPart; label: string; sensitive: boolean }
-  | { type: "approval_request"; call: ToolCallPart; label: string }
+  | { type: "approval_request"; call: ToolCallPart; label: string; confirm?: ConfirmPayload }
   | { type: "tool_result"; call: ToolCallPart; result: ToolResultPart; declined?: boolean }
   | { type: "usage"; inputTokens: number; outputTokens: number }
   | { type: "done"; reason: StopReason | "max_steps" | "aborted" | "empty" | "repeated_failure" }
@@ -42,7 +44,7 @@ export type RunOptions = {
   executor: BrowserExecutor;
   maxSteps: number;
   autoApprove: boolean;
-  requestApproval: (label: string, call: ToolCallPart) => Promise<boolean>;
+  requestApproval: (label: string, call: ToolCallPart, confirm?: ConfirmPayload) => Promise<boolean>;
   onEvent: (e: AgentEvent) => void;
   signal: AbortSignal;
   contextBudgetTokens?: number;
@@ -96,7 +98,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
       onEvent({ type: "tool_start", call, label: plan.label, sensitive: false });
       let out: ToolOutput;
       try { out = await plan.run(); }
-      catch (e) { out = { content: [{ type: "text", text: errMsg(e) }], isError: true }; }
+      catch (e) { out = { content: [{ type: "text", text: errorText(e, o.executor.currentNonce?.()) }], isError: true }; }
       const r = result(call, out);
       o.history.push({ role: "tool", parts: [r] });
       o.onEvent({ type: "tool_result", call, result: r });
@@ -238,19 +240,26 @@ export async function runTurn(o: RunOptions): Promise<void> {
         log.warn("agent", "Reply claimed a browser action but no tool was called", {
           reply: textAcc.slice(0, 300),
         });
-        const where = await o.executor
-          .currentTab()
-          .then((t) => `"${t.title ?? ""}" (${t.url ?? ""})`)
-          .catch(() => "an unknown page");
+        const tab = await o.executor.currentTab().catch(() => null);
+        const nonce = o.executor.currentNonce?.();
+        const whereRaw = tab
+          ? `${tab.title ?? ""} (${tab.url ?? ""})`
+          : "an unknown page";
+        // Keep the nudge out of an unfenced user-role payload: wrap page-derived title/URL.
+        const where = nonce
+          ? fence(whereRaw, { source: "agent_nudge", nonce, url: tab?.url, maxChars: 500 })
+          : neutralize(whereRaw);
         onEvent({ type: "retract_text" });
         o.history.push({ role: "assistant", parts });
+        // System-style correction via tool role is unavailable without a call id; fence the
+        // page-derived bit and keep the instruction Enki-authored outside the fence.
         o.history.push({
           role: "user",
           parts: [
             {
               type: "text",
               text:
-                `You called no tool, so nothing happened in the browser — the active tab is still ${where}. ` +
+                `You called no tool, so nothing happened in the browser — the active tab is still:\n${where}\n` +
                 "Do not describe actions. Either call the tool that performs what was asked now, or tell the user plainly that you did not do it and why.",
             },
           ],
@@ -291,7 +300,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             plan = await o.executor.prepare(call);
           } catch (e) {
             recordFailure();
-            const r = result(call, { content: [{ type: "text", text: `Error: ${errMsg(e)}` }], isError: true });
+            const r = result(call, { content: [{ type: "text", text: errorText(e, o.executor.currentNonce?.()) }], isError: true });
             results.push(r);
             onEvent({ type: "tool_start", call, label: call.name, sensitive: false });
             onEvent({ type: "tool_result", call, result: r });
@@ -300,10 +309,21 @@ export async function runTurn(o: RunOptions): Promise<void> {
           log.info("tool", `${call.name}: ${plan.label}`, { input: call.input, sensitive: plan.sensitive });
           onEvent({ type: "tool_start", call, label: plan.label, sensitive: plan.sensitive });
           onEvent({ type: "status", message: `Executing ${call.name}`, step: step + 1 });
-          if (plan.sensitive && (!o.autoApprove || plan.alwaysAsk)) {
-            onEvent({ type: "approval_request", call, label: plan.label });
+          // Structured policy: autoApprove may skip only the categories mayAutoApprove allows.
+          // Page-requested, cross-origin, downloads, uploads, account changes and sensitive
+          // inputs always ask; Incognito always asks. Hard blocks never reach prepare().
+          const decision = plan.sensitive || plan.alwaysAsk
+            ? confirmDecision(plan.classification ?? {
+                categories: [], primary: null, target: plan.label, origin: "", value: "",
+                pageRequested: !!plan.confirm?.pageRequested, requiresConfirm: true,
+                unnamedRecipient: false, incognito: false,
+                connectorAllowed: false, sameOrigin: true, formHasSensitiveFilled: false,
+              }, o.autoApprove, plan.alwaysAsk)
+            : "skip";
+          if (decision === "ask") {
+            onEvent({ type: "approval_request", call, label: plan.label, confirm: plan.confirm });
             onEvent({ type: "status", message: "Waiting for your approval", step: step + 1 });
-            const approved = await o.requestApproval(plan.label, call);
+            const approved = await o.requestApproval(plan.label, call, plan.confirm);
             // Stop may resolve the approval while the user is deciding. Never run the
             // pending action, even if an approval click raced with cancellation.
             if (o.signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -322,13 +342,15 @@ export async function runTurn(o: RunOptions): Promise<void> {
           } catch (e) {
             if (o.signal.aborted) throw e;
             log.error("tool", `${call.name} failed`, { error: errMsg(e) });
-            out = { content: [{ type: "text", text: `Error: ${errMsg(e)}` }], isError: true };
+            out = { content: [{ type: "text", text: errorText(e, o.executor.currentNonce?.()) }], isError: true };
           }
           const r = result(call, out);
           if (out.isError) recordFailure(); else failures.delete(fingerprint);
-          log.info("tool", `${call.name} → ${out.isError ? "error" : "ok"}`, {
-            output: out.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n").slice(0, 600),
-          });
+          // Never log fence nonces (or raw page text that embeds them).
+          const turnNonce = o.executor.currentNonce?.();
+          const logged = out.content.map((c) => (c.type !== "text" ? "[image]" : redactForLog(c.text, turnNonce)))
+            .join("\n").slice(0, 600);
+          log.info("tool", `${call.name} → ${out.isError ? "error" : "ok"}`, { output: logged });
           results.push(r);
           onEvent({ type: "tool_result", call, result: r });
         }
@@ -361,6 +383,14 @@ export async function runTurn(o: RunOptions): Promise<void> {
 
 function result(call: ToolCallPart, out: ToolOutput): ToolResultPart {
   return { type: "tool_result", toolCallId: call.id, name: call.name, content: out.content, isError: out.isError };
+}
+
+/**
+ * A tool error as the model sees it. Error text can quote a page or an MCP server's body, so it is
+ * fenced as tool_error data; Enki's own "Error:" prefix stays outside the fence.
+ */
+function errorText(e: unknown, nonce: string | undefined): string {
+  return fenceError(errMsg(e), nonce);
 }
 
 function errMsg(e: unknown): string {

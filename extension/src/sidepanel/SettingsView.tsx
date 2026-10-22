@@ -396,14 +396,14 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
               />
               <Toggle
                 label="Attach a screenshot to every message"
-                hint="Lets Enki see what you see. Costs a few hundred tokens per message."
+                hint="Off by default. Lets Enki see what you see: a picture of the tab goes to your AI provider with each message, and costs a few hundred tokens."
                 checked={draft.vision && draft.attachScreenshot}
                 disabled={!draft.vision}
                 onChange={(v) => set("attachScreenshot", v)}
               />
               <Toggle
                 label="Auto-approve sensitive actions"
-                hint="Skip the confirmation card for send / buy / delete style clicks. Not recommended."
+                hint="Skip the card for send / buy / delete style clicks only. Never skips page-requested actions, new sites, downloads, uploads, account changes, sensitive typing, or anything in Incognito."
                 checked={draft.autoApprove}
                 onChange={(v) => set("autoApprove", v)}
               />

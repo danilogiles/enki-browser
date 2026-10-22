@@ -55,6 +55,8 @@ try {
           // is about screenshots reaching the provider.
           vision: true,
           attachScreenshot: true,
+          // Saved after the 0.3.6 migration, which would otherwise turn the screenshot off.
+          settingsVersion: 1,
           maxSteps: 10,
           customInstructions: "",
           saveConversations: false,
@@ -80,7 +82,7 @@ try {
   await panel.press("textarea", "Enter");
   await panel.waitForFunction(() => document.body.innerText.includes("Echo:"), null, { timeout: 20000 });
   const echo = await panel.evaluate(() => document.body.innerText);
-  check("ask: page context sent", /Current tab\] Enki test page/.test(echo), echo.match(/Echo:.*$/m)?.[0]);
+  check("ask: page context sent", /Current tab\].*Enki test page/.test(echo) && /untrusted_page_data/.test(echo), echo.match(/Echo:.*$/m)?.[0]);
   check("ask: screenshot attached", /image=true/.test(echo));
   check("ask: user screenshot thumbnail rendered", await panel.locator("img[alt='Screenshot attached']").count() === 1);
 
@@ -99,7 +101,7 @@ try {
   // Approval card should appear for "Buy now".
   await panel.waitForSelector("text=Allow", { timeout: 30000 });
   const cardText = await panel.evaluate(() => document.body.innerText);
-  check("act: approval requested for Buy now", /Click "Buy now"/.test(cardText));
+  check("act: approval requested for Buy now", /Buy now/.test(cardText));
   await panel.click("button:has-text('Allow')");
 
   await panel.waitForFunction(() => document.body.innerText.includes("Done."), null, { timeout: 30000 });

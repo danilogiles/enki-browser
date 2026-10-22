@@ -229,7 +229,11 @@ export type Settings = {
    * settings before this existed get it without re-saving.
    */
   textTools?: boolean;
-  /** Attach a screenshot of the current tab with every user message (requires vision). */
+  /**
+   * Attach a screenshot of the current tab with every user message (requires vision). Off by
+   * default since Enki 0.3.6: a picture of the tab can carry more than the page text (other
+   * windows' notifications, half-typed forms), so it is something to opt into.
+   */
   attachScreenshot: boolean;
   /** Max tool-call rounds per user request. */
   maxSteps: number;
@@ -250,6 +254,11 @@ export type Settings = {
   favoriteModels: string[];
   askModel: string;
   actModel: string;
+  /**
+   * Which one-time migrations (SETTINGS_VERSION) these stored settings have been through. Unset
+   * means settings saved before Enki 0.3.6.
+   */
+  settingsVersion?: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -263,7 +272,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoApprove: false,
   // Follows the default preset: Nemotron reads text only.
   vision: !presetOf("nvidia").noVision,
-  attachScreenshot: true,
+  // Off by default (0.3.6): turned on in Settings or with the composer's camera button.
+  attachScreenshot: false,
   maxSteps: 30,
   requestTimeoutSec: 180,
   devMode: false,
@@ -276,6 +286,15 @@ export const DEFAULT_SETTINGS: Settings = {
   askModel: "",
   actModel: "",
 };
+
+/**
+ * Bumped by each one-time change to stored settings, which then runs once per profile:
+ *   1 (Enki 0.3.6): the per-message screenshot goes off for everyone who had it on, because the
+ *     old default (on) was saved with every other setting the first time Settings were saved.
+ * Settings carry the version they were migrated to, so a choice made afterwards, turning the
+ * screenshot back on included, is never undone by a later load.
+ */
+export const SETTINGS_VERSION = 1;
 
 export const SETTINGS_KEY = "enki:settings";
 const KEY = SETTINGS_KEY;
@@ -291,9 +310,45 @@ export function usesTextTools(settings: Settings): boolean {
   return settings.textTools ?? !!preset.textTools;
 }
 
-/** Stored settings → what the app uses: defaults filled in, keys per provider, keys decrypted. */
-async function fromStored(raw: Partial<Settings> | undefined): Promise<{ settings: Settings; hadPlainKeys: boolean }> {
+/** Every key Settings may hold: the defaults' plus the optional ones. Nothing else is read from storage. */
+const SETTINGS_KEYS: ReadonlySet<string> = new Set<string>([
+  ...Object.keys(DEFAULT_SETTINGS),
+  "apiKeys", "customTheme", "textTools", "unfiltered", "acceptedTerms", "settingsVersion",
+]);
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  Object.prototype.toString.call(v) === "[object Object]";
+
+/**
+ * What storage held → known settings keys only. Anything that is not a plain object (null, a
+ * string, an array, a number) counts as nothing stored, and unknown keys are dropped.
+ */
+function storedSettings(raw: unknown): Partial<Settings> | undefined {
+  if (!isPlainObject(raw)) return undefined;
+  const known: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) if (SETTINGS_KEYS.has(k)) known[k] = v;
+  if ("apiKeys" in known && !isPlainObject(known.apiKeys)) delete known.apiKeys;
+  return known as Partial<Settings>;
+}
+
+/** Stored settings with the defaults filled in and the one-time migrations applied (SETTINGS_VERSION). */
+export function migrateSettings(input: unknown): { settings: Settings; migrated: boolean } {
+  const raw = storedSettings(input);
   const s: Settings = { ...DEFAULT_SETTINGS, ...raw };
+  // Nothing stored yet: the defaults are already current, and there is nothing to write back.
+  // A missing or invalid version (a string, NaN, Infinity) counts as 0: the migrations run once
+  // and the current version is stored, so a later opt-in is never undone.
+  const v = raw?.settingsVersion;
+  const from = raw ? (typeof v === "number" && Number.isFinite(v) ? v : 0) : SETTINGS_VERSION;
+  if (from < 1) s.attachScreenshot = false;
+  s.settingsVersion = Math.max(from, SETTINGS_VERSION);
+  return { settings: s, migrated: from < SETTINGS_VERSION };
+}
+
+/** Stored settings → what the app uses: defaults filled in, keys per provider, keys decrypted. */
+async function fromStored(input: unknown): Promise<{ settings: Settings; hadPlainKeys: boolean; migrated: boolean }> {
+  const raw = storedSettings(input);
+  const { settings: s, migrated } = migrateSettings(raw);
   // 24000 was the old default, kept by everyone who never touched it: give them the new one.
   if (s.contextBudgetTokens === 24000) s.contextBudgetTokens = DEFAULT_SETTINGS.contextBudgetTokens;
   // Before per-provider keys, the one key belonged to whichever provider was selected.
@@ -307,14 +362,15 @@ async function fromStored(raw: Partial<Settings> | undefined): Promise<{ setting
   }
   s.apiKeys = keys;
   s.apiKey = keys[s.preset] ?? "";
-  return { settings: s, hadPlainKeys };
+  return { settings: s, hadPlainKeys, migrated };
 }
 
 export async function loadSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(KEY);
-  const { settings, hadPlainKeys } = await fromStored(stored[KEY] as Partial<Settings> | undefined);
-  // Keys saved before encryption existed are encrypted the first time they are read.
-  if (hadPlainKeys) await saveSettings(settings);
+  const { settings, hadPlainKeys, migrated } = await fromStored(stored[KEY] as Partial<Settings> | undefined);
+  // Keys saved before encryption existed are encrypted the first time they are read, and a
+  // one-time migration is written back with its version so it never runs again.
+  if (hadPlainKeys || migrated) await saveSettings(settings);
   return settings;
 }
 
@@ -326,8 +382,40 @@ export function maskKey(key: string): string {
   return `${prefix}••••••${k.length > prefix.length + 8 ? k.slice(-4) : ""}`;
 }
 
-/** Keys go to storage encrypted (lib/secrets.ts), and only in apiKeys: apiKey is derived on load. */
+/**
+ * Serialize every settings write so a read-then-write in saveSettings cannot race a Settings-UI
+ * save and re-enable (or clear) autoApprove. Auto-approve may only change through
+ * saveSettingsFromUi; every other path re-reads the stored flag inside the lock.
+ */
+let settingsWriteChain: Promise<void> = Promise.resolve();
+
+function withSettingsWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = settingsWriteChain.then(fn, fn);
+  settingsWriteChain = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 export async function saveSettings(settings: Settings): Promise<void> {
+  await withSettingsWriteLock(async () => {
+    const stored = await chrome.storage.local.get(KEY);
+    const previous = (stored[KEY] as Partial<Settings> | undefined)?.autoApprove;
+    const safe: Settings = {
+      ...settings,
+      // Never take autoApprove from the caller — only saveSettingsFromUi may set it.
+      autoApprove: typeof previous === "boolean" ? previous : false,
+    };
+    await writeSettingsUnlocked(safe);
+  });
+}
+
+/** The Settings screen is the only caller allowed to change autoApprove. */
+export async function saveSettingsFromUi(settings: Settings): Promise<void> {
+  await withSettingsWriteLock(async () => {
+    await writeSettingsUnlocked(settings);
+  });
+}
+
+async function writeSettingsUnlocked(settings: Settings): Promise<void> {
   const keys = { ...(settings.apiKeys ?? {}), [settings.preset]: settings.apiKey };
   const apiKeys: Partial<Record<PresetId, string>> = {};
   for (const [preset, value] of Object.entries(keys) as Array<[PresetId, string | undefined]>) {
