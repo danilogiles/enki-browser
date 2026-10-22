@@ -352,12 +352,12 @@ try {
   check("screenshot: off by default with a model that takes images", /^Screenshot off/.test(await shot()));
   await configure("mock-echo", "ask", { vision: true, attachScreenshot: true, settingsVersion: undefined });
   await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
-  check("screenshot: settings saved by 0.3.5 with it on are turned off once, on the first load", /^Screenshot off/.test(await shot()) && JSON.stringify(await storedShot()) === "[false,1]", JSON.stringify(await storedShot()));
+  check("screenshot: settings saved by 0.3.5 with it on are turned off once, on the first load", /^Screenshot off/.test(await shot()) && JSON.stringify(await storedShot()) === "[false,2]", JSON.stringify(await storedShot()));
   await panel.click("button[title^='Screenshot']"); await panel.waitForTimeout(300);
-  check("screenshot: the camera button turns it back on", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  check("screenshot: the camera button turns it back on", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,2]");
   await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
   await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
-  check("screenshot: the opt-in survives reloads (the migration does not run again)", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  check("screenshot: the opt-in survives reloads (the migration does not run again)", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,2]");
   await panel.click("button[title='Settings']"); await panel.click("button:has-text('Behavior')");
   const shotSwitch = panel.getByRole("switch", { name: "Attach a screenshot to every message" });
   check("screenshot: the Settings switch agrees and says it is off by default", await shotSwitch.getAttribute("aria-checked") === "true" && (await panel.textContent("body")).includes("Off by default."));
@@ -367,6 +367,53 @@ try {
   await configure("mock-echo", "ask");
   await panel.reload(); await panel.waitForSelector("textarea");
   check("screenshot: no camera button with a text-only model", await panel.locator("button[title^='Screenshot']").count() === 0);
+
+  // 0.8.12: plain HTTP to the model only on this computer, or a local IP the user allows one by one.
+  {
+    const LAN = "http://192.168.1.20:11434";
+    const stored = () => panel.evaluate(async () => (await chrome.storage.local.get("enki:settings"))["enki:settings"].localHttpOrigins ?? []);
+    const save = () => panel.locator("button:has-text('Save')").last();
+    await configure("mock-echo", "ask", { baseUrl: LAN + "/v1", apiKey: "", settingsVersion: 2 });
+    await panel.reload(); await panel.waitForSelector("textarea");
+    await panel.click("button[title='Settings']");
+    check("local HTTP: a private IP is blocked with the toggle off and Save disabled",
+      await panel.getAttribute("[data-endpoint]", "data-endpoint") === "private-off" && await save().isDisabled());
+    await panel.getByRole("switch", { name: "Allow HTTP for this local address" }).click();
+    check("local HTTP: allowing it shows the warning, the chip and Revoke",
+      (await panel.textContent("body")).includes("Not encrypted: anyone on the same Wi-Fi can read your questions and page content.") &&
+      await panel.getByRole("button", { name: "Revoke HTTP for 192.168.1.20:11434" }).count() === 1 && !(await save().isDisabled()));
+    await save().click(); await panel.waitForSelector("[data-egress=local-http]");
+    check("local HTTP: Save stores that exact origin and the header shows the chip", JSON.stringify(await stored()) === JSON.stringify([LAN]));
+    await panel.getByRole("button", { name: "Revoke HTTP for 192.168.1.20:11434" }).click(); await panel.waitForTimeout(300);
+    check("local HTTP: Revoke deletes the exception and removes the chip",
+      JSON.stringify(await stored()) === "[]" && await panel.locator("[data-egress=local-http]").count() === 0);
+    await panel.click("button[title='Settings']");
+    for (const [url, state] of [["http://ollama.local:11434/v1", "hostname"], ["http://203.0.113.7/v1", "public"]]) {
+      await panel.fill("input[aria-label='Base URL']", url);
+      check(`local HTTP: ${state} over HTTP is refused and cannot be saved`, await panel.getAttribute("[data-endpoint]", "data-endpoint") === state && await save().isDisabled());
+    }
+    await panel.fill("input[aria-label='Base URL']", "http://127.0.0.1:8787/v1");
+    await panel.fill("input[aria-label='API key']", "test");
+    check("local HTTP: loopback with a key is fine and says it stays on this computer",
+      await panel.getAttribute("[data-endpoint]", "data-endpoint") === "loopback" && !(await save().isDisabled()) &&
+      (await panel.textContent("body")).includes("Requests stay on this computer. Nothing goes over the network."));
+    await panel.click("button[title='Back']");
+    // The one-time notice after the update: in the panel only, never in the chat or its history.
+    await configure("mock-echo", "ask", { baseUrl: LAN + "/v1", apiKey: "", settingsVersion: 1 });
+    await panel.reload(); await panel.waitForSelector("[data-notice=carried]");
+    check("local HTTP: settings from 0.8.11 keep a keyless private IP and say so once", JSON.stringify(await stored()) === JSON.stringify([LAN]));
+    const card = panel.locator("[data-notice=carried]");
+    const cardText = await card.textContent();
+    check("local HTTP: the carried-over notice shows the body with the address, the unencrypted warning and Revoke together",
+      cardText.includes("Enki now asks before using HTTP on your local network. It stays on for http://192.168.1.20:11434 because you set it up that way.") &&
+      cardText.includes("Not encrypted: anyone on the same Wi-Fi can read your questions and page content.") &&
+      await card.getByRole("button", { name: "Revoke HTTP for 192.168.1.20:11434" }).count() === 1, cardText);
+    const leaked = await panel.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+    check("local HTTP: the notice is not part of any chat", !/HTTP is still on/.test(leaked) && await panel.locator("[data-notice] ~ * :text('HTTP is still on')").count() === 0);
+    await panel.click("[data-notice] button:has-text('Got it')"); await panel.reload(); await panel.waitForSelector("textarea"); await panel.waitForTimeout(300);
+    check("local HTTP: the notice is shown once", await panel.locator("[data-notice]").count() === 0);
+    await configure("mock-echo", "ask");
+  }
 
   // First use: a notice links the terms and the privacy policy until "Got it".
   await configure("mock-echo", "ask", { acceptedTerms: undefined });

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ImagePart, Message, TextPart, ToolCallPart } from "../lib/types";
-import { loadSettings, onSettingsChange, presetOf, saveSettings, saveSettingsFromUi, type Settings } from "../lib/settings";
+import { dismissEndpointNotice, loadSettings, onSettingsChange, presetOf, revokeLocalHttp, saveSettings, saveSettingsFromUi, takeEndpointNotice, type Settings } from "../lib/settings";
+import type { EndpointNotice } from "../lib/providers/endpoint-policy";
+import { EndpointNoticeCard } from "./EndpointNoticeCard";
 import { onHandoff, takeHandoff, type Handoff } from "../lib/handoff";
 import { createProvider } from "../lib/providers";
 import { BrowserExecutor, isRestrictedUrl } from "../lib/tools/executor";
@@ -94,6 +96,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   const [usage, setUsage] = useState({ input: 0, output: 0 });
   const [ready, setReady] = useState(false);
   const [banner, setBanner] = useState("");
+  // The one-time 0.8.12 model-address notice: panel state only, never part of the conversation.
+  const [endpointNotice, setEndpointNotice] = useState<EndpointNotice | null>(null);
   const [progress, setProgress] = useState({ message: "Ready", step: 0, model: "", since: Date.now() });
   const [elapsed, setElapsed] = useState(0);
   const [tabs, setTabs] = useState<TabInfo[]>([]);
@@ -118,6 +122,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   useEffect(() => {
     loadSettings().then(async (s) => {
       setSettings(s);
+      if (!isolated) setEndpointNotice(await takeEndpointNotice());
       if (s.saveConversations) {
         setChats(await listChats());
       }
@@ -616,6 +621,13 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     await saveSettings(next);
   };
 
+  /** Revoke: the saved HTTP exception for that exact origin is deleted (settings follow via onSettingsChange). */
+  const revokeHttp = async (origin: string) => {
+    await revokeLocalHttp(origin);
+    setSettings((cur) => cur && { ...cur, localHttpOrigins: (cur.localHttpOrigins ?? []).filter((o) => o !== origin) });
+  };
+  const closeNotice = () => { setEndpointNotice(null); void dismissEndpointNotice(); };
+
   if (!settings || !ready) return null;
 
   if (view === "logs") return <LogsView settings={settings} onClose={() => setView("chat")} />;
@@ -630,6 +642,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
           setView("chat");
         }}
         onClose={() => setView("chat")}
+        onRevokeLocalHttp={revokeHttp}
       />
     );
   }
@@ -657,7 +670,14 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         selectedTab={selectedTab}
         onSelectTab={setSelectedTab}
         usage={usage}
+        onRevokeLocalHttp={(o) => { void revokeHttp(o); }}
       />
+      {endpointNotice && (
+        <EndpointNoticeCard notice={endpointNotice}
+          onRevoke={(o) => { void revokeHttp(o); closeNotice(); }}
+          onDismiss={closeNotice}
+          onOpenSettings={() => { closeNotice(); setView("settings"); }} />
+      )}
       {banner && <div role="status" className="mx-3 mb-1 rounded-lg bg-ink-900 px-3 py-1.5 text-xs text-zinc-400">{banner} <button className="underline" onClick={() => setBanner("")}>{t.dismiss}</button></div>}
 
       {isolated && showLegacyCard(location.search) && <LegacySearchCard />}

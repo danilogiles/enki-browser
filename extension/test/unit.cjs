@@ -443,14 +443,14 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     // Stored values that are not what Enki wrote: a junk version counts as 0 (migrate once, store
     // 1), anything but a plain object counts as nothing stored, and unknown keys are dropped.
     const M = S.migrateSettings;
-    check('a string settingsVersion counts as 0: migrated once, then 1', () => {
+    check('a string settingsVersion counts as 0: migrated once, then the current version', () => {
       const r = M({ attachScreenshot: true, settingsVersion: '1' });
-      assert.equal(r.migrated, true); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, 1);
+      assert.equal(r.migrated, true); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, S.SETTINGS_VERSION);
     });
     check('a NaN or Infinity settingsVersion counts as 0', () => {
       for (const v of [NaN, Infinity, -Infinity, null, {}]) {
         const r = M({ attachScreenshot: true, settingsVersion: v });
-        assert.equal(r.migrated, true, String(v)); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, 1);
+        assert.equal(r.migrated, true, String(v)); assert.equal(r.settings.attachScreenshot, false); assert.equal(r.settings.settingsVersion, S.SETTINGS_VERSION);
         assert.ok(Number.isFinite(r.settings.settingsVersion));
       }
     });
@@ -477,7 +477,7 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     s = await S.loadSettings();
     check('a junk version is repaired: screenshot off, version 1 stored, junk keys gone', () => {
       assert.equal(s.attachScreenshot, false); assert.equal(writes, 1);
-      assert.equal(store['enki:settings'].settingsVersion, 1); assert.ok(!('junk' in store['enki:settings']));
+      assert.equal(store['enki:settings'].settingsVersion, S.SETTINGS_VERSION); assert.ok(!('junk' in store['enki:settings']));
     });
     await S.saveSettings({ ...s, attachScreenshot: true });
     writes = 0;
@@ -517,6 +517,242 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     assert.equal(await takeHandoff(INCOGNITO), null);
     checks++; console.log('PASS [HANDOFF-INCOGNITO] requests never cross between an Incognito window and a normal one');
     global.chrome = saved;
+  }
+  {
+    // 0.8.12: plain HTTP to a model address on the local network (providers/endpoint-policy.ts).
+    const P = require('../src/lib/providers/endpoint-policy.ts');
+    const S = require('../src/lib/settings.ts');
+    const { OpenAICompatProvider } = require('../src/lib/providers/openai-compat.ts');
+    const { AnthropicProvider } = require('../src/lib/providers/anthropic.ts');
+    const { createProvider } = require('../src/lib/providers/index.ts');
+    const realFetch = global.fetch;
+    let sent = [];
+    global.fetch = async (input, init = {}) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const h = new Headers(init.headers ?? (typeof input === 'object' && 'headers' in input ? input.headers : undefined));
+      sent.push({ url, auth: h.get('authorization'), xkey: h.get('x-api-key') });
+      return new Response(JSON.stringify({ data: [{ id: 'm1' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const LAN = 'http://192.168.1.20:11434';
+    const oa = (baseUrl, apiKey = '', localHttpOrigins) => new OpenAICompatProvider({ apiKey, baseUrl, localHttpOrigins });
+    const reaches = async (provider) => { sent = []; try { await provider.listModels(); } catch (e) { if (!(e instanceof P.EndpointBlockedError)) throw e; return { blocked: e, sent }; } return { blocked: null, sent }; };
+    const streams = async (provider) => {
+      sent = [];
+      try { for await (const _ of provider.stream({ system: 's', messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }], tools: [], model: 'm' })) break; }
+      catch (e) { if (e instanceof P.EndpointBlockedError) return { blocked: e, sent }; }
+      return { blocked: null, sent };
+    };
+    const anthropic = async (baseUrl, apiKey, localHttpOrigins) => {
+      sent = [];
+      try { await new AnthropicProvider({ apiKey, baseUrl, localHttpOrigins }).listModels(); }
+      catch (e) { if (e instanceof P.EndpointBlockedError || e?.cause instanceof P.EndpointBlockedError) return { blocked: true, sent }; return { blocked: false, sent, error: e }; }
+      return { blocked: false, sent };
+    };
+
+    // (a) A public IP over HTTP is refused, even if someone wrote it into the exception list.
+    for (const url of ['http://8.8.8.8/v1', 'http://203.0.113.7:8080/v1', 'http://[2001:4860:4860::8888]/v1', 'http://169.254.1.1/v1', 'http://100.64.0.1/v1']) {
+      const v = P.evaluateEndpoint(url, { hasKey: false, exceptions: [P.originOf(url)] });
+      assert.equal(v.state, 'public', url); assert.equal(v.allowed, false, url);
+      const r = await reaches(oa(url, '', [P.originOf(url)]));
+      assert.ok(r.blocked, url); assert.equal(r.sent.length, 0, url);
+      assert.match(r.blocked.message, /Public addresses need HTTPS/);
+    }
+    assert.deepEqual(P.sanitizeExceptions(['http://8.8.8.8:80', 'http://ollama.local:11434', 'https://192.168.1.20:443', 'junk', 7, LAN]), [LAN]);
+    checks++; console.log('PASS [LOCAL-HTTP-PUBLIC] a public IP over HTTP is refused before any request, exception or not');
+
+    // (b) A hostname over HTTP is refused: DNS can point it anywhere (rebinding), ollama.local included.
+    for (const url of ['http://ollama.local:11434/v1', 'http://my-box/v1', 'http://example.com/v1', 'http://localhost.example.com/v1', 'http://foo.localhost/v1']) {
+      const v = P.evaluateEndpoint(url, { hasKey: false, exceptions: [P.originOf(url)] });
+      assert.equal(v.state, 'hostname', url); assert.equal(v.allowed, false, url);
+      const r = await reaches(oa(url, '', [P.originOf(url)]));
+      assert.ok(r.blocked, url); assert.equal(r.sent.length, 0, url);
+      const st = await streams(oa(url, '', [P.originOf(url)]));
+      assert.ok(st.blocked, url); assert.equal(st.sent.length, 0, url);
+    }
+    assert.equal(P.evaluateEndpoint('https://ollama.local/v1', { hasKey: true }).allowed, true, 'over HTTPS a hostname is fine');
+    checks++; console.log('PASS [LOCAL-HTTP-HOSTNAME] a hostname over HTTP (ollama.local too) is refused before any request');
+
+    // (c) A key is never sent over HTTP to a private IP, even with the exception on.
+    {
+      const v = P.evaluateEndpoint(LAN + '/v1', { hasKey: true, exceptions: [LAN] });
+      assert.equal(v.state, 'key-over-http'); assert.equal(v.allowed, false);
+      for (const r of [await reaches(oa(LAN + '/v1', 'sk-secret', [LAN])), await streams(oa(LAN + '/v1', 'sk-secret', [LAN]))]) {
+        assert.ok(r.blocked); assert.equal(r.sent.length, 0, 'nothing leaves, so the key cannot');
+      }
+      const a = await anthropic(LAN, 'sk-ant-secret', [LAN]);
+      assert.equal(a.blocked, true, String(a.error)); assert.equal(a.sent.length, 0);
+      const { guardedFetch } = require('../src/lib/providers/endpoint-guard.ts');
+      sent = [];
+      assert.throws(() => guardedFetch('sk-ant-secret', [LAN])(LAN + '/v1/messages', { method: 'POST' }), P.EndpointBlockedError);
+      assert.throws(() => guardedFetch('sk-ant-secret', [LAN])(new URL(LAN + '/v1/models')), P.EndpointBlockedError);
+      assert.equal(sent.length, 0, 'the fetch the SDK is given refuses too');
+    }
+    checks++; console.log('PASS [LOCAL-HTTP-KEY] an API key is never sent over HTTP to a private IP, exception or not (OpenAI-compatible and Anthropic)');
+
+    // (d) Loopback over HTTP still gets the key (OmniRoute, Ollama, anything on this computer).
+    for (const base of ['http://localhost:20128/v1', 'http://localhost:11434/v1', 'http://127.0.0.1:9/v1', 'http://127.8.9.10:1234/v1', 'http://[::1]:8080/v1']) {
+      assert.equal(P.evaluateEndpoint(base, { hasKey: true }).state, 'loopback', base);
+      const r = await reaches(oa(base, 'sk-local'));
+      assert.equal(r.blocked, null, base); assert.equal(r.sent.length, 1); assert.equal(r.sent[0].auth, 'Bearer sk-local', base);
+    }
+    {
+      const a = await anthropic('http://127.0.0.1:9', 'sk-ant-local');
+      assert.equal(a.blocked, false); assert.equal(a.sent.length >= 1, true); assert.equal(a.sent[0].xkey, 'sk-ant-local');
+    }
+    checks++; console.log('PASS [LOCAL-HTTP-LOOPBACK] loopback over HTTP is allowed and the key is still sent');
+
+    // (e) A private IP is refused without the exception and reached with it, for that exact origin only.
+    {
+      assert.equal(P.evaluateEndpoint(LAN + '/v1', { hasKey: false }).state, 'private-off');
+      let r = await reaches(oa(LAN + '/v1'));
+      assert.ok(r.blocked); assert.equal(r.sent.length, 0);
+      r = await reaches(oa(LAN + '/v1', '', [LAN]));
+      assert.equal(r.blocked, null); assert.equal(r.sent.length, 1); assert.equal(r.sent[0].auth, null, 'no key, no Authorization header');
+      for (const other of ['http://192.168.1.20:11435/v1', 'http://192.168.1.21:11434/v1', 'http://192.168.1.20/v1', 'http://10.0.0.5:11434/v1']) {
+        assert.equal(P.evaluateEndpoint(other, { hasKey: false, exceptions: [LAN] }).allowed, false, other);
+        const o = await reaches(oa(other, '', [LAN]));
+        assert.ok(o.blocked, other); assert.equal(o.sent.length, 0, other);
+      }
+      for (const lan of ['http://10.1.2.3:8000', 'http://172.16.0.9:8000', 'http://172.31.255.1:80', 'http://[fd12:3456::1]:8000']) {
+        assert.equal(P.evaluateEndpoint(lan + '/v1', { hasKey: false }).state, 'private-off', lan);
+        assert.equal(P.evaluateEndpoint(lan + '/v1', { hasKey: false, exceptions: [lan] }).state, 'private-on', lan);
+      }
+      assert.equal(P.evaluateEndpoint('http://172.32.0.1/v1', { hasKey: false }).state, 'public', '172.32/16 is not private');
+      assert.equal(P.originOf('http://192.168.1.20/v1'), 'http://192.168.1.20:80', 'the default port is written out');
+      assert.deepEqual(P.addException([], 'http://192.168.1.20:11434/v1/'), [LAN]);
+    }
+    checks++; console.log('PASS [LOCAL-HTTP-EXACT-ORIGIN] a private IP over HTTP is refused unless that exact origin is allowed; another port is refused');
+
+    // (f) Revoke deletes the saved exception at once (not on the next Save).
+    {
+      const saved = global.chrome;
+      const store = { 'enki:settings': { preset: 'custom', baseUrl: LAN + '/v1', model: 'm', settingsVersion: S.SETTINGS_VERSION,
+        localHttpOrigins: [LAN, 'http://10.0.0.5:8000'] } };
+      global.chrome = { ...saved, storage: { local: {
+        get: async (k) => (k in store ? { [k]: structuredClone(store[k]) } : {}),
+        set: async (o) => { Object.assign(store, structuredClone(o)); },
+        remove: async (k) => { delete store[k]; },
+      }, onChanged: { addListener() {}, removeListener() {} } } };
+      let s = await S.loadSettings();
+      assert.equal(P.evaluateEndpoint(s.baseUrl, { hasKey: false, exceptions: s.localHttpOrigins }).state, 'private-on');
+      await S.revokeLocalHttp(LAN);
+      assert.deepEqual(store['enki:settings'].localHttpOrigins, ['http://10.0.0.5:8000'], 'only that origin is deleted');
+      s = await S.loadSettings();
+      assert.equal(P.evaluateEndpoint(s.baseUrl, { hasKey: false, exceptions: s.localHttpOrigins }).state, 'private-off');
+      const r = await reaches(createProvider(s));
+      assert.ok(r.blocked); assert.equal(r.sent.length, 0);
+      global.chrome = saved;
+    }
+    checks++; console.log('PASS [LOCAL-HTTP-REVOKE] Revoke deletes the saved exception and the address is refused again');
+
+    // (g) The 0.8.12 migration: carry over only a literal private IP with no saved key.
+    {
+      const old = (baseUrl, extra = {}) => ({ preset: 'custom', baseUrl, model: 'm', settingsVersion: 1, ...extra });
+      let r = S.migrateSettings(old(LAN + '/v1'));
+      assert.equal(r.migrated, true); assert.deepEqual(r.settings.localHttpOrigins, [LAN]);
+      assert.deepEqual(r.endpointNotice, { kind: 'carried', origin: LAN });
+      let probe = await reaches(createProvider(r.settings));
+      assert.equal(probe.blocked, null, 'the carried address keeps working'); assert.equal(probe.sent.length, 1);
+
+      r = S.migrateSettings(old(LAN + '/v1', { apiKeys: { custom: 'enc:v1:stored' } }));
+      assert.ok(!r.settings.localHttpOrigins?.length, 'a private IP with a saved key is not carried over');
+      assert.deepEqual(r.endpointNotice, { kind: 'blocked-key', origin: LAN });
+      assert.equal(r.settings.apiKeys.custom, 'enc:v1:stored', 'the key stays stored');
+      probe = await reaches(createProvider({ ...r.settings, apiKey: 'sk-secret' }));
+      assert.ok(probe.blocked); assert.equal(probe.sent.length, 0, 'and is never sent');
+      r = S.migrateSettings(old(LAN + '/v1', { apiKey: 'sk-legacy-plain' }));
+      assert.equal(r.endpointNotice.kind, 'blocked-key', 'a pre-per-provider key counts too');
+
+      for (const [url, kind] of [['http://ollama.local:11434/v1', 'blocked-host'], ['http://8.8.8.8/v1', 'blocked-public']]) {
+        r = S.migrateSettings(old(url));
+        assert.ok(!r.settings.localHttpOrigins?.length, url);
+        assert.deepEqual(r.endpointNotice, { kind, origin: P.originOf(url) }, url);
+        probe = await reaches(createProvider(r.settings));
+        assert.ok(probe.blocked, url); assert.equal(probe.sent.length, 0, url);
+      }
+      for (const url of ['http://localhost:11434/v1', 'https://192.168.1.20/v1', 'https://api.openai.com/v1']) {
+        r = S.migrateSettings(old(url, { apiKeys: { custom: 'enc:v1:k' } }));
+        assert.equal(r.endpointNotice, null, url);
+      }
+      r = S.migrateSettings(old(LAN + '/v1', { settingsVersion: S.SETTINGS_VERSION }));
+      assert.equal(r.endpointNotice, null, 'it runs once'); assert.equal(r.migrated, false);
+      assert.equal(S.migrateSettings(undefined).endpointNotice, null, 'a fresh profile has nothing to carry');
+      assert.equal(P.CARRY_OVER_PRIVATE_HTTP, true);
+      const off = P.migrateEndpoint(LAN + '/v1', false, undefined, false);
+      assert.deepEqual(off, { exceptions: [], notice: { kind: 'private-off', origin: LAN } }, 'with the constant off: blocked, and the notice says how to turn it on');
+
+      // The notice is UI-only: stored apart from Settings, shown once, gone after Dismiss.
+      const saved = global.chrome;
+      const store = { 'enki:settings': old(LAN + '/v1') };
+      global.chrome = { ...saved, storage: { local: {
+        get: async (k) => (k in store ? { [k]: structuredClone(store[k]) } : {}),
+        set: async (o) => { Object.assign(store, structuredClone(o)); },
+        remove: async (k) => { delete store[k]; },
+      }, onChanged: { addListener() {}, removeListener() {} } } };
+      const s = await S.loadSettings();
+      assert.deepEqual(s.localHttpOrigins, [LAN]); assert.deepEqual(store['enki:settings'].localHttpOrigins, [LAN]);
+      assert.ok(!JSON.stringify(store['enki:settings']).includes('carried'), 'the notice is not a setting');
+      assert.deepEqual(await S.takeEndpointNotice(), { kind: 'carried', origin: LAN });
+      await S.loadSettings();
+      assert.deepEqual(await S.takeEndpointNotice(), { kind: 'carried', origin: LAN }, 'a reload does not make a second one');
+      await S.dismissEndpointNotice();
+      assert.equal(await S.takeEndpointNotice(), null);
+      await S.loadSettings();
+      assert.equal(await S.takeEndpointNotice(), null, 'shown once');
+      global.chrome = saved;
+    }
+    checks++; console.log('PASS [LOCAL-HTTP-MIGRATION] 0.8.12 carries over only a private IP with no key; a key or a hostname/public IP is blocked with a notice');
+
+    // (h) An allowed endpoint must not be able to redirect the request (and its body and key) past the
+    // policy. A loopback endpoint answers 307 and 308 to http://203.0.113.5/ (a public IP over HTTP,
+    // always refused). Connections to 203.0.113.5 are intercepted at net.connect and sent to a local trap
+    // listener instead, so the test sees whether anything would have reached the target.
+    {
+      const http = require('node:http');
+      const net = require('node:net');
+      const listen = (handler) => new Promise((resolve) => { const srv = http.createServer(handler); srv.listen(0, '127.0.0.1', () => resolve(srv)); });
+      const trapHits = [];
+      const trap = await listen((rq, rs) => {
+        let body = ''; rq.on('data', (c) => { body += c; });
+        rq.on('end', () => { trapHits.push({ method: rq.method, url: rq.url, body, auth: rq.headers.authorization, xkey: rq.headers['x-api-key'] }); rs.writeHead(200, { 'content-type': 'application/json' }); rs.end('{"data":[{"id":"stolen"}]}'); });
+      });
+      const targetConnects = [];
+      const realConnect = net.connect;
+      net.connect = function (...args) {
+        const o = args[0] && typeof args[0] === 'object' ? args[0] : { host: args[1], port: args[0] };
+        if (o.host === '203.0.113.5') { targetConnects.push(`${o.host}:${o.port}`); return realConnect.call(net, { ...o, host: '127.0.0.1', port: trap.address().port }); }
+        return realConnect.apply(net, args);
+      };
+      let status = 307; const originHits = [];
+      const origin = await listen((rq, rs) => { originHits.push(`${rq.method} ${rq.url}`); rq.resume(); rs.writeHead(status, { location: `http://203.0.113.5${rq.url}` }); rs.end(); });
+      const base = `http://127.0.0.1:${origin.address().port}/v1`;
+      global.fetch = realFetch;
+      const fails = async (run) => { try { await run(); return false; } catch { return true; } };
+      try {
+        for (const code of [307, 308]) {
+          status = code;
+          const oaFailed = await fails(() => oa(base, 'sk-local').listModels());
+          const oaStreamFailed = await fails(async () => {
+            for await (const _ of oa(base, 'sk-local').stream({ system: 's', messages: [{ role: 'user', parts: [{ type: 'text', text: 'secret question' }] }], tools: [], model: 'm' })) {}
+          });
+          const anFailed = await fails(async () => {
+            const a = new AnthropicProvider({ apiKey: 'sk-ant-local', baseUrl: `http://127.0.0.1:${origin.address().port}`, localHttpOrigins: [] });
+            a.client.maxRetries = 0;
+            await a.listModels();
+          });
+          assert.ok(oaFailed, `${code}: OpenAI-compatible model listing must fail on a redirect`);
+          assert.ok(oaStreamFailed, `${code}: OpenAI-compatible chat POST must fail on a redirect`);
+          assert.ok(anFailed, `${code}: Anthropic must fail on a redirect`);
+        }
+        assert.ok(originHits.length >= 6, `the allowed endpoint was asked: ${originHits}`);
+        assert.deepEqual(targetConnects, [], 'nothing connected to 203.0.113.5');
+        assert.deepEqual(trapHits, [], 'the redirect target received nothing');
+      } finally {
+        net.connect = realConnect; origin.close(); trap.close(); global.fetch = realFetch;
+      }
+    }
+    checks++; console.log('PASS [LOCAL-HTTP-REDIRECT] an allowed endpoint answering 307 or 308 to http://203.0.113.5/ fails the request and nothing reaches the target (OpenAI-compatible list and chat, Anthropic)');
+    global.fetch = realFetch;
   }
   console.log(`${checks}/${checks} checks passed`);
 })().catch((e) => { console.error(e); process.exitCode = 1; });

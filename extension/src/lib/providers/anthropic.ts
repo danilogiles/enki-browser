@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { log } from "../debug";
+import { assertEndpointAllowed, guardedFetch } from "./endpoint-guard";
 import type {
   ChatProvider,
   ChatRequest,
@@ -16,23 +17,30 @@ const ADAPTIVE_THINKING = /(opus-4-[6-9]|opus-5|sonnet-4-6|sonnet-5|fable|mythos
 export class AnthropicProvider implements ChatProvider {
   readonly id = "anthropic";
   private client: Anthropic;
+  /** Checked up front so a refusal is a clear error, not a retried connection failure. */
+  private guard: () => void;
 
-  constructor(opts: { apiKey: string; baseUrl?: string }) {
+  constructor(opts: { apiKey: string; baseUrl?: string; localHttpOrigins?: readonly string[] }) {
+    this.guard = () => assertEndpointAllowed(opts.baseUrl || "https://api.anthropic.com", opts.apiKey, opts.localHttpOrigins);
     this.client = new Anthropic({
       apiKey: opts.apiKey,
       baseURL: opts.baseUrl || undefined,
+      // The endpoint policy runs on every request the SDK makes (endpoint-policy.ts).
+      fetch: guardedFetch(opts.apiKey, opts.localHttpOrigins),
       dangerouslyAllowBrowser: true,
       maxRetries: 2,
     });
   }
 
   async listModels(): Promise<string[]> {
+    this.guard();
     const ids: string[] = [];
     for await (const m of this.client.models.list()) ids.push(m.id);
     return ids;
   }
 
   async *stream(req: ChatRequest): AsyncIterable<StreamEvent> {
+    this.guard();
     const params: Anthropic.MessageStreamParams = {
       model: req.model,
       max_tokens: req.maxTokens ?? 16000,
