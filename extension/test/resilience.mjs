@@ -56,8 +56,17 @@ try {
     );
 
   await configure("mock-echo");
+  // The test window must really open the mock page. Without the argument `mock` was undefined and
+  // the tab sat on chrome-extension://<id>/undefined/page; since 0.8.11 a non-web origin is never
+  // treated as same-origin, so Act's move to the mock page rightly asked first and the run hung.
   const wid = await panel.evaluate(
     async (mock) => (await chrome.windows.create({ url: `${mock}/page`, width: 900, height: 700 })).id,
+    MOCK,
+  );
+  check(
+    "the test window opened the mock page",
+    (await panel.evaluate(async (w) => { for (let i = 0; i < 50; i++) { const [t] = await chrome.tabs.query({ windowId: w }); if (t?.url?.startsWith("http")) return t.url; await new Promise((r) => setTimeout(r, 100)); } return ""; }, wid)).startsWith(MOCK),
+    "test window tab is not on the mock page",
   );
   const panelUrl = `chrome-extension://${extId}/src/sidepanel/index.html?window=${wid}`;
 
