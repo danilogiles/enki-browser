@@ -7,7 +7,7 @@
  * a ```mindmap block (an indented list) draws a map. Everything is drawn here, without a charting
  * library: the panel is small and these four shapes are all it needs.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 
 import { dataFromSpec, dataFromTable, parseMindmap, type DataSet, type Kind, type MapNode } from "../lib/visual-data";
@@ -40,6 +40,17 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   return ticks;
 }
 
+/** What a screen reader hears for the chart: "Bar chart: Ana 1,200,000; Bruno 1,140,000". */
+export function summarize(data: DataSet, kind: Kind): string {
+  const name = { bar: "Bar chart", line: "Line chart", pie: "Pie chart", table: "Table" }[kind];
+  const series = data.series.map((s) => {
+    const total = s.data.reduce((a, b) => a + b, 0);
+    const values = data.labels.map((l, i) => kind === "pie" && total ? `${l} ${fmt(s.data[i])} (${((s.data[i] / total) * 100).toFixed(1)}%)` : `${l} ${fmt(s.data[i])}`).join("; ");
+    return data.series.length > 1 ? `${s.name}: ${values}` : values;
+  });
+  return `${name}${data.title ? `, ${data.title}` : ""}: ${series.join(". ")}`;
+}
+
 // ---------- the chart card with its mini-tabs
 
 export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind; table?: ReactNode }) {
@@ -50,23 +61,42 @@ export function DataView({ data, prefer, table }: { data: DataSet; prefer?: Kind
   const [active, setActive] = useState(0);
   const shown: DataSet = mixed ? { ...data, series: [data.series[active]] } : data;
   const names: Record<Kind, string> = { bar: "Bar", line: "Line", pie: "Pie", table: "Table" };
+  // WAI-ARIA tabs: one tab stop, Left/Right (and Home/End) move the selection, the tab names its panel.
+  const uid = useId();
+  const tabId = (k: Kind) => `${uid}-tab-${k}`;
+  const panelId = `${uid}-panel`;
+  const tabRefs = useRef<Partial<Record<Kind, HTMLButtonElement | null>>>({});
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const i = kinds.indexOf(kind);
+    const next = e.key === "ArrowRight" ? (i + 1) % kinds.length : e.key === "ArrowLeft" ? (i + kinds.length - 1) % kinds.length
+      : e.key === "Home" ? 0 : e.key === "End" ? kinds.length - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    setKind(kinds[next]);
+    tabRefs.current[kinds[next]]?.focus();
+  };
   return (
     <figure className="enki-visual my-2 rounded-xl border border-ink-700 bg-ink-900/60 p-2.5">
       <div className="mb-2 flex items-center gap-2">
         {data.title && <figcaption className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-200">{data.title}</figcaption>}
         <div role="tablist" aria-label="Chart type" className="ml-auto flex gap-0.5 rounded-lg bg-ink-800 p-0.5">
           {kinds.map((k) => (
-            <button key={k} role="tab" aria-selected={kind === k} onClick={() => setKind(k)}
+            <button key={k} id={tabId(k)} ref={(el) => { tabRefs.current[k] = el; }} type="button" role="tab"
+              aria-selected={kind === k} aria-controls={panelId} tabIndex={kind === k ? 0 : -1} onClick={() => setKind(k)} onKeyDown={onTabKey}
               className={`rounded-md px-2 py-0.5 text-[11px] ${kind === k ? "bg-ink-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>
               {names[k]}
             </button>
           ))}
         </div>
       </div>
-      {kind === "bar" && <Bars data={shown} first={mixed ? active : 0} />}
-      {kind === "line" && <Lines data={shown} first={mixed ? active : 0} />}
-      {kind === "pie" && <Pie data={pieFits(shown) ? shown : data} />}
-      {kind === "table" && (table ?? <PlainTable data={data} />)}
+      <div id={panelId} role="tabpanel" aria-labelledby={tabId(kind)} tabIndex={0} className="enki-tabpanel rounded-md">
+        {/* The numbers in words, for screen readers; the Table tab has them as a real table. */}
+        {kind !== "table" && <p className="sr-only">{summarize(kind === "pie" ? { ...(pieFits(shown) ? shown : data), series: [(pieFits(shown) ? shown : data).series[0]] } : data, kind)}</p>}
+        {kind === "bar" && <Bars data={shown} first={mixed ? active : 0} />}
+        {kind === "line" && <Lines data={shown} first={mixed ? active : 0} />}
+        {kind === "pie" && <Pie data={pieFits(shown) ? shown : data} />}
+        {kind === "table" && (table ?? <PlainTable data={data} />)}
+      </div>
       {data.series.length > 1 && kind !== "table" && (
         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-zinc-400">
           {data.series.map((s, i) => mixed ? (
@@ -94,7 +124,7 @@ function Bars({ data, first = 0 }: { data: DataSet; first?: number }) {
   const zero = -min / span;
   const colorOf = (j: number) => PALETTE[(first + j) % PALETTE.length];
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5" aria-hidden="true">
       {data.labels.map((label, i) => (
         <div key={i} className="grid grid-cols-[minmax(56px,min(38%,200px))_1fr] items-center gap-2 text-[11px]">
           <span className="truncate text-zinc-300" title={label}>{label}</span>
@@ -144,7 +174,7 @@ function Lines({ data, first = 0 }: { data: DataSet; first?: number }) {
   const every = Math.ceil(n / Math.max(2, Math.floor((width - left) / 56)));
   return (
     <div ref={ref}>
-      <svg width={width} height={height} role="img" aria-label="Line chart" className="block overflow-visible">
+      <svg width={width} height={height} role="img" aria-label="Line chart" aria-hidden="true" className="block overflow-visible">
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={left} x2={width - right} y1={y(t)} y2={y(t)} stroke="var(--color-ink-700)" strokeDasharray={t === 0 ? undefined : "3 3"} />
@@ -182,8 +212,8 @@ function Pie({ data }: { data: DataSet }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       {data.series.length > 1 && <p className="w-full text-[11px] text-zinc-400">{data.series[0].name}</p>}
-      <svg width={128} height={128} role="img" aria-label="Pie chart" className="shrink-0">{arcs}</svg>
-      <ul className="min-w-0 flex-1 space-y-0.5 text-[11px]">
+      <svg width={128} height={128} role="img" aria-label="Pie chart" aria-hidden="true" className="shrink-0">{arcs}</svg>
+      <ul aria-hidden="true" className="min-w-0 flex-1 space-y-0.5 text-[11px]">
         {data.labels.map((l, i) => (
           <li key={i} className="flex items-center gap-1.5">
             <i className="inline-block h-2 w-2 shrink-0 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
@@ -235,20 +265,26 @@ export function MindMap({ root }: { root: MapNode }) {
   const color = (n: { depth: number; branch: number }) => (n.depth === 0 ? "var(--color-zinc-200)" : PALETTE[n.branch % PALETTE.length]);
   return (
     <figure className="enki-visual my-2 overflow-x-auto rounded-xl border border-ink-700 bg-ink-900/60 p-2">
-      <svg width={layout.width} height={layout.height} role="img" aria-label={`Mind map: ${root.label}`} className="block">
+      <svg width={layout.width} height={layout.height} role="group" aria-label={`Mind map: ${root.label}`} className="block">
         {layout.nodes.filter((n) => n.parent).map((n) => {
           const p = layout.byId.get(n.parent!)!;
           const x1 = p.x + p.w, x2 = n.x, mid = (x1 + x2) / 2;
           return <path key={`l${n.id}`} d={`M${x1},${p.y} C${mid},${p.y} ${mid},${n.y} ${x2},${n.y}`} fill="none" stroke={color(n)} strokeOpacity="0.6" strokeWidth="1.5" />;
         })}
         {layout.nodes.map((n) => (
-          <g key={n.id} transform={`translate(${n.x},${n.y})`} className={n.kids ? "cursor-pointer" : ""} onClick={() => n.kids && toggle(n.id)}>
+          // A node that folds is a button: Tab reaches it, Enter or Space folds or opens it.
+          <g key={n.id} transform={`translate(${n.x},${n.y})`} className={n.kids ? "enki-node cursor-pointer" : ""} onClick={() => n.kids && toggle(n.id)}
+            {...(n.kids ? {
+              role: "button", tabIndex: 0, "aria-expanded": !closed.has(n.id),
+              "aria-label": `${n.label}, ${n.kids} ${n.kids === 1 ? "branch" : "branches"}`,
+              onKeyDown: (e: KeyboardEvent<SVGGElement>) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(n.id); } },
+            } : { role: "note", "aria-label": n.label })}>
             <rect x={0} y={-10} width={n.w} height={20} rx={10} fill="var(--color-ink-800)" stroke={color(n)} strokeWidth={n.depth === 0 ? 2 : 1} />
             <text x={9} y={4} fontSize="11" fill="var(--color-zinc-100)" fontWeight={n.depth === 0 ? 600 : 400}>
               {n.label.length * 6.2 + 18 > n.w ? `${n.label.slice(0, Math.floor((n.w - 22) / 6.2))}…` : n.label}
-              <title>{n.label}{n.kids ? ` (${closed.has(n.id) ? "click to open" : "click to fold"})` : ""}</title>
+              <title>{n.label}{n.kids ? ` (${closed.has(n.id) ? "click or Enter to open" : "click or Enter to fold"})` : ""}</title>
             </text>
-            {n.kids > 0 && closed.has(n.id) && <text x={n.w + 3} y={4} fontSize="10" fill="var(--color-zinc-400)">+{n.kids}</text>}
+            {n.kids > 0 && closed.has(n.id) && <text x={n.w + 3} y={4} fontSize="10" fill="var(--color-zinc-400)" aria-hidden="true">+{n.kids}</text>}
           </g>
         ))}
       </svg>
