@@ -10,7 +10,7 @@ import { toolsForMode } from "../lib/tools/definitions";
 import { runTurn, type AgentEvent } from "../lib/agent/loop";
 import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
 import { fenceInline, newNonce } from "../lib/agent/untrusted";
-import type { ConfirmPayload } from "../lib/tools/executor";
+import type { ConfirmPayload, OtherWindowStop } from "../lib/tools/executor";
 import { Chat, type Progress } from "./Chat";
 import { Composer } from "./Composer";
 import { SettingsView } from "./SettingsView";
@@ -90,7 +90,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   }, []);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [running, setRunning] = useState(false);
-  const [approval, setApproval] = useState<{ label: string; confirm?: ConfirmPayload; resolve: (ok: boolean) => void } | null>(null);
+  // `windowStop` turns the card into the Cancel-only "tab in another window" stop.
+  const [approval, setApproval] = useState<{ label: string; confirm?: ConfirmPayload; windowStop?: OtherWindowStop; resolve: (ok: boolean) => void } | null>(null);
   // The active tab is tracked for the tab picker in the "more" menu; nothing else shows it now.
   const [, setTab] = useState<TabInfo | null>(null);
   const [usage, setUsage] = useState({ input: 0, output: 0 });
@@ -343,6 +344,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
           ]);
           break;
         case "approval_request":
+        case "other_window":
           patchSegments((segs) =>
             segs.map((s) => (s.kind === "tool" && s.id === e.call.id ? { ...s, status: "awaiting" } : s)),
           );
@@ -380,6 +382,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
                     ? t.refusal
                     : e.reason === "empty"
                       ? t.empty
+                      : e.reason === "other_window"
+                        ? t.otherWindowStopped
                       : e.reason === "max_tokens"
                         ? t.maxTokens
                         : undefined),
@@ -410,6 +414,24 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
           confirm,
           resolve: finish,
         });
+      }),
+    [],
+  );
+
+  // The "tab in another window" card has nothing to allow: Cancel, Stop, Escape and New chat all
+  // just resolve it, and the loop ends the run without acting in the other window.
+  const stopForOtherWindow = useCallback(
+    (_call: ToolCallPart, stop: OtherWindowStop) =>
+      new Promise<void>((resolve) => {
+        const signal = abortRef.current?.signal;
+        const finish = () => {
+          signal?.removeEventListener("abort", finish);
+          setApproval(null);
+          resolve();
+        };
+        if (signal?.aborted) return finish();
+        signal?.addEventListener("abort", finish, { once: true });
+        setApproval({ label: "", windowStop: stop, resolve: () => finish() });
       }),
     [],
   );
@@ -497,7 +519,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       await runTurn({ provider: createProvider(settings), model: settings.model, mode: effectiveMode,
         system: buildSystemPrompt(effectiveMode, settings.customInstructions, settings.devMode && !!settings.unfiltered), history,
         tools: [...toolsForMode(effectiveMode, settings.vision), ...connectorTools(apps, turnNonce)], executor, maxSteps: settings.maxSteps,
-        autoApprove: settings.autoApprove, requestApproval,
+        autoApprove: settings.autoApprove, requestApproval, stopForOtherWindow,
         onEvent: (e) => { if (historyRef.current === history) handleEvent(e); },
         signal: controller.signal, contextBudgetTokens: settings.contextBudgetTokens,
         maxOutputTokens: settings.maxOutputTokens, refreshPage: intent !== "normal" || restoredRef.current,
@@ -519,7 +541,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       abortRef.current = null;
       await releaseTurn();
     }
-  }, [settings, ready, selectedTab, mode, requestApproval, handleEvent, tasks, apps, chatId]);
+  }, [settings, ready, selectedTab, mode, requestApproval, stopForOtherWindow, handleEvent, tasks, apps, chatId]);
 
   const stop = () => abortRef.current?.abort();
   const retry = useCallback(() => {

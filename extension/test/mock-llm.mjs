@@ -198,6 +198,21 @@ const server = http.createServer((req, res) => {
         if (toolMsgs.length === 1) return streamToolCall(res, "type", { ref: refFor(toolMsgs[0].content, /textbox/), text: "locked target" });
         return streamText(res, "Finished the typing test.");
       }
+      // 0.8.12: asks to switch to a tab in another window (its id is in the prompt). Enki must stop
+      // on the Cancel-only card; the text after it must never be reached.
+      if (model === "mock-other-window") {
+        const tabId = Number(/OTHER_TAB=(\d+)/.exec(userText)?.[1] ?? 0);
+        if (toolMsgs.length === 0) return streamToolCall(res, "switch_tab", { tab_id: tabId });
+        if (toolMsgs.length === 1) return streamToolCall(res, "click", { ref: "ref_1" });
+        return streamText(res, "OTHER-WINDOW-CONTINUED");
+      }
+      // 0.8.12: reads the page, then waits while the test drags the tab into another window, then
+      // tries to click Buy now there. Enki must stop on the card instead.
+      if (model === "mock-tab-moved") {
+        if (toolMsgs.length === 0) return streamToolCall(res, "read_page", { filter: "interactive" });
+        if (toolMsgs.length === 1) return setTimeout(() => streamToolCall(res, "click", { ref: refFor(toolMsgs[0].content, /Buy now/) }), 5000);
+        return streamText(res, "TAB-MOVED-CONTINUED");
+      }
       // Opens the stream and then goes silent forever, like a wedged gateway.
       if (model === "mock-stall") {
         res.write(": waiting\n\n");

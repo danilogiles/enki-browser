@@ -306,6 +306,201 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     checks++; console.log('PASS', 'new_tab with no URL opens chrome://newtab/, not a search engine');
   }
 
+  {
+    // 0.8.12: a tab in another window is a stop shown on a Cancel-only card, never an action.
+    const executorModule = require('../src/lib/tools/executor.ts');
+    const { BrowserExecutor } = executorModule;
+    // Falls back to a stand-in so a build without the stop fails on the assertions below, not on load.
+    const TabInOtherWindowError = executorModule.TabInOtherWindowError ?? class TabInOtherWindowError extends Error {
+      constructor(stop) { super('stand-in'); this.name = 'TabInOtherWindowError'; this.stop = stop; }
+    };
+    const realChrome = global.chrome;
+    const touched = [];
+    const HOSTILE = '<img src=x onerror=alert(1)> Checkout \u2014 Shop ' + 'x'.repeat(400);
+    const tabs = { 4: { id: 4, url: 'https://here.test/', windowId: 1, active: true, title: 'Here' }, 5: { id: 5, url: 'https://shop.test/cart', windowId: 2, active: true, title: HOSTILE } };
+    global.chrome = {
+      runtime: { getManifest: () => ({ content_scripts: [{ js: ['content.js'] }] }) },
+      tabs: {
+        get: async (id) => { if (!tabs[id]) throw new Error('No tab'); return { ...tabs[id] }; },
+        query: async () => [tabs[4]],
+        sendMessage: async (...a) => { touched.push(['tabs.sendMessage', a[0], a[1]?.type]); return { ok: true, data: { x: 1, y: 1, tag: 'button', role: 'button', name: 'Buy', sensitive: false } }; },
+        update: async (...a) => { touched.push(['tabs.update', a[0], a[1]]); return {}; },
+        create: async (...a) => { touched.push(['tabs.create', a[0]]); return { id: 8 }; },
+        captureVisibleTab: async (...a) => { touched.push(['tabs.captureVisibleTab', a[0]]); return 'data:image/png;base64,'; },
+      },
+      windows: { update: async (...a) => { touched.push(['windows.update', a[0]]); return {}; } },
+      scripting: { executeScript: async (...a) => { touched.push(['scripting.executeScript', a[0]?.target]); return [{ result: null }]; } },
+      debugger: {
+        onDetach: { addListener() {} },
+        attach: async (...a) => { touched.push(['debugger.attach', a[0]]); },
+        sendCommand: async (...a) => { touched.push(['debugger.sendCommand', a[1]]); },
+        detach: async () => {},
+      },
+    };
+    const ex = new BrowserExecutor(1);
+    ex.lockTab(5); // the controlled tab was dragged into window 2
+    const tries = [
+      { name: 'click', input: { ref: 'ref_1' } },
+      { name: 'click', input: { x: 10, y: 10 } },
+      { name: 'type', input: { ref: 'ref_1', text: 'card number' } },
+      { name: 'press_key', input: { key: 'Enter' } },
+      { name: 'navigate', input: { url: 'https://evil.test/' } },
+      { name: 'read_page', input: {} },
+      { name: 'get_page_text', input: {} },
+      { name: 'find', input: { query: 'buy' } },
+      { name: 'scroll', input: { direction: 'down' } },
+      { name: 'screenshot', input: {} },
+    ];
+    for (const t of tries) {
+      let stopped = null;
+      try {
+        const plan = await ex.prepare({ type: 'tool_call', id: 'c', name: t.name, input: t.input });
+        await plan.run();
+      } catch (e) { stopped = e; }
+      assert.ok(stopped instanceof TabInOtherWindowError, `${t.name} on a moved tab was not stopped: ${stopped && stopped.message}`);
+      assert.equal(stopped.stop.tabId, 5);
+      assert.deepEqual(Object.keys(stopped.stop).sort(), ['tabId', 'title'], 'the stop carries only what the card shows');
+      assert.ok(stopped.stop.title.startsWith('<img src=x onerror=alert(1)> Checkout'), 'the card gets the raw title, to show as text');
+      assert.ok(stopped.stop.title.length <= 300, 'the title is capped');
+      assert.ok(!stopped.message.includes('<img'), 'the error text the model sees carries no page text');
+    }
+    assert.deepEqual(touched, [], `a moved tab was touched: ${JSON.stringify(touched)}`);
+    checks++; console.log('PASS [TAB-WINDOW-MOVED] a controlled tab moved to another window stops every tool with the tab title, touching nothing');
+
+    // A closed tab keeps the old message: there is no tab to name.
+    ex.lockTab(77);
+    await assert.rejects(async () => (await ex.prepare({ type: 'tool_call', id: 'c', name: 'click', input: { ref: 'ref_1' } })).run(), (e) => !(e instanceof TabInOtherWindowError) && /closed or moved/.test(e.message));
+    checks++; console.log('PASS [TAB-WINDOW-CLOSED] a closed controlled tab still gives the plain closed-tab error');
+
+    ex.lockTab(4);
+    let refused = null;
+    try { await ex.prepare({ type: 'tool_call', id: 'c', name: 'switch_tab', input: { tab_id: 5 } }); } catch (e) { refused = e; }
+    assert.ok(refused instanceof TabInOtherWindowError, 'switch_tab to another window is refused while planning');
+    assert.equal(refused.stop.tabId, 5);
+    // Moved between planning and running: refused again at run time.
+    tabs[6] = { id: 6, url: 'https://late.test/', windowId: 1, active: false, title: 'Late mover' };
+    const plan = await ex.prepare({ type: 'tool_call', id: 'c', name: 'switch_tab', input: { tab_id: 6 } });
+    tabs[6].windowId = 2;
+    await assert.rejects(() => plan.run(), (e) => e instanceof TabInOtherWindowError && e.stop.title === 'Late mover');
+    assert.deepEqual(touched, [], `switch_tab touched another window: ${JSON.stringify(touched)}`);
+    checks++; console.log('PASS [TAB-WINDOW-SWITCH] switch_tab never activates a tab in another window, at planning or at run time');
+    global.chrome = realChrome;
+
+    // The loop: the card is shown (even with auto-approve on), it has nothing to allow, and the
+    // run ends with no execution and no further model call.
+    const stopError = () => new TabInOtherWindowError({ tabId: 5, title: HOSTILE.slice(0, 300) });
+    for (const where of ['prepare', 'run']) {
+      const evs = [];
+      let modelCalls = 0, ran = 0, asked = 0, cards = 0;
+      await runTurn({
+        ...options, autoApprove: true, history: [user('switch to the shop tab and buy')], tools: [{ name: 'switch_tab' }, { name: 'click' }],
+        provider: { async *stream() {
+          modelCalls++;
+          yield { type: 'tool_call', call: { type: 'tool_call', id: 's1', name: 'switch_tab', input: { tab_id: 5 } } };
+          yield { type: 'tool_call', call: { type: 'tool_call', id: 's2', name: 'click', input: { ref: 'ref_9' } } };
+          yield { type: 'done', stopReason: 'tool_use' };
+        } },
+        executor: {
+          prepare: async (c) => {
+            if (where === 'prepare' && c.name === 'switch_tab') throw stopError();
+            return { label: c.name, sensitive: false, run: async () => { if (c.name === 'switch_tab') throw stopError(); ran++; return { content: [{ type: 'text', text: 'ok' }], isError: false }; } };
+          },
+          release: async () => {},
+        },
+        requestApproval: async () => { asked++; return true; },
+        // Even a card that "approves" cannot make the step run.
+        stopForOtherWindow: async (c, stop) => { cards++; assert.equal(c.name, 'switch_tab'); assert.equal(stop.tabId, 5); return true; },
+        onEvent: (e) => evs.push(e),
+      });
+      const card = evs.find((e) => e.type === 'other_window');
+      assert.ok(card, `no card for a ${where} stop`);
+      assert.equal(card.stop.title, HOSTILE.slice(0, 300));
+      assert.ok(!('url' in card.stop), 'the other_window event carries no url');
+      assert.deepEqual(Object.keys(card.stop).sort(), ['tabId', 'title']);
+      assert.equal(evs.find((e) => e.type === 'summary').reason, 'other_window', 'the run status names the other-window stop');
+      assert.ok(evs.findIndex((e) => e.type === 'tool_start' && e.call.id === 's1') < evs.indexOf(card), 'the step shows before its card');
+      assert.equal(cards, 1);
+      assert.equal(ran, 0, 'nothing ran after the stop');
+      assert.equal(asked, 0);
+      assert.equal(modelCalls, 1, 'the model is not asked to continue');
+      const r = evs.find((e) => e.type === 'tool_result' && e.call.id === 's1');
+      assert.equal(r.declined, true);
+      assert.match(r.result.content[0].text, /another window/);
+      assert.equal(evs.at(-1).type, 'done');
+      assert.equal(evs.at(-1).reason, 'other_window');
+    }
+    checks++; console.log('PASS [TAB-WINDOW-LOOP] the loop shows the card even with auto-approve, runs nothing after it, and ends the run');
+
+    // Stop/Escape while the card is up closes it like Cancel: the run ends as an other-window
+    // stop, not a generic "Stopped." Without a card handler it still ends.
+    const ctl = new AbortController();
+    const evs = [];
+    let modelCalls = 0;
+    await runTurn({
+      ...options, signal: ctl.signal, history: [user('go')], tools: [{ name: 'switch_tab' }],
+      provider: { async *stream() { modelCalls++; yield { type: 'tool_call', call: { type: 'tool_call', id: 's1', name: 'switch_tab', input: { tab_id: 5 } } }; yield { type: 'done', stopReason: 'tool_use' }; } },
+      executor: { prepare: async () => { throw stopError(); }, release: async () => {} },
+      stopForOtherWindow: () => new Promise((resolve) => { ctl.signal.addEventListener('abort', resolve); setTimeout(() => ctl.abort(), 10); }),
+      onEvent: (e) => evs.push(e),
+    });
+    assert.equal(modelCalls, 1);
+    assert.equal(evs.at(-1).reason, 'other_window');
+    assert.equal(evs.find((e) => e.type === 'summary').reason, 'other_window');
+    const bare = [];
+    await runTurn({
+      ...options, history: [user('go')], tools: [{ name: 'switch_tab' }],
+      provider: { async *stream() { yield { type: 'tool_call', call: { type: 'tool_call', id: 's1', name: 'switch_tab', input: { tab_id: 5 } } }; yield { type: 'done', stopReason: 'tool_use' }; } },
+      executor: { prepare: async () => { throw stopError(); }, release: async () => {} },
+      onEvent: (e) => bare.push(e),
+    });
+    assert.equal(bare.at(-1).reason, 'other_window');
+    // Continue's page refresh on a moved tab stops the same way, before any model call.
+    const refresh = [];
+    let refreshModel = 0, refreshCards = 0;
+    await runTurn({
+      ...options, refreshPage: true, history: [user('continue')], tools: [{ name: 'read_page' }],
+      provider: { async *stream() { refreshModel++; yield { type: 'done', stopReason: 'end_turn' }; } },
+      executor: { prepare: async () => ({ label: 'Read page', sensitive: false, run: async () => { throw stopError(); } }), release: async () => {} },
+      stopForOtherWindow: async () => { refreshCards++; },
+      onEvent: (e) => refresh.push(e),
+    });
+    assert.equal(refreshCards, 1);
+    assert.equal(refreshModel, 0);
+    assert.equal(refresh.at(-1).reason, 'other_window');
+    assert.equal(refresh.find((e) => e.type === 'summary').reason, 'other_window');
+    checks++; console.log('PASS [TAB-WINDOW-DISMISS] Stop/Escape on the card ends the run as an other-window stop; Continue on a moved tab stops before the model');
+  }
+  {
+    // The card renders the page title as React text, Cancel only, and has no allow path.
+    const chat = fs.readFileSync(require('node:path').join(__dirname, '../src/sidepanel/Chat.tsx'), 'utf8');
+    const card = chat.slice(chat.indexOf('function OtherWindowCard'), chat.indexOf('function ApprovalCard'));
+    assert.ok(card.length > 100, 'OtherWindowCard exists');
+    assert.ok(!/dangerouslySetInnerHTML|innerHTML/.test(card), 'no HTML rendering of the title');
+    assert.equal((card.match(/<button/g) || []).length, 1, 'exactly one button: Cancel');
+    assert.match(card, /\{t\.deny\}/);
+    assert.match(card, /<Globe size=\{16\} className="shrink-0 text-zinc-400"/, 'the tab chip uses the globe icon at 16px, muted');
+    assert.match(card, /<Info size=\{15\}/, 'the card uses the neutral info icon');
+    assert.ok(!/amber|ShieldAlert|AppWindow/.test(card), 'not amber, not the shield');
+    assert.match(card, /\{t\.otherWindowBody\}/);
+    assert.equal((card.match(/\{name\}/g) || []).length, 1, 'the tab title is rendered once, in the chip');
+    assert.ok(!/otherWindowBody\(/.test(card), 'the body takes no title');
+    assert.match(chat, /s\.reason === "other_window" \? t\.otherWindowStopped/, 'the run status shows the other-window note, not Needs your input');
+    assert.match(card, /\{t\.otherWindowHint\}/);
+    const strings = fs.readFileSync(require('node:path').join(__dirname, '../src/sidepanel/strings.ts'), 'utf8');
+    const en = strings.slice(strings.indexOf('const en = {'), strings.indexOf('type Strings'));
+    assert.ok(en.includes('otherWindowTitle: "That tab is in another window",'));
+    assert.ok(en.includes('otherWindowBody: "Enki only acts in the window you asked from.",'));
+    assert.ok(strings.includes('otherWindowBody: "O Enki só age na janela em que você fez o pedido.",'));
+    assert.ok(strings.includes('otherWindowBody: "Enki solo actúa en la ventana desde la que lo pediste.",'));
+    assert.ok(en.includes('otherWindowStopped: "Stopped: the tab is in another window.",'));
+    assert.ok(en.includes('otherWindowHint: "To use it, switch to that window and ask again there.",'));
+    assert.ok(en.includes('deny: "Cancel",'));
+    assert.ok(!/favIcon|<img/.test(card), 'the chip never loads the page favicon');
+    assert.ok(!/onDecide\(true\)|resolve\(true\)|t\.allow/.test(card));
+    assert.match(chat, /approval\.windowStop\s*\?\s*<OtherWindowCard[^>]*onCancel=\{\(\) => approval\.resolve\(false\)\}/);
+    checks++; console.log('PASS [TAB-WINDOW-CARD] the stop card shows the title as text with a single Cancel button');
+  }
+
   check('no source file carries text saved in the wrong encoding', () => {
     // UTF-8 read as Windows-1252 turns ▍ into "â–" and é into "Ã©"; the panel once showed that.
     const path = require('node:path');
