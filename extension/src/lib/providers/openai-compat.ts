@@ -1,4 +1,5 @@
 import { log } from "../debug";
+import { assertEndpointAllowed } from "./endpoint-guard";
 import type {
   ChatProvider,
   ChatRequest,
@@ -17,7 +18,12 @@ import type {
 export class OpenAICompatProvider implements ChatProvider {
   readonly id = "openai-compatible";
 
-  constructor(private opts: { apiKey: string; baseUrl: string; idleTimeoutMs?: number }) {}
+  constructor(private opts: { apiKey: string; baseUrl: string; idleTimeoutMs?: number; localHttpOrigins?: readonly string[] }) {}
+
+  /** The endpoint policy, checked before every request: a refused endpoint never sees the key. */
+  private guard(url: string): void {
+    assertEndpointAllowed(url, this.opts.apiKey, this.opts.localHttpOrigins);
+  }
 
   private headers(): Record<string, string> {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -34,7 +40,13 @@ export class OpenAICompatProvider implements ChatProvider {
   }
 
   async listModels(): Promise<string[]> {
-    const res = await fetch(this.url("/models"), { headers: this.headers(), signal: AbortSignal.timeout(15000) });
+    this.guard(this.url("/models"));
+    const res = await fetch(this.url("/models"), {
+      headers: this.headers(),
+      signal: AbortSignal.timeout(15000),
+      // A redirect would skip the endpoint check (it could point at a hostname or public IP over HTTP).
+      redirect: "error",
+    });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const body = (await res.json()) as { data?: Array<{ id: string }> };
     return (body.data ?? []).map((m) => m.id).sort();
@@ -76,11 +88,14 @@ export class OpenAICompatProvider implements ChatProvider {
     )), idleMs);
     let res: Response;
     try {
+      this.guard(url);
       res = await fetch(url, {
         method: "POST",
         headers: this.headers(),
         body: payload,
         signal: connection.signal,
+        // fetch would follow a 307/308 with this body to wherever it points, unchecked.
+        redirect: "error",
       });
     } catch (error) {
       clearTimeout(connectionTimer);

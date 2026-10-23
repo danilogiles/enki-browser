@@ -15,6 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { checkComponents } from "./components.mjs";
+import { judgeThirdPartyCookies, waitForProfileCookieMode } from "./cookie-3p.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const linux = process.platform === "linux";
@@ -45,7 +46,27 @@ const check = (name, ok, detail = "") => {
 };
 
 // A local page for the checks that need one; the blocker and fingerprint checks run from it.
+// Under /3p/ it also serves the third-party cookie check: /3p/set sets a cookie that may go
+// cross-site (SameSite=None; Secure, allowed on localhost over http), /3p/probe records whether
+// it came back, /3p/embed frames the probe from localhost on a 127.0.0.1 page (another site).
+const cookieProbes = [];
 const server = http.createServer((req, res) => {
+  const url = new URL(req.url, "http://x");
+  if (url.pathname === "/3p/set") {
+    res.setHeader("set-cookie", "enki_3p=1; SameSite=None; Secure; Path=/; Max-Age=600");
+    res.end("set");
+    return;
+  }
+  if (url.pathname === "/3p/probe") {
+    cookieProbes.push({ as: url.searchParams.get("as"), sent: /(^|;\s*)enki_3p=1/.test(req.headers.cookie ?? "") });
+    res.end("probe");
+    return;
+  }
+  if (url.pathname === "/3p/embed") {
+    res.setHeader("content-type", "text/html");
+    res.end(`<!doctype html><iframe src="http://localhost:${server.address().port}/3p/probe?as=third-party"></iframe>`);
+    return;
+  }
   res.setHeader("content-type", "text/html");
   res.end(`<!doctype html><title>Enki Browser check</title><canvas id=c width=200 height=50></canvas>
 <script>
@@ -224,35 +245,28 @@ try {
   const second = await page.evaluate(() => window.canvasHash);
   check("canvas readings carry per-load noise", first !== second, `${first} vs ${second}`);
 
-  // ---- third-party cookies: what the settings page says is in effect
-  // The settings page renders its radio group asynchronously; on the slower macOS x64 runner a
-  // fixed 1.5 s wait once read the page before any option was checked. Poll until one is.
+  // ---- third-party cookies: the pref Chromium holds, and a cookie that has to stay home.
+  // Reading the settings page's radio labels could not tell Enki's default from a machine policy
+  // overriding it (see test/cookie-3p.mjs), so read the pref itself, fail by name when a policy
+  // decides it, and try the real thing.
   await page.goto("chrome://settings/cookies");
-  let cookieState = null;
-  for (let i = 0; i < 40 && !cookieState; i++) {
-    await page.waitForTimeout(250);
-    cookieState = await page.evaluate(() => {
-      const find = (n) => {
-        for (const el of [n, ...(n.shadowRoot ? [n.shadowRoot] : []), ...n.querySelectorAll?.("*") ?? []]) {
-          if (el !== n && el.shadowRoot) { const r = find(el.shadowRoot); if (r) return r; }
-          if (el.getAttribute?.("aria-checked") === "true" && /third-party/i.test(el.textContent || el.getAttribute("label") || "")) return el.getAttribute("label") || el.textContent;
-          if (el.checked === true && /block/i.test(el.getAttribute?.("label") || "")) return el.getAttribute("label");
-        }
-        return null;
-      };
-      return find(document.body);
-    });
+  const cookiePref = await until(() => page.evaluate(() => new Promise((resolve) =>
+    chrome.settingsPrivate.getPref("profile.cookie_controls_mode", (p) => resolve(p ? { value: p.value, enforcement: p.enforcement, controlledBy: p.controlledBy } : null)))), 10000);
+  const lh = `http://localhost:${server.address().port}`;
+  await page.goto(`${lh}/3p/set`);
+  await page.goto(`${lh}/3p/probe?as=first-party`);
+  await page.goto(`${local}3p/embed`);
+  await until(async () => cookieProbes.some((p) => p.as === "third-party"), 10000);
+  const probe = (as) => cookieProbes.find((p) => p.as === as);
+  const cookieNet = probe("first-party") && probe("third-party") ? { firstParty: probe("first-party").sent, thirdParty: probe("third-party").sent } : null;
+  // Enki's own value, from the profile on disk; only for the message when a policy hides it.
+  // Chromium writes Preferences a few seconds after start, so wait for it.
+  let profileCookieMode = null;
+  if (cookiePref?.enforcement || cookiePref?.controlledBy) {
+    profileCookieMode = await waitForProfileCookieMode(() => JSON.parse(readFileSync(path.join(userData, "Default", "Preferences"), "utf8")).profile?.cookie_controls_mode, 20000);
   }
-  if (!cookieState) {
-    // Say what the page did show, so a real regression is distinguishable from a slow render.
-    const options = await page.evaluate(() => {
-      const all = (n, acc = []) => { for (const el of n.querySelectorAll("*")) { acc.push(el); if (el.shadowRoot) all(el.shadowRoot, acc); } return acc; };
-      return all(document).filter((el) => el.hasAttribute("aria-checked") || "checked" in el && /radio|toggle|checkbox/i.test(el.tagName + (el.getAttribute("role") ?? "")))
-        .map((el) => `${el.tagName.toLowerCase()} "${(el.getAttribute("label") || el.textContent || "").trim().slice(0, 60)}" checked=${el.checked ?? el.getAttribute("aria-checked")}`);
-    }).catch(() => []);
-    console.log(`  cookie settings options (${options.length}):\n    ${options.join("\n    ") || "none rendered"}`);
-  }
-  check("third-party cookies are blocked", /block/i.test(cookieState ?? ""), cookieState ?? "no checked option found");
+  const cookieVerdict = judgeThirdPartyCookies({ pref: cookiePref, profileValue: profileCookieMode, network: cookieNet });
+  check("third-party cookies are blocked", cookieVerdict.ok, cookieVerdict.detail);
 
   // ---- closing the last window must end the browser, or a staged update never installs.
   // Not on macOS: Chromium there has no such setting (a Mac app runs until it is quit, ⌘Q, like

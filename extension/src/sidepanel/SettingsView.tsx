@@ -11,9 +11,17 @@ import {
   Plug,
   RefreshCw,
   Sliders,
+  AlertTriangle,
+  Ban,
+  Info,
+  KeyRound,
+  Laptop,
+  LockOpen,
 } from "lucide-react";
 import { maskKey, PRESETS, presetOf, THEMES, usesTextTools, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
+import { addException, evaluateEndpoint, removeException, type EndpointVerdict } from "../lib/providers/endpoint-policy";
+import { ENDPOINT_STRINGS as E, revokeLabel } from "../lib/providers/endpoint-strings";
 import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
@@ -26,11 +34,13 @@ type Props = {
   settings: Settings;
   onSave: (s: Settings) => Promise<void>;
   onClose: () => void;
+  /** Revoke deletes the saved HTTP exception for that origin right away (not on Save). */
+  onRevokeLocalHttp?: (origin: string) => Promise<void>;
 };
 
 type TabId = "model" | "appearance" | "behavior" | "connections";
 
-export function SettingsView({ settings, onSave, onClose }: Props) {
+export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("model");
   const [draft, setDraft] = useState<Settings>(settings);
   const [showKey, setShowKey] = useState(false);
@@ -117,7 +127,15 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
     }
   };
 
-  const canSave = !!draft.model.trim() && (!!draft.apiKey.trim() || !!preset.keyOptional) && !!draft.baseUrl.trim();
+  // The same policy the request layer enforces (providers/endpoint-policy.ts).
+  const endpoint = evaluateEndpoint(draft.baseUrl, { hasKey: !!draft.apiKey.trim(), exceptions: draft.localHttpOrigins });
+  const canSave = !!draft.model.trim() && (!!draft.apiKey.trim() || !!preset.keyOptional) && !!draft.baseUrl.trim() && endpoint.allowed;
+  const setLocalHttp = (on: boolean) => setDraft((d) => ({ ...d,
+    localHttpOrigins: on ? addException(d.localHttpOrigins, d.baseUrl) : removeException(d.localHttpOrigins, d.baseUrl) }));
+  const revoke = async (origin: string) => {
+    setDraft((d) => ({ ...d, localHttpOrigins: removeException(d.localHttpOrigins, origin) }));
+    await onRevokeLocalHttp?.(origin);
+  };
 
   /** Themes preview live, so leaving without saving must put the saved theme back. */
   const close = () => {
@@ -247,10 +265,12 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                   onChange={(e) => set("baseUrl", e.target.value)}
                   placeholder="https://host/v1"
                   spellCheck={false}
+                  aria-label="Base URL"
                   className={inputCls}
                 />
               </>
             )}
+            <EndpointPolicy verdict={endpoint} onToggle={setLocalHttp} onRevoke={(o) => { void revoke(o); }} />
 
             <label className="mt-3 block text-xs text-zinc-400">Model</label>
             {!!preset.recommended?.length && (
@@ -289,7 +309,7 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
                   <option key={m} value={m} />
                 ))}
               </datalist>
-              <button type="button" onClick={loadModels} disabled={loadingModels} className={iconBtn} title="Test connection and list models">
+              <button type="button" onClick={loadModels} disabled={loadingModels || !endpoint.allowed} className={iconBtn} title="Test connection and list models">
                 {loadingModels ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
               </button>
             </div>
@@ -500,6 +520,74 @@ export function SettingsView({ settings, onSave, onClose }: Props) {
       </div>
     </div>
   );
+}
+
+/**
+ * The model address's HTTP state (Ink's 05a–05e). Only shown for plain HTTP; HTTPS shows nothing.
+ * Amber is a state the user chose (HTTP allowed); the soft error tone is a refusal Enki makes.
+ */
+export function EndpointPolicy({ verdict, onToggle, onRevoke }: {
+  verdict: EndpointVerdict;
+  onToggle: (on: boolean) => void;
+  onRevoke: (origin: string) => void;
+}) {
+  const scope = <p className="flex items-start gap-1.5 text-xs text-zinc-500"><Info size={13} className="mt-0.5 shrink-0" />{E.scope}</p>;
+  const err = (icon: ReactNode, title: string, body: string, extra?: ReactNode) => (
+    <div role="alert" data-endpoint={verdict.state} className="flex items-start gap-2 rounded-md border border-[#e8928d]/70 px-2.5 py-2 text-xs text-[#f2b8b5]">
+      <span className="mt-0.5 shrink-0">{icon}</span>
+      <span><b className="block text-[13px]">{title}</b>{body}{extra}</span>
+    </div>
+  );
+  switch (verdict.state) {
+    case "loopback":
+      return (
+        <div data-endpoint="loopback" className="space-y-1.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-enki-500/40 bg-enki-500/10 px-2 py-0.5 text-xs text-enki-400"><Laptop size={13} />{E.loopChip}</span>
+          <p className="flex items-start gap-1.5 text-xs text-zinc-400"><Check size={13} className="mt-0.5 shrink-0 text-enki-400" />{E.loopNoteDesktop}</p>
+          {scope}
+        </div>
+      );
+    case "private-off":
+    case "private-on": {
+      const on = verdict.state === "private-on";
+      return (
+        <div data-endpoint={verdict.state} className="space-y-2">
+          <div className={`rounded-md border px-2.5 py-2 ${on ? "border-amber-400/45 bg-[#2e2a1c]" : "border-ink-700 bg-ink-900"}`}>
+            <div className="flex items-start justify-between gap-3">
+              <span>
+                <span id="local-http-label" className="block text-xs text-zinc-100">{E.toggle}</span>
+                <span className="block font-mono text-[11px] text-zinc-400">{verdict.origin}</span>
+              </span>
+              <button type="button" role="switch" aria-checked={on} aria-labelledby="local-http-label" onClick={() => onToggle(!on)}
+                className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition ${on ? "bg-amber-400" : "bg-ink-700"}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${on ? "left-4.5" : "left-0.5"}`} />
+              </button>
+            </div>
+            {on
+              ? <p role="note" className="mt-2 flex items-start gap-1.5 text-xs text-[#cfae43]"><AlertTriangle size={13} className="mt-0.5 shrink-0" />{E.warn}</p>
+              : <p className="mt-2 flex items-start gap-1.5 text-xs text-zinc-400"><Ban size={13} className="mt-0.5 shrink-0" />{E.offNote}</p>}
+          </div>
+          {on && (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/45 bg-[#2e2a1c] px-2 py-0.5 text-xs text-amber-200"><LockOpen size={13} />{E.httpChip}</span>
+              <span className="font-mono text-[11px] text-zinc-400">{verdict.hostPort}</span>
+              <button type="button" aria-label={revokeLabel(verdict.hostPort)} onClick={() => onRevoke(verdict.origin)} className="ml-auto rounded px-2 py-0.5 text-xs text-amber-200 underline hover:bg-ink-800">{E.revoke}</button>
+            </div>
+          )}
+          {scope}
+        </div>
+      );
+    }
+    case "hostname":
+      return (<div className="space-y-2">{err(<Ban size={15} />, E.refusedTitle, E.refusedBody,
+        <><span className="mt-1.5 block">{E.refusedHint}</span><code className="mt-1.5 block font-mono">{E.refusedExample}</code></>)}{scope}</div>);
+    case "public":
+      return (<div className="space-y-2">{err(<Ban size={15} />, E.publicTitle, E.publicBody)}{scope}</div>);
+    case "key-over-http":
+      return err(<KeyRound size={15} />, E.keyTitle, E.keyBody, <span className="mt-1.5 block">{E.keyHint}</span>);
+    default:
+      return null;
+  }
 }
 
 function TabButton({

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown, MoreHorizontal, Trash2 } from "lucide-react";
+import { Check, ChevronDown, LockOpen, MoreHorizontal, Trash2 } from "lucide-react";
 import logo from "../assets/logo.svg";
 import { presetOf, type Settings } from "../lib/settings";
 import { isRestrictedUrl } from "../lib/tools/executor";
 import type { ChatEntry } from "../lib/history";
 import type { TabInfo } from "./types";
 import { t } from "./strings";
+import { evaluateEndpoint } from "../lib/providers/endpoint-policy";
+import { ENDPOINT_STRINGS as E, revokeLabel } from "../lib/providers/endpoint-strings";
 
 /**
  * The panel's only chrome, kept as quiet as Comet's: Enki and the model on the left (a click
@@ -31,6 +33,8 @@ type Props = {
   selectedTab: number | null;
   onSelectTab: (id: number | null) => void;
   usage: { input: number; output: number };
+  /** Revoke from the egress chip: deletes the saved HTTP exception for that origin. */
+  onRevokeLocalHttp?: (origin: string) => void;
 };
 
 function usePopover() {
@@ -57,6 +61,9 @@ export function Header(p: Props) {
     ...(preset.recommended ?? []).map((r) => r.id),
   ].filter(Boolean))].filter((m) => m.toLowerCase().includes(search.toLowerCase()));
   const short = (m: string) => m.split("/").pop() ?? m;
+  // The egress chip: the model is reached over plain HTTP on the local network, by the user's choice.
+  const egress = evaluateEndpoint(p.settings.baseUrl || preset.baseUrl,
+    { hasKey: !!p.settings.apiKey, exceptions: p.settings.localHttpOrigins });
 
   return (
     <header className="flex items-center gap-2 px-3 py-2.5">
@@ -105,6 +112,16 @@ export function Header(p: Props) {
           </Popover>
         )}
       </div>
+      {egress.state === "private-on" && (
+        <span data-egress="local-http" title={`${E.warn} ${egress.origin}`}
+          className="flex shrink-0 items-center gap-1 rounded-full border border-amber-400/45 bg-[#2e2a1c] py-px pl-1.5 pr-0.5 text-[10px] text-amber-200">
+          <LockOpen size={10} />{E.httpChip}
+          {p.onRevokeLocalHttp && (
+            <button type="button" aria-label={revokeLabel(egress.hostPort)} onClick={() => p.onRevokeLocalHttp?.(egress.origin)}
+              className="rounded-full px-1 underline hover:bg-ink-800">{E.revoke}</button>
+          )}
+        </span>
+      )}
 
       <div ref={more.ref} className="relative ml-auto">
         <button

@@ -7,7 +7,7 @@ import type {
   ToolDefinition,
   ToolResultPart,
 } from "../types";
-import type { BrowserExecutor, ConfirmPayload, ToolOutput } from "../tools/executor";
+import type { BrowserExecutor, ConfirmPayload, OtherWindowStop, ToolOutput } from "../tools/executor";
 import { log } from "../debug";
 import { budgetHistory, trimToolResults, compactHistory, estimateTokens, historySize } from "./context";
 import { CLAIMS_NO_TOOLS, extractTextToolCalls } from "./toolcall-text";
@@ -28,9 +28,11 @@ export type AgentEvent =
   | { type: "notice"; message: string }
   | { type: "tool_start"; call: ToolCallPart; label: string; sensitive: boolean }
   | { type: "approval_request"; call: ToolCallPart; label: string; confirm?: ConfirmPayload }
+  /** The step targets a tab in another window: the card shows it with Cancel only, then the run ends. */
+  | { type: "other_window"; call: ToolCallPart; stop: OtherWindowStop }
   | { type: "tool_result"; call: ToolCallPart; result: ToolResultPart; declined?: boolean }
   | { type: "usage"; inputTokens: number; outputTokens: number }
-  | { type: "done"; reason: StopReason | "max_steps" | "aborted" | "empty" | "repeated_failure" }
+  | { type: "done"; reason: StopReason | "max_steps" | "aborted" | "empty" | "repeated_failure" | "other_window" }
   | { type: "error"; message: string };
 
 export type RunOptions = {
@@ -45,6 +47,12 @@ export type RunOptions = {
   maxSteps: number;
   autoApprove: boolean;
   requestApproval: (label: string, call: ToolCallPart, confirm?: ConfirmPayload) => Promise<boolean>;
+  /**
+   * Shows the "tab in another window" card and resolves when it is cancelled or dismissed (Stop,
+   * Escape, New chat). There is nothing to allow: whatever it resolves with, the step never runs
+   * and the turn ends. Without it the turn still ends, with no card.
+   */
+  stopForOtherWindow?: (call: ToolCallPart, stop: OtherWindowStop) => Promise<unknown>;
   onEvent: (e: AgentEvent) => void;
   signal: AbortSignal;
   contextBudgetTokens?: number;
@@ -85,6 +93,19 @@ export async function runTurn(o: RunOptions): Promise<void> {
     o.onEvent(e);
   };
   const failures = new Map<string, number>();
+  // A step aimed at a tab in another window: show the card (Cancel only) and wait for it to be
+  // cancelled or dismissed. Nothing is run either way; the caller ends the turn.
+  // Returns false only when the run was already stopped before the card could show.
+  const showOtherWindow = async (call: ToolCallPart, stop: OtherWindowStop): Promise<boolean> => {
+    log.warn("agent", "Stopped: the target tab is in another window", { tool: call.name });
+    if (o.signal.aborted) return false;
+    if (!o.stopForOtherWindow) return true;
+    onEvent({ type: "other_window", call, stop: { tabId: stop.tabId, title: stop.title } });
+    onEvent({ type: "status", message: "Stopped: tab in another window", step: 0 });
+    // Cancel, Stop and Escape all just close the card; the run then ends as an other-window stop.
+    await o.stopForOtherWindow(call, stop);
+    return true;
+  };
   let nudged = false;
   let claimCorrected = false;
   let toolCallsThisTurn = 0;
@@ -97,11 +118,24 @@ export async function runTurn(o: RunOptions): Promise<void> {
       o.history.push({ role: "assistant", parts: [call] });
       onEvent({ type: "tool_start", call, label: plan.label, sensitive: false });
       let out: ToolOutput;
+      let moved: OtherWindowStop | null = null;
+      let carded = false;
       try { out = await plan.run(); }
-      catch (e) { out = { content: [{ type: "text", text: errorText(e, o.executor.currentNonce?.()) }], isError: true }; }
+      catch (e) {
+        moved = otherWindowOf(e);
+        if (moved) {
+          carded = await showOtherWindow(call, moved);
+          out = { content: [{ type: "text", text: OTHER_WINDOW_TEXT }], isError: true };
+        } else out = { content: [{ type: "text", text: errorText(e, o.executor.currentNonce?.()) }], isError: true };
+      }
       const r = result(call, out);
       o.history.push({ role: "tool", parts: [r] });
-      o.onEvent({ type: "tool_result", call, result: r });
+      o.onEvent({ type: "tool_result", call, result: r, declined: moved ? true : undefined });
+      if (moved) {
+        if (!carded) return void onEvent({ type: "done", reason: "aborted" });
+        needsInput = true;
+        return void onEvent({ type: "done", reason: "other_window" });
+      }
       // A failed refresh used to end the turn here, before the model was ever asked. On a
       // browser-internal page (a new tab, settings) that is every attempt: Continue, Read page
       // again and the first message after a restore all failed, and the only way out was
@@ -281,10 +315,12 @@ export async function runTurn(o: RunOptions): Promise<void> {
       const results: ToolResultPart[] = [];
       let declined = false;
       let repeatedFailure = false;
+      let otherWindow = false;
+      let otherWindowCarded = false;
       try {
         for (const call of calls) {
           if (o.signal.aborted) throw new DOMException("Aborted", "AbortError");
-          if (declined || repeatedFailure) {
+          if (declined || repeatedFailure || otherWindow) {
             results.push(result(call, { content: [{ type: "text", text: "Skipped because this task has stopped." }], isError: true }));
             continue;
           }
@@ -299,6 +335,16 @@ export async function runTurn(o: RunOptions): Promise<void> {
             if (!o.tools.some((t) => t.name === call.name)) throw new Error(`Tool ${call.name} is unavailable in ${o.mode} mode.`);
             plan = await o.executor.prepare(call);
           } catch (e) {
+            const moved = otherWindowOf(e);
+            if (moved) {
+              onEvent({ type: "tool_start", call, label: call.name, sensitive: false });
+              otherWindowCarded = await showOtherWindow(call, moved);
+              otherWindow = true;
+              const r = result(call, { content: [{ type: "text", text: OTHER_WINDOW_TEXT }], isError: true });
+              results.push(r);
+              onEvent({ type: "tool_result", call, result: r, declined: true });
+              continue;
+            }
             recordFailure();
             const r = result(call, { content: [{ type: "text", text: errorText(e, o.executor.currentNonce?.()) }], isError: true });
             results.push(r);
@@ -341,6 +387,15 @@ export async function runTurn(o: RunOptions): Promise<void> {
             out = await plan.run();
           } catch (e) {
             if (o.signal.aborted) throw e;
+            const moved = otherWindowOf(e);
+            if (moved) {
+              otherWindowCarded = await showOtherWindow(call, moved);
+              otherWindow = true;
+              const r = result(call, { content: [{ type: "text", text: OTHER_WINDOW_TEXT }], isError: true });
+              results.push(r);
+              onEvent({ type: "tool_result", call, result: r, declined: true });
+              continue;
+            }
             log.error("tool", `${call.name} failed`, { error: errMsg(e) });
             out = { content: [{ type: "text", text: errorText(e, o.executor.currentNonce?.()) }], isError: true };
           }
@@ -363,6 +418,11 @@ export async function runTurn(o: RunOptions): Promise<void> {
         }
         o.history.push({ role: "tool", parts: results });
       }
+      // The card was cancelled or dismissed: the task ends here, with no further model call.
+      if (otherWindow) {
+        if (!otherWindowCarded) return void onEvent({ type: "done", reason: "aborted" });
+        return void onEvent({ type: "done", reason: "other_window" });
+      }
       if (repeatedFailure) {
         onEvent({ type: "notice", message: "The same action failed three times. Read the page again or switch models before continuing." });
         return void onEvent({ type: "done", reason: "repeated_failure" });
@@ -380,6 +440,15 @@ export async function runTurn(o: RunOptions): Promise<void> {
     await o.executor.release().catch(() => undefined);
   }
 }
+
+/** The executor's TabInOtherWindowError, recognised without importing the executor (and chrome). */
+function otherWindowOf(e: unknown): OtherWindowStop | null {
+  if (!e || typeof e !== "object" || (e as { name?: unknown }).name !== "TabInOtherWindowError") return null;
+  const stop = (e as { stop?: OtherWindowStop }).stop;
+  return stop && typeof stop === "object" ? stop : null;
+}
+
+const OTHER_WINDOW_TEXT = "Stopped: that tab is in another window. Enki only acts in the window it was opened in, and nothing was done in the other window. Do not retry; the user cancelled this task.";
 
 function result(call: ToolCallPart, out: ToolOutput): ToolResultPart {
   return { type: "tool_result", toolCallId: call.id, name: call.name, content: out.content, isError: out.isError };

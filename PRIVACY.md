@@ -32,6 +32,8 @@ included (`extension/`).
 | Global Privacy Control: the `Sec-GPC: 1` header and `navigator.globalPrivacyControl` | Every website you visit | On every request, also on sites where Shields are down | It says only that you do not want your data sold or shared, nothing about you. Turn it off in Shields' settings (*Tell sites not to sell or share my data*) |
 | Phishing and filter lists | GitLab / Cloudflare Pages (phishing list), the filter list hosts uBlock Origin Lite uses | Twice a day, and when uBlock refreshes its lists | The lists are downloaded whole; the sites you visit are never sent |
 
+Plain HTTP to the AI provider (since Enki Browser 0.8.12) is used only for an address on this computer (`localhost`, `127.x.x.x`, `[::1]`) or a local-network IP address you allow one by one in Settings → Model (*Allow HTTP for this local address*); Enki refuses host names and public addresses over HTTP and never sends your API key over HTTP outside this computer.
+
 ### Hosts Enki Browser contacts on its own
 
 The list below is the same information as the table above, as host names, so that a test can

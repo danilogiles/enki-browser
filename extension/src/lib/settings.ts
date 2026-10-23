@@ -1,5 +1,6 @@
 import type { CustomTheme } from "./theme";
 import { decrypt, encrypt, isEncrypted } from "./secrets";
+import { migrateEndpoint, removeException, sanitizeExceptions, type EndpointNotice } from "./providers/endpoint-policy";
 
 export type ProviderKind = "anthropic" | "openai-compatible";
 
@@ -259,6 +260,12 @@ export type Settings = {
    * means settings saved before Enki 0.3.6.
    */
   settingsVersion?: number;
+  /**
+   * Exact origins (scheme://host:port) of private-IP model endpoints the user allowed over plain
+   * HTTP (Enki 0.8.12, providers/endpoint-policy.ts). Nothing else can be listed: loopback needs
+   * no exception, and host names and public IPs never get one.
+   */
+  localHttpOrigins?: string[];
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -291,10 +298,13 @@ export const DEFAULT_SETTINGS: Settings = {
  * Bumped by each one-time change to stored settings, which then runs once per profile:
  *   1 (Enki 0.3.6): the per-message screenshot goes off for everyone who had it on, because the
  *     old default (on) was saved with every other setting the first time Settings were saved.
+ *   2 (Enki 0.8.12): plain-HTTP model endpoints follow the endpoint policy. A saved private-IP
+ *     HTTP endpoint with no key is carried over as an exception (CARRY_OVER_PRIVATE_HTTP); any
+ *     other non-loopback HTTP endpoint is blocked. Either way a one-time notice says so.
  * Settings carry the version they were migrated to, so a choice made afterwards, turning the
  * screenshot back on included, is never undone by a later load.
  */
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 export const SETTINGS_KEY = "enki:settings";
 const KEY = SETTINGS_KEY;
@@ -314,6 +324,7 @@ export function usesTextTools(settings: Settings): boolean {
 const SETTINGS_KEYS: ReadonlySet<string> = new Set<string>([
   ...Object.keys(DEFAULT_SETTINGS),
   "apiKeys", "customTheme", "textTools", "unfiltered", "acceptedTerms", "settingsVersion",
+  "localHttpOrigins",
 ]);
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
@@ -328,11 +339,12 @@ function storedSettings(raw: unknown): Partial<Settings> | undefined {
   const known: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw)) if (SETTINGS_KEYS.has(k)) known[k] = v;
   if ("apiKeys" in known && !isPlainObject(known.apiKeys)) delete known.apiKeys;
+  if ("localHttpOrigins" in known) known.localHttpOrigins = sanitizeExceptions(known.localHttpOrigins);
   return known as Partial<Settings>;
 }
 
 /** Stored settings with the defaults filled in and the one-time migrations applied (SETTINGS_VERSION). */
-export function migrateSettings(input: unknown): { settings: Settings; migrated: boolean } {
+export function migrateSettings(input: unknown): { settings: Settings; migrated: boolean; endpointNotice: EndpointNotice | null } {
   const raw = storedSettings(input);
   const s: Settings = { ...DEFAULT_SETTINGS, ...raw };
   // Nothing stored yet: the defaults are already current, and there is nothing to write back.
@@ -341,14 +353,23 @@ export function migrateSettings(input: unknown): { settings: Settings; migrated:
   const v = raw?.settingsVersion;
   const from = raw ? (typeof v === "number" && Number.isFinite(v) ? v : 0) : SETTINGS_VERSION;
   if (from < 1) s.attachScreenshot = false;
+  let endpointNotice: EndpointNotice | null = null;
+  if (from < 2) {
+    // Whether a key is saved for the selected provider (still encrypted here: presence is enough).
+    const keys = isPlainObject(raw?.apiKeys) ? raw.apiKeys as Record<string, unknown> : {};
+    const hasKey = !!keys[s.preset] || (!raw?.apiKeys && !!s.apiKey);
+    const m = migrateEndpoint(s.baseUrl || presetOf(s.preset).baseUrl, hasKey, s.localHttpOrigins);
+    if (m.exceptions.length || s.localHttpOrigins) s.localHttpOrigins = m.exceptions;
+    endpointNotice = m.notice;
+  }
   s.settingsVersion = Math.max(from, SETTINGS_VERSION);
-  return { settings: s, migrated: from < SETTINGS_VERSION };
+  return { settings: s, migrated: from < SETTINGS_VERSION, endpointNotice };
 }
 
 /** Stored settings → what the app uses: defaults filled in, keys per provider, keys decrypted. */
-async function fromStored(input: unknown): Promise<{ settings: Settings; hadPlainKeys: boolean; migrated: boolean }> {
+async function fromStored(input: unknown): Promise<{ settings: Settings; hadPlainKeys: boolean; migrated: boolean; endpointNotice: EndpointNotice | null }> {
   const raw = storedSettings(input);
-  const { settings: s, migrated } = migrateSettings(raw);
+  const { settings: s, migrated, endpointNotice } = migrateSettings(raw);
   // 24000 was the old default, kept by everyone who never touched it: give them the new one.
   if (s.contextBudgetTokens === 24000) s.contextBudgetTokens = DEFAULT_SETTINGS.contextBudgetTokens;
   // Before per-provider keys, the one key belonged to whichever provider was selected.
@@ -362,14 +383,30 @@ async function fromStored(input: unknown): Promise<{ settings: Settings; hadPlai
   }
   s.apiKeys = keys;
   s.apiKey = keys[s.preset] ?? "";
-  return { settings: s, hadPlainKeys, migrated };
+  return { settings: s, hadPlainKeys, migrated, endpointNotice };
+}
+
+/**
+ * The one-time 0.8.12 endpoint notice, kept apart from Settings until the panel shows it and the
+ * user dismisses it. UI only: it never enters a conversation, the model's context or a request.
+ */
+export const ENDPOINT_NOTICE_KEY = "enki:endpoint-notice";
+
+export async function takeEndpointNotice(): Promise<EndpointNotice | null> {
+  const v = (await chrome.storage.local.get(ENDPOINT_NOTICE_KEY))[ENDPOINT_NOTICE_KEY] as EndpointNotice | undefined;
+  return v && typeof v.kind === "string" && typeof v.origin === "string" ? v : null;
+}
+
+export async function dismissEndpointNotice(): Promise<void> {
+  await chrome.storage.local.remove(ENDPOINT_NOTICE_KEY);
 }
 
 export async function loadSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(KEY);
-  const { settings, hadPlainKeys, migrated } = await fromStored(stored[KEY] as Partial<Settings> | undefined);
+  const { settings, hadPlainKeys, migrated, endpointNotice } = await fromStored(stored[KEY] as Partial<Settings> | undefined);
   // Keys saved before encryption existed are encrypted the first time they are read, and a
   // one-time migration is written back with its version so it never runs again.
+  if (endpointNotice) await chrome.storage.local.set({ [ENDPOINT_NOTICE_KEY]: endpointNotice });
   if (hadPlainKeys || migrated) await saveSettings(settings);
   return settings;
 }
@@ -405,6 +442,19 @@ export async function saveSettings(settings: Settings): Promise<void> {
       autoApprove: typeof previous === "boolean" ? previous : false,
     };
     await writeSettingsUnlocked(safe);
+  });
+}
+
+/**
+ * Revoke (Settings and the panel's "Local · HTTP" chip): deletes the saved HTTP exception for
+ * that exact origin, at once, without waiting for Save. Re-reads storage inside the write lock.
+ */
+export async function revokeLocalHttp(origin: string): Promise<void> {
+  await withSettingsWriteLock(async () => {
+    const stored = await chrome.storage.local.get(KEY);
+    const cur = stored[KEY] as Partial<Settings> | undefined;
+    if (!isPlainObject(cur)) return;
+    await chrome.storage.local.set({ [KEY]: { ...cur, localHttpOrigins: removeException(cur.localHttpOrigins, origin) } });
   });
 }
 
