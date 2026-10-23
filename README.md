@@ -261,7 +261,8 @@ checks what a user would observe, not what the config says:
 - `http://example.com` ends up on `https://`
 - ad and tracker scripts never load: refused, or replaced by uBlock's harmless stub
 - the same canvas drawing reads back differently on each load
-- `chrome://settings/cookies` has third-party cookies blocked
+- third-party cookies are blocked: `profile.cookie_controls_mode` is 1 (fails, saying so, when a
+  machine policy decides it instead) and a cross-site cookie is not sent
 - the browser does not keep running after its last window closes (so updates can install)
 - the Shields button counts what was blocked on a site, shows that number, Shields down lets that
   site's trackers through and Shields up blocks them again; new profiles have it pinned
