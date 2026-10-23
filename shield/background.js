@@ -6,6 +6,7 @@ import "./params.js";
 import "./gpc.js";
 import { welcomeOnce } from "./default-browser.js";
 import { native } from "./updates.js";
+import "./webstore.js";
 // Enki Shield: warns before a known phishing site opens.
 //
 // Privacy is the point of doing this locally. Google Safe Browsing (which ungoogled-chromium
@@ -180,6 +181,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (d) => {
 // ------------------------------------------------------------------ messages
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+  // The store button's messages are webstore.js's to answer; a null from here would race it.
+  if (typeof msg?.what === "string" && msg.what.startsWith("enki-shield:cws-")) return false;
   (async () => {
     if (msg?.type === "shield:status") {
       const list = await load();
