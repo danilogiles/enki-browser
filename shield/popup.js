@@ -1,6 +1,7 @@
 // The Shields panel: the button right of the address bar, as Brave's lion is.
 import { t } from "./i18n.js";
 import { BADGE, LEVELS, blocker, blockerId, forgetList, inIncognito, setDown, setForget, setSite, sites } from "./sites.js";
+import { renderNotices } from "./webstore-ui.js";
 
 const $ = (id) => document.getElementById(id);
 const DOCS = "https://github.com/danilogiles/enki-browser/blob/main/";
@@ -14,6 +15,8 @@ try {
   const url = new URL(tab?.url ?? "");
   if (/^https?:$/.test(url.protocol)) host = url.hostname;
 } catch { /* not a web page */ }
+
+void renderNotices($("cws-notices"));
 
 const open = (url) => chrome.tabs.create({ url, index: (tab?.index ?? 0) + 1 });
 $("terms").onclick = (e) => { e.preventDefault(); void open(DOCS + "TERMS.md"); };
