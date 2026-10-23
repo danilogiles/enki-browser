@@ -32,3 +32,21 @@ export function judgeThirdPartyCookies({ pref, profileValue, network }) {
   if (!network.firstParty) return { ok: false, detail: "control failed: the test cookie was not sent even first-party, so the third-party result says nothing" };
   return { ok: !network.thirdParty, detail: `cookie_controls_mode=1, third-party cookie ${network.thirdParty ? "SENT" : "not sent"}` };
 }
+
+/**
+ * Polls `read` (Enki's profile.cookie_controls_mode from the Preferences file; it throws or gives
+ * undefined until Chromium has written the file) until it gives a value or `ms` run out. 0 (allow)
+ * is a value: a truthiness test would keep waiting on it and then report it as missing.
+ * @param {() => number|null|undefined|Promise<number|null|undefined>} read
+ * @returns {Promise<number|null>} the value, or null if none appeared in time
+ */
+export async function waitForProfileCookieMode(read, ms, every = 500) {
+  const end = Date.now() + ms;
+  for (;;) {
+    let v;
+    try { v = await read(); } catch { v = undefined; }
+    if (v != null) return v;
+    if (Date.now() >= end) return null;
+    await new Promise((r) => setTimeout(r, every));
+  }
+}

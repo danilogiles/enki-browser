@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { checkComponents } from "./components.mjs";
-import { judgeThirdPartyCookies } from "./cookie-3p.mjs";
+import { judgeThirdPartyCookies, waitForProfileCookieMode } from "./cookie-3p.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const linux = process.platform === "linux";
@@ -263,7 +263,7 @@ try {
   // Chromium writes Preferences a few seconds after start, so wait for it.
   let profileCookieMode = null;
   if (cookiePref?.enforcement || cookiePref?.controlledBy) {
-    profileCookieMode = await until(async () => JSON.parse(readFileSync(path.join(userData, "Default", "Preferences"), "utf8")).profile?.cookie_controls_mode, 20000) ?? null;
+    profileCookieMode = await waitForProfileCookieMode(() => JSON.parse(readFileSync(path.join(userData, "Default", "Preferences"), "utf8")).profile?.cookie_controls_mode, 20000);
   }
   const cookieVerdict = judgeThirdPartyCookies({ pref: cookiePref, profileValue: profileCookieMode, network: cookieNet });
   check("third-party cookies are blocked", cookieVerdict.ok, cookieVerdict.detail);

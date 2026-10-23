@@ -1,7 +1,7 @@
 // Unit checks for test/cookie-3p.mjs, the decision behind verify.mjs's third-party cookie check.
 //
 //   node test/cookie-3p-unit.mjs
-import { judgeThirdPartyCookies as judge } from "./cookie-3p.mjs";
+import { judgeThirdPartyCookies as judge, waitForProfileCookieMode } from "./cookie-3p.mjs";
 
 let failed = 0;
 const expect = (name, got, want) => {
@@ -28,5 +28,20 @@ expect("a policy that allows fails", viaPolicy, false);
 expect("…and says it is a machine policy", { ok: /overridden by machine policy/.test(viaPolicy.detail), detail: viaPolicy.detail }, true);
 expect("a policy that blocks still fails (Enki's default is not what is in effect)", judge({ pref: policy(1), profileValue: 1, network: blocked }), false);
 expect("a recommended/extension-controlled value fails", judge({ pref: { value: 1, controlledBy: "EXTENSION" }, profileValue: 1, network: blocked }), false);
+// Enki's own value from Preferences: 0 (allow, e.g. a profile someone switched) is a value, not
+// "not written yet". It must come back at once as 0, not after the whole wait as missing.
+{
+  let t = Date.now();
+  const zero = await waitForProfileCookieMode(() => 0, 1500, 50);
+  expect("a profile value of 0 is read as 0 at once", { ok: zero === 0 && Date.now() - t < 500, detail: `${zero} after ${Date.now() - t} ms` }, true);
+  let n = 0;
+  t = Date.now();
+  const later = await waitForProfileCookieMode(() => { n++; if (n < 3) throw new Error("not written yet"); return 1; }, 1500, 50);
+  expect("a Preferences file written late is waited for", { ok: later === 1, detail: `${later} after ${n} reads` }, true);
+  const never = await waitForProfileCookieMode(() => undefined, 200, 50);
+  expect("a value that never appears is null (reported as missing)", { ok: never === null, detail: String(never) }, true);
+  const viaZero = judge({ pref: policy(0), profileValue: zero, network: sent });
+  expect("…and the policy message names 0, not missing", { ok: /in the profile: 0$/.test(viaZero.detail), detail: viaZero.detail }, true);
+}
 console.log(failed ? `\n${failed} failed` : "\nall passed");
 process.exit(failed ? 1 : 0);
