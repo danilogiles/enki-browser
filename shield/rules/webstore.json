@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "priority": 10000,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "cookie", "operation": "remove" },
+        { "header": "referer", "operation": "remove" },
+        { "header": "x-client-data", "operation": "remove" }
+      ],
+      "responseHeaders": [{ "header": "set-cookie", "operation": "remove" }]
+    },
+    "condition": {
+      "requestDomains": ["clients2.google.com", "clients2.googleusercontent.com"],
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "other"]
+    }
+  }
+]
