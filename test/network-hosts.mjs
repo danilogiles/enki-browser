@@ -138,6 +138,89 @@ export function hostsFromNetLog(text, markPrefix) {
   return { hosts, events: log.events.length, marks };
 }
 
+/** Whether Chromium finished writing the net log: it parses as written, with an events array. */
+export function netLogComplete(text) {
+  try { return Array.isArray(JSON.parse(text)?.events); } catch { return false; }
+}
+
+/**
+ * Whether a net log can be judged at all: complete (Chromium closed it), with at least
+ * `minEvents` events, and with `needHost` among its hosts (proof that the part under test was
+ * recorded). { ok, events, detail }. A log the network service lost (empty, or re-created with
+ * only its constants when the service restarted at shutdown) is not evidence of anything.
+ */
+export function judgeNetLog(text, { minEvents = 1, needHost = null } = {}) {
+  if (!text) return { ok: false, events: 0, detail: "the net log is empty (0 bytes)" };
+  if (!netLogComplete(text)) return { ok: false, events: 0, detail: `the net log was not finished (${text.length} bytes)` };
+  const { hosts, events } = hostsFromNetLog(text);
+  if (events < minEvents) return { ok: false, events, detail: `the net log has ${events} events (want ${minEvents}+)` };
+  if (needHost && !hosts.has(needHost)) return { ok: false, events, detail: `no ${needHost} in the net log's ${events} events` };
+  return { ok: true, events, detail: `${events} events` };
+}
+
+/**
+ * The address-bar DNS check. "leak" (with the hosts) whenever a host made of the typed words is
+ * in the log, complete or not; otherwise "incomplete" when the log cannot be judged; else "pass".
+ */
+export function judgeTypedWordsLookup(text, { words = /elon|%20/i, needHost = "duckduckgo.com" } = {}) {
+  const leaked = [...new Set(((text ?? "").match(/"host":"[^"]*"/g) ?? []).filter((h) => words.test(h)))];
+  if (leaked.length) return { result: "leak", detail: leaked.slice(0, 2).join(" ") };
+  const j = judgeNetLog(text ?? "", { needHost });
+  return j.ok ? { result: "pass", detail: j.detail } : { result: "incomplete", detail: j.detail };
+}
+
+/** The judging's own checks, on made-up net logs (no browser). */
+export function checkNetLogJudge(check) {
+  const ev = (host) => ({ type: 1, time: "1", source: { id: 1, type: 1 }, phase: 0, params: { host } });
+  const full = (...hosts) => JSON.stringify({ constants: {}, events: hosts.map(ev) });
+  const cut = (...hosts) => `{"constants": {},\n"events": [\n${hosts.map((h) => JSON.stringify(ev(h))).join(",\n")}${hosts.length ? ",\n" : ""}`;
+  const r = (t, o) => judgeTypedWordsLookup(t, o);
+  const e = r("");
+  check("net log judge: an empty net log is 'incomplete', not a DNS verdict", e.result === "incomplete", `${e.result}: ${e.detail}`);
+  const c = r(cut());
+  check("net log judge: a log cut to its constants (network service restarted) is 'incomplete'", c.result === "incomplete", `${c.result}: ${c.detail}`);
+  const n = r(full("malware-filter.gitlab.io:443", "example.org:443"));
+  check("net log judge: a complete log with events but no duckduckgo.com is 'incomplete'", n.result === "incomplete", `${n.result}: ${n.detail}`);
+  const l = r(full("duckduckgo.com:443", "elon%20musk%20github%20replacemente"));
+  const lc = r(cut("elon%20musk%20github%20replacemente"));
+  check("net log judge: a host made of the typed words FAILs with the host listed (complete or cut log)",
+    l.result === "leak" && l.detail.includes("elon%20musk%20github%20replacemente") && lc.result === "leak", `${l.result}: ${l.detail}; cut: ${lc.result}`);
+  const p = r(full("malware-filter.gitlab.io:443", "duckduckgo.com:443"));
+  const pe = r(full("malware-filter.gitlab.io:443"), { needHost: null });
+  check("net log judge: a complete, clean log with duckduckgo.com PASSes", p.result === "pass" && pe.result === "pass", `${p.result}: ${p.detail}; no host needed: ${pe.result}`);
+}
+
+/**
+ * Stops a browser started `detached` (its pid is Chromium itself: the launcher execs it) so that
+ * Chromium finishes the net log: `close()` (DevTools Browser.close) first, else SIGTERM to the main
+ * process only, each with a bounded wait for it to exit. Never signals the network service
+ * separately: if it dies before the browser, the browser restarts it and the net log is re-created
+ * empty. Leftovers in the process group are killed only once the main process is gone (or stuck).
+ * Returns how it stopped: "Browser.close", "SIGTERM", "SIGKILL" or "already".
+ */
+export async function stopBrowser(child, { close, ms = 15000 } = {}) {
+  const exited = () => child.exitCode !== null || child.signalCode !== null;
+  if (!child || exited()) return "already";
+  const gone = new Promise((r) => child.once("exit", () => r(true)));
+  const wait = (t) => Promise.race([gone, sleep(t).then(exited)]);
+  let how = null;
+  if (close) { await Promise.race([close().catch(() => {}), sleep(5000)]); if (await wait(ms)) how = "Browser.close"; }
+  if (!how) { try { process.kill(child.pid, "SIGTERM"); } catch {} if (await wait(ms)) how = "SIGTERM"; }
+  try { process.kill(-child.pid, "SIGKILL"); } catch {}
+  if (!how) { await wait(3000); how = "SIGKILL"; }
+  return how;
+}
+
+/** The net log once Chromium has closed it: re-read for up to `ms` while it is unfinished. */
+export async function readNetLog(file, ms = 3000) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    if (netLogComplete(text) || Date.now() >= end) return text;
+    await sleep(250);
+  }
+}
+
 /** Runs the browser part. `check(name, ok, detail)` records each result. */
 export async function runNetworkHosts(check, { build = process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser"), allowed } = {}) {
   allowed ??= checkAllowlist(check);
@@ -211,21 +294,15 @@ async function session(check, { build, allowed, tmp, port }) {
   const child = spawn(path.join(build, "enki-browser"), args, {
     env: { ...process.env, ENKI_BROWSER_USER_DATA: path.join(tmp, "data") }, stdio: ["ignore", openSync(logFile, "w"), openSync(logFile, "a")], detached: true,
   });
-  const stop = async () => {
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    const gone = new Promise((r) => child.once("exit", r));
-    try { process.kill(-child.pid, "SIGTERM"); } catch {}
-    if (await Promise.race([gone.then(() => true), sleep(8000).then(() => false)])) return;
-    try { process.kill(-child.pid, "SIGKILL"); } catch {}
-  };
   const cdpJson = (p) => fetch(`http://127.0.0.1:${port}${p}`).then((r) => r.json());
   let searched = false;
+  let browser;
   try {
     let version;
     for (let i = 0; i < 60 && !version; i++) { await sleep(500); version = await cdpJson("/json/version").catch(() => undefined); }
     if (!version) { check("network hosts: browser started", false, readFileSync(logFile, "utf8").split("\n").slice(-5).join(" | ")); return; }
     const { chromium } = await import("playwright-core");
-    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
     const ctx = browser.contexts()[0];
     // First run: Shield fetches its phishing list on install; the extensions settle; then idle.
     const ids = JSON.parse(readFileSync(path.join(build, "version.json"), "utf8"));
@@ -249,15 +326,18 @@ async function session(check, { build, allowed, tmp, port }) {
       check("network hosts: the address-bar search went to DuckDuckGo", searched);
       await sleep(3000);
     } else console.log("SKIP network hosts: address-bar search (xdotool not installed)");
-    // Closing through DevTools lets Chromium finish the net log.
-    await browser.newBrowserCDPSession().then((s) => s.send("Browser.close")).catch(() => {});
-    for (let i = 0; i < 20 && child.exitCode === null && child.signalCode === null; i++) await sleep(500);
   } finally {
-    await stop();
+    // Closing through DevTools (or SIGTERM to Chromium alone) lets Chromium finish the net log.
+    await stopBrowser(child, { close: browser ? () => browser.newBrowserCDPSession().then((s) => s.send("Browser.close")) : undefined });
     catchAll.close(); pages.close();
   }
   try {
-    const text = existsSync(netlog) ? readFileSync(netlog, "utf8") : "";
+    const text = await readNetLog(netlog);
+    // A lost or unfinished net log says nothing about the hosts: a distinct failure, rerun.
+    const usable = judgeNetLog(text, { minEvents: 100, needHost: searched ? "duckduckgo.com" : null });
+    if (!usable.ok) check("network hosts: net log empty/incomplete — rerun", false, usable.detail);
+    else check("network hosts: the net log is complete", true, usable.detail);
+    if (!text) return;
     const { hosts, events, marks } = hostsFromNetLog(text, MARK);
     const userAt = marks.get(`${MARK}user`) ?? Infinity;
     check("network hosts: the net log recorded the session", events > 100 && Number.isFinite(userAt), `${events} events`);
@@ -279,6 +359,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const results = [];
   const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };
   checkHostParser(check);
+  checkNetLogJudge(check);
   if (process.argv.includes("--unit")) checkAllowlist(check);
   else await runNetworkHosts(check);
   const failed = results.filter((r) => !r).length;
