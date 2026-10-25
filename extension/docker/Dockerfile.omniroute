@@ -1,16 +1,22 @@
-FROM diegosouzapw/omniroute:latest
+# Pinned by digest so a re-tagged or compromised :latest can't slip into a build.
+# diegosouzapw/omniroute:3.8.52 (was :latest on 2026-10-22), multi-arch OCI index.
+# To update: resolve the new tag's index digest, review the release, then bump both.
+FROM diegosouzapw/omniroute:3.8.52@sha256:b08a12e876baa8a5ccadd1ebbe346fe7267dba3b1c9f4fd6bb02070fae41ab6c
 
 USER root
 
 # Set shared path for Playwright Chromium binaries
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Install Playwright, Chromium headless browser, and all required OS system dependencies
+# Install Playwright, Chromium headless browser, and all required OS system dependencies.
+# playwright is pinned to the exact version OmniRoute 3.8.52 itself depends on
+# (package.json: "playwright": "1.62.1"), so npx never fetches a newer CLI.
+# The browsers stay root-owned and read-only for the runtime user (no chmod 777).
 RUN mkdir -p /ms-playwright && \
-    npm install playwright --legacy-peer-deps && \
-    npx playwright install chromium && \
-    npx playwright install-deps chromium && \
-    chmod -R 777 /ms-playwright && \
+    npm install --save-exact --legacy-peer-deps playwright@1.62.1 && \
+    npx --no-install playwright install chromium && \
+    npx --no-install playwright install-deps chromium && \
+    chmod -R u=rwX,go=rX /ms-playwright && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 USER node
