@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ImagePart, Message, TextPart, ToolCallPart } from "../lib/types";
-import { loadSettings, onSettingsChange, presetOf, saveSettings, saveSettingsFromUi, type Settings } from "../lib/settings";
+import { dismissEndpointNotice, loadSettings, onSettingsChange, presetOf, revokeLocalHttp, saveSettings, saveSettingsFromUi, takeEndpointNotice, type Settings } from "../lib/settings";
+import type { EndpointNotice } from "../lib/providers/endpoint-policy";
+import { EndpointNoticeCard } from "./EndpointNoticeCard";
 import { onHandoff, takeHandoff, type Handoff } from "../lib/handoff";
 import { createProvider } from "../lib/providers";
 import { BrowserExecutor, isRestrictedUrl } from "../lib/tools/executor";
@@ -8,7 +10,7 @@ import { toolsForMode } from "../lib/tools/definitions";
 import { runTurn, type AgentEvent } from "../lib/agent/loop";
 import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
 import { fenceInline, newNonce } from "../lib/agent/untrusted";
-import type { ConfirmPayload } from "../lib/tools/executor";
+import type { ConfirmPayload, OtherWindowStop } from "../lib/tools/executor";
 import { Chat, type Progress } from "./Chat";
 import { Composer } from "./Composer";
 import { SettingsView } from "./SettingsView";
@@ -88,12 +90,15 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   }, []);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [running, setRunning] = useState(false);
-  const [approval, setApproval] = useState<{ label: string; confirm?: ConfirmPayload; resolve: (ok: boolean) => void } | null>(null);
+  // `windowStop` turns the card into the Cancel-only "tab in another window" stop.
+  const [approval, setApproval] = useState<{ label: string; confirm?: ConfirmPayload; windowStop?: OtherWindowStop; resolve: (ok: boolean) => void } | null>(null);
   // The active tab is tracked for the tab picker in the "more" menu; nothing else shows it now.
   const [, setTab] = useState<TabInfo | null>(null);
   const [usage, setUsage] = useState({ input: 0, output: 0 });
   const [ready, setReady] = useState(false);
   const [banner, setBanner] = useState("");
+  // The one-time 0.8.12 model-address notice: panel state only, never part of the conversation.
+  const [endpointNotice, setEndpointNotice] = useState<EndpointNotice | null>(null);
   const [progress, setProgress] = useState({ message: "Ready", step: 0, model: "", since: Date.now() });
   const [elapsed, setElapsed] = useState(0);
   const [tabs, setTabs] = useState<TabInfo[]>([]);
@@ -118,6 +123,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   useEffect(() => {
     loadSettings().then(async (s) => {
       setSettings(s);
+      if (!isolated) setEndpointNotice(await takeEndpointNotice());
       if (s.saveConversations) {
         setChats(await listChats());
       }
@@ -338,6 +344,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
           ]);
           break;
         case "approval_request":
+        case "other_window":
           patchSegments((segs) =>
             segs.map((s) => (s.kind === "tool" && s.id === e.call.id ? { ...s, status: "awaiting" } : s)),
           );
@@ -375,6 +382,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
                     ? t.refusal
                     : e.reason === "empty"
                       ? t.empty
+                      : e.reason === "other_window"
+                        ? t.otherWindowStopped
                       : e.reason === "max_tokens"
                         ? t.maxTokens
                         : undefined),
@@ -405,6 +414,24 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
           confirm,
           resolve: finish,
         });
+      }),
+    [],
+  );
+
+  // The "tab in another window" card has nothing to allow: Cancel, Stop, Escape and New chat all
+  // just resolve it, and the loop ends the run without acting in the other window.
+  const stopForOtherWindow = useCallback(
+    (_call: ToolCallPart, stop: OtherWindowStop) =>
+      new Promise<void>((resolve) => {
+        const signal = abortRef.current?.signal;
+        const finish = () => {
+          signal?.removeEventListener("abort", finish);
+          setApproval(null);
+          resolve();
+        };
+        if (signal?.aborted) return finish();
+        signal?.addEventListener("abort", finish, { once: true });
+        setApproval({ label: "", windowStop: stop, resolve: () => finish() });
       }),
     [],
   );
@@ -492,7 +519,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       await runTurn({ provider: createProvider(settings), model: settings.model, mode: effectiveMode,
         system: buildSystemPrompt(effectiveMode, settings.customInstructions, settings.devMode && !!settings.unfiltered), history,
         tools: [...toolsForMode(effectiveMode, settings.vision), ...connectorTools(apps, turnNonce)], executor, maxSteps: settings.maxSteps,
-        autoApprove: settings.autoApprove, requestApproval,
+        autoApprove: settings.autoApprove, requestApproval, stopForOtherWindow,
         onEvent: (e) => { if (historyRef.current === history) handleEvent(e); },
         signal: controller.signal, contextBudgetTokens: settings.contextBudgetTokens,
         maxOutputTokens: settings.maxOutputTokens, refreshPage: intent !== "normal" || restoredRef.current,
@@ -514,7 +541,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       abortRef.current = null;
       await releaseTurn();
     }
-  }, [settings, ready, selectedTab, mode, requestApproval, handleEvent, tasks, apps, chatId]);
+  }, [settings, ready, selectedTab, mode, requestApproval, stopForOtherWindow, handleEvent, tasks, apps, chatId]);
 
   const stop = () => abortRef.current?.abort();
   const retry = useCallback(() => {
@@ -616,6 +643,13 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     await saveSettings(next);
   };
 
+  /** Revoke: the saved HTTP exception for that exact origin is deleted (settings follow via onSettingsChange). */
+  const revokeHttp = async (origin: string) => {
+    await revokeLocalHttp(origin);
+    setSettings((cur) => cur && { ...cur, localHttpOrigins: (cur.localHttpOrigins ?? []).filter((o) => o !== origin) });
+  };
+  const closeNotice = () => { setEndpointNotice(null); void dismissEndpointNotice(); };
+
   if (!settings || !ready) return null;
 
   if (view === "logs") return <LogsView settings={settings} onClose={() => setView("chat")} />;
@@ -630,6 +664,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
           setView("chat");
         }}
         onClose={() => setView("chat")}
+        onRevokeLocalHttp={revokeHttp}
       />
     );
   }
@@ -657,7 +692,14 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         selectedTab={selectedTab}
         onSelectTab={setSelectedTab}
         usage={usage}
+        onRevokeLocalHttp={(o) => { void revokeHttp(o); }}
       />
+      {endpointNotice && (
+        <EndpointNoticeCard notice={endpointNotice}
+          onRevoke={(o) => { void revokeHttp(o); closeNotice(); }}
+          onDismiss={closeNotice}
+          onOpenSettings={() => { closeNotice(); setView("settings"); }} />
+      )}
       {banner && <div role="status" className="mx-3 mb-1 rounded-lg bg-ink-900 px-3 py-1.5 text-xs text-zinc-400">{banner} <button className="underline" onClick={() => setBanner("")}>{t.dismiss}</button></div>}
 
       {isolated && showLegacyCard(location.search) && <LegacySearchCard />}

@@ -352,12 +352,12 @@ try {
   check("screenshot: off by default with a model that takes images", /^Screenshot off/.test(await shot()));
   await configure("mock-echo", "ask", { vision: true, attachScreenshot: true, settingsVersion: undefined });
   await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
-  check("screenshot: settings saved by 0.3.5 with it on are turned off once, on the first load", /^Screenshot off/.test(await shot()) && JSON.stringify(await storedShot()) === "[false,1]", JSON.stringify(await storedShot()));
+  check("screenshot: settings saved by 0.3.5 with it on are turned off once, on the first load", /^Screenshot off/.test(await shot()) && JSON.stringify(await storedShot()) === "[false,2]", JSON.stringify(await storedShot()));
   await panel.click("button[title^='Screenshot']"); await panel.waitForTimeout(300);
-  check("screenshot: the camera button turns it back on", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  check("screenshot: the camera button turns it back on", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,2]");
   await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
   await panel.reload(); await panel.waitForSelector("button[title^='Screenshot']"); await panel.waitForTimeout(300);
-  check("screenshot: the opt-in survives reloads (the migration does not run again)", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,1]");
+  check("screenshot: the opt-in survives reloads (the migration does not run again)", /^Screenshot attached/.test(await shot()) && JSON.stringify(await storedShot()) === "[true,2]");
   await panel.click("button[title='Settings']"); await panel.click("button:has-text('Behavior')");
   const shotSwitch = panel.getByRole("switch", { name: "Attach a screenshot to every message" });
   check("screenshot: the Settings switch agrees and says it is off by default", await shotSwitch.getAttribute("aria-checked") === "true" && (await panel.textContent("body")).includes("Off by default."));
@@ -367,6 +367,53 @@ try {
   await configure("mock-echo", "ask");
   await panel.reload(); await panel.waitForSelector("textarea");
   check("screenshot: no camera button with a text-only model", await panel.locator("button[title^='Screenshot']").count() === 0);
+
+  // 0.8.12: plain HTTP to the model only on this computer, or a local IP the user allows one by one.
+  {
+    const LAN = "http://192.168.1.20:11434";
+    const stored = () => panel.evaluate(async () => (await chrome.storage.local.get("enki:settings"))["enki:settings"].localHttpOrigins ?? []);
+    const save = () => panel.locator("button:has-text('Save')").last();
+    await configure("mock-echo", "ask", { baseUrl: LAN + "/v1", apiKey: "", settingsVersion: 2 });
+    await panel.reload(); await panel.waitForSelector("textarea");
+    await panel.click("button[title='Settings']");
+    check("local HTTP: a private IP is blocked with the toggle off and Save disabled",
+      await panel.getAttribute("[data-endpoint]", "data-endpoint") === "private-off" && await save().isDisabled());
+    await panel.getByRole("switch", { name: "Allow HTTP for this local address" }).click();
+    check("local HTTP: allowing it shows the warning, the chip and Revoke",
+      (await panel.textContent("body")).includes("Not encrypted: anyone on the same Wi-Fi can read your questions and page content.") &&
+      await panel.getByRole("button", { name: "Revoke HTTP for 192.168.1.20:11434" }).count() === 1 && !(await save().isDisabled()));
+    await save().click(); await panel.waitForSelector("[data-egress=local-http]");
+    check("local HTTP: Save stores that exact origin and the header shows the chip", JSON.stringify(await stored()) === JSON.stringify([LAN]));
+    await panel.getByRole("button", { name: "Revoke HTTP for 192.168.1.20:11434" }).click(); await panel.waitForTimeout(300);
+    check("local HTTP: Revoke deletes the exception and removes the chip",
+      JSON.stringify(await stored()) === "[]" && await panel.locator("[data-egress=local-http]").count() === 0);
+    await panel.click("button[title='Settings']");
+    for (const [url, state] of [["http://ollama.local:11434/v1", "hostname"], ["http://203.0.113.7/v1", "public"]]) {
+      await panel.fill("input[aria-label='Base URL']", url);
+      check(`local HTTP: ${state} over HTTP is refused and cannot be saved`, await panel.getAttribute("[data-endpoint]", "data-endpoint") === state && await save().isDisabled());
+    }
+    await panel.fill("input[aria-label='Base URL']", "http://127.0.0.1:8787/v1");
+    await panel.fill("input[aria-label='API key']", "test");
+    check("local HTTP: loopback with a key is fine and says it stays on this computer",
+      await panel.getAttribute("[data-endpoint]", "data-endpoint") === "loopback" && !(await save().isDisabled()) &&
+      (await panel.textContent("body")).includes("Requests stay on this computer. Nothing goes over the network."));
+    await panel.click("button[title='Back']");
+    // The one-time notice after the update: in the panel only, never in the chat or its history.
+    await configure("mock-echo", "ask", { baseUrl: LAN + "/v1", apiKey: "", settingsVersion: 1 });
+    await panel.reload(); await panel.waitForSelector("[data-notice=carried]");
+    check("local HTTP: settings from 0.8.11 keep a keyless private IP and say so once", JSON.stringify(await stored()) === JSON.stringify([LAN]));
+    const card = panel.locator("[data-notice=carried]");
+    const cardText = await card.textContent();
+    check("local HTTP: the carried-over notice shows the body with the address, the unencrypted warning and Revoke together",
+      cardText.includes("Enki now asks before using HTTP on your local network. It stays on for http://192.168.1.20:11434 because you set it up that way.") &&
+      cardText.includes("Not encrypted: anyone on the same Wi-Fi can read your questions and page content.") &&
+      await card.getByRole("button", { name: "Revoke HTTP for 192.168.1.20:11434" }).count() === 1, cardText);
+    const leaked = await panel.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+    check("local HTTP: the notice is not part of any chat", !/HTTP is still on/.test(leaked) && await panel.locator("[data-notice] ~ * :text('HTTP is still on')").count() === 0);
+    await panel.click("[data-notice] button:has-text('Got it')"); await panel.reload(); await panel.waitForSelector("textarea"); await panel.waitForTimeout(300);
+    check("local HTTP: the notice is shown once", await panel.locator("[data-notice]").count() === 0);
+    await configure("mock-echo", "ask");
+  }
 
   // First use: a notice links the terms and the privacy policy until "Got it".
   await configure("mock-echo", "ask", { acceptedTerms: undefined });
@@ -556,6 +603,98 @@ try {
   await panel.waitForFunction(() => document.body.innerText.includes("Searched.") || !!document.querySelector("[role=alertdialog]"), null, { timeout: 25000 });
   check("control: the same-site search form without an image button searches without a card", await panel.locator("[role=alertdialog]").count() === 0);
   await idle();
+
+  // 0.8.12: a step aimed at a tab in another window stops on the confirm card, Cancel only.
+  // Window A is Enki's; window B holds an active tab and the target tab, which is in the
+  // background with an HTML-looking title. Auto-approve is on: the card must still show.
+  const shots = process.env.ENKI_TABWIN_SHOTS;
+  if (shots) await mkdir(shots, { recursive: true });
+  const winA = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/page?a", width: 900, height: 700 });
+    return { wid: w.id, tab: w.tabs[0].id };
+  });
+  const winB = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/page?b-front", width: 900, height: 700 });
+    const t = await chrome.tabs.create({ windowId: w.id, url: "http://127.0.0.1:8787/page?b-target", active: false });
+    await new Promise((r) => setTimeout(r, 800));
+    await chrome.scripting.executeScript({ target: { tabId: t.id }, func: () => { document.title = "<b>Checkout</b> & Pay \u2014 Other window shop"; } });
+    await chrome.tabs.update(w.tabs[0].id, { active: true });
+    return { wid: w.id, front: w.tabs[0].id, tab: t.id };
+  });
+  const OTHER_TITLE = "<b>Checkout</b> & Pay \u2014 Other window shop";
+  await configure("mock-other-window", "act", { autoApprove: true });
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${winA.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(winA.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", `switch to OTHER_TAB=${winB.tab} and buy it`); await panel.press("textarea", "Enter");
+  const owCard = panel.locator("[role=alertdialog]");
+  await owCard.waitFor({ timeout: 25000 });
+  const owText = await owCard.innerText();
+  check("other-window card names the target tab by its title, once, in the chip",
+    owText.split(OTHER_TITLE).length === 2 && (await owCard.locator("[data-testid=other-window-tab]").innerText()) === OTHER_TITLE
+    && (await owCard.locator("[data-testid=other-window-tab]").getAttribute("title")) === OTHER_TITLE, owText);
+  check("other-window card uses Ink's exact title, body and hint",
+    (await owCard.locator("div.font-semibold").first().innerText()) === "That tab is in another window"
+    && (await owCard.locator("[data-testid=other-window-body]").innerText()) === "Enki only acts in the window you asked from."
+    && (await owCard.locator("[data-testid=other-window-hint]").innerText()) === "To use it, switch to that window and ask again there.", owText);
+  check("other-window card shows the neutral info icon, not amber or the shield",
+    await owCard.locator("[data-testid=other-window-icon] svg.lucide-info").count() === 1 && await owCard.locator("svg.lucide-shield-alert").count() === 0
+    && !/amber/.test(await owCard.evaluate((el) => el.outerHTML)));
+  check("other-window card renders the page title as text, not HTML", await owCard.locator("b").count() === 0);
+  check("other-window card offers Cancel only (no Allow), even with autoApprove ON",
+    await owCard.locator("button").count() === 1 && (await owCard.locator("button").innerText()).trim() === "Cancel" && !/Allow/.test(owText));
+  check("other-window tab chip shows the globe icon, never a favicon", await owCard.locator("[data-testid=other-window-chip] svg.lucide-globe").count() === 1 && await owCard.locator("img").count() === 0);
+  check("other-window card focuses Cancel", await panel.evaluate(() => document.activeElement?.textContent?.trim() === "Cancel"));
+  if (shots) {
+    await panel.screenshot({ path: path.join(shots, "01-switch-tab-other-window-panel.png") });
+    await owCard.screenshot({ path: path.join(shots, "02-switch-tab-other-window-card.png") });
+  }
+  await owCard.locator("button").click();
+  await idle(); await panel.waitForTimeout(300);
+  const owBody = await panel.textContent("body");
+  check("Cancel stops the run: no card, no further model step", await panel.locator("[role=alertdialog]").count() === 0 && !owBody.includes("OTHER-WINDOW-CONTINUED"));
+  const runStatus = () => panel.locator("details > summary").last().innerText();
+  const owStatus = await runStatus();
+  check("after Cancel the run status is the other-window note, not Needs your input",
+    owStatus.trim() === "Stopped: the tab is in another window." && !owBody.includes("Needs your input"), owStatus);
+  if (shots) await panel.screenshot({ path: path.join(shots, "03-after-cancel.png") });
+  const bState = await panel.evaluate(async (b) => {
+    const t = await chrome.tabs.get(b.tab); const f = await chrome.tabs.get(b.front);
+    const [r] = await chrome.scripting.executeScript({ target: { tabId: b.tab }, func: () => document.getElementById("q").value });
+    return { targetActive: t.active, frontActive: f.active, title: t.title, q: r.result, url: t.url };
+  }, winB);
+  check("nothing happened in the other window: target not activated, not clicked or typed into",
+    !bState.targetActive && bState.frontActive && bState.title === OTHER_TITLE && bState.q === "" && bState.url.endsWith("b-target"), JSON.stringify(bState));
+
+  // The controlled tab is dragged into window B mid-task: the next step (Buy now) stops on the
+  // same card, and Escape (Stop) dismisses it without clicking.
+  const winC = await panel.evaluate(async () => {
+    const w = await chrome.windows.create({ url: "http://127.0.0.1:8787/page?c-stay", width: 900, height: 700 });
+    const t = await chrome.tabs.create({ windowId: w.id, url: "http://127.0.0.1:8787/page?c-moving", active: true });
+    await new Promise((r) => setTimeout(r, 800));
+    return { wid: w.id, tab: t.id };
+  });
+  await configure("mock-tab-moved", "act", { autoApprove: true });
+  await panel.goto(`chrome-extension://${id}/src/sidepanel/index.html?window=${winC.wid}`);
+  await panel.waitForSelector("textarea");
+  await newChat(); await idle();
+  await panel.click("button[title='More']"); await panel.selectOption("#controlled-tab", String(winC.tab)); await panel.keyboard.press("Escape");
+  await panel.fill("textarea", "buy the item on this page"); await panel.press("textarea", "Enter");
+  await panel.waitForFunction(() => document.body.textContent.includes("Read page"), null, { timeout: 20000 });
+  await panel.evaluate(async ({ tab, wid }) => { await chrome.tabs.move(tab, { windowId: wid, index: -1 }); }, { tab: winC.tab, wid: winB.wid });
+  const movedCard = panel.locator("[role=alertdialog]");
+  await movedCard.waitFor({ timeout: 25000 });
+  const movedText = await movedCard.innerText();
+  check("a controlled tab moved to another window stops on the card, naming the tab", movedText.split("Enki test page").length === 2 && movedText.includes("That tab is in another window") && movedText.includes("Enki only acts in the window you asked from.") && await movedCard.locator("button").count() === 1);
+  if (shots) await movedCard.screenshot({ path: path.join(shots, "04-moved-tab-card.png") });
+  await panel.keyboard.press("Escape");
+  await idle(); await panel.waitForTimeout(300);
+  const movedTitle = await panel.evaluate(async (tab) => (await chrome.tabs.get(tab)).title, winC.tab);
+  check("Escape dismisses the card and stops the run; Buy now was never clicked in the other window",
+    await panel.locator("[role=alertdialog]").count() === 0 && !movedTitle.startsWith("BOUGHT") && !(await panel.textContent("body")).includes("TAB-MOVED-CONTINUED"), movedTitle);
+  const movedStatus = await runStatus();
+  check("after Escape the run status is the other-window note too", movedStatus.trim() === "Stopped: the tab is in another window." && !(await panel.textContent("body")).includes("Needs your input"), movedStatus);
 
   console.log(`${checks}/${checks} checks passed`);
 } finally { await context.close(); }

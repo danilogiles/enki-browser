@@ -25,13 +25,13 @@
 // every OS, and its browser part after the address-bar cases, on the build itself. Here because
 // this is the Linux job's test that already drives the real address bar and reads the net log.
 import { execSync, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
-import { checkAllowlist, checkHostParser, runNetworkHosts } from "./network-hosts.mjs";
+import { checkAllowlist, checkHostParser, checkNetLogJudge, judgeTypedWordsLookup, readNetLog, runNetworkHosts, stopBrowser } from "./network-hosts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const build = process.env.ENKI_LINUX_DIR ?? path.join(root, "out", "linux", "enki-browser");
@@ -54,6 +54,7 @@ let allowed; // PRIVACY.md's allowed hosts, for the network-hosts part at the en
   let listed = true;
   const listCheck = (n, pass, d = "") => { listed &&= pass; console.log(`${pass ? "PASS" : "FAIL"} ${n}${d ? ` — ${d}` : ""}`); };
   checkHostParser(listCheck);
+  checkNetLogJudge(listCheck);
   allowed = checkAllowlist(listCheck);
   if (!ok || !fb || !listed || !allowed) process.exit(1);
   if (process.argv.includes("--unit")) process.exit(0);
@@ -74,17 +75,13 @@ const APP = path.resolve(process.env.ENKI_OMNIBOX_APP ?? path.join(os.tmpdir(), 
 // on the sandbox.
 const NO_SANDBOX = !!process.env.CI && process.env.CI !== "false";
 if (NO_SANDBOX) console.log("note: test browser runs with --no-sandbox (CI is set)");
-// The launcher is a bash script that runs Chromium as its child: stop the whole process group,
-// or Chromium outlives it and keeps the debugging port (and the profile) for the next case.
+// The launcher execs Chromium, so the child is Chromium itself, in its own process group.
+// stopApp closes it cleanly (DevTools Browser.close when connected, else SIGTERM to Chromium
+// alone, each with a bounded wait), so that it finishes the net log, then kills leftovers in the
+// group: a SIGTERM to the whole group could stop the network service before the browser, which
+// then restarts it and re-creates the net log empty (CI run 39882585602).
 const launchApp = (args, userData) => spawn(path.join(APP, "enki-browser"), args, { env: { ...process.env, ENKI_BROWSER_USER_DATA: userData }, stdio: ["ignore", "ignore", "pipe"], detached: true });
-async function stopApp(child) {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  const gone = new Promise((r) => child.once("exit", r));
-  try { process.kill(-child.pid, "SIGTERM"); } catch {}
-  if (await Promise.race([gone.then(() => true), sleep(8000).then(() => false)])) return;
-  try { process.kill(-child.pid, "SIGKILL"); } catch {}
-  await Promise.race([gone, sleep(3000)]);
-}
+const stopApp = (child, browser) => stopBrowser(child, { close: browser ? () => browser.newBrowserCDPSession().then((s) => s.send("Browser.close")) : undefined });
 const alive = (c) => c.exitCode === null && c.signalCode === null;
 // Polls `test` until it gives a value or `ms` runs out (then undefined): every wait below ends on a
 // real signal or on this deadline, never on a fixed sleep.
@@ -235,10 +232,11 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
       if (landed.startsWith(want)) break;
       await new Promise((r) => setTimeout(r, 500));
     }
+    await stopApp(child, browser); // the net log is completed on exit
     await browser.close().catch(() => {});
-    await stopApp(child); // the net log is completed on exit
-    const log = existsSync(netlog) ? readFileSync(netlog, "utf8") : "";
-    const leaked = (log.match(/"host":"[^"]*"/g) ?? []).filter((h) => /elon|%20/i.test(h));
+    const log = await readNetLog(netlog);
+    // Searches that land on DuckDuckGo must show it in the log, or the log missed the search.
+    const dns = judgeTypedWordsLookup(log, { needHost: expect === "DuckDuckGo" ? "duckduckgo.com" : null });
     const c = knownLimit ? (n, ok, d = "") => { known.push(`${n}: ${ok ? "did not happen here" : "happened"}${d ? ` — ${d}` : ""}`); console.log(`KNOWN LIMIT ${n} — ${ok ? "ok in this run" : "gap reproduced"}${d ? ` — ${d}` : ""}`); } : check;
     c(`${name}: search lands on ${expect}`, landed.startsWith(want), landed || navs.join(" "));
     if (incognito) {
@@ -247,10 +245,12 @@ async function run(name, { engine, withoutEnki = false, incognito = false, shiel
       c(`${name}: DuckDuckGo gets only q`, onlyQ, landed);
     }
     c(`${name}: never an http(s):// address of the typed words`, !wentOut.length && ![...navs, landed, ...ctx.pages().map((x) => x.url())].some((u) => /^https?:\/\/[^/]*%20/.test(u)), [...wentOut, ...navs.filter((u) => /elon/i.test(u))].join(" "));
-    c(`${name}: no DNS lookup of the typed words`, log.length > 0 && leaked.length === 0, leaked.slice(0, 2).join(" "));
+    // An empty or unfinished net log is not a DNS verdict either way: say so, distinctly.
+    if (dns.result === "incomplete") c(`${name}: net log empty/incomplete — rerun`, false, dns.detail);
+    else c(`${name}: no DNS lookup of the typed words`, dns.result === "pass", dns.result === "leak" ? dns.detail : "");
   } finally {
+    await stopApp(child, browser);
     await browser?.close().catch(() => {});
-    await stopApp(child);
     rmSync(tmp, { recursive: true, force: true });
   }
 }

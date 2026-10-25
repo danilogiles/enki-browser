@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { AlertTriangle, Ban, Check, ChevronDown, ChevronRight, Loader2, RotateCw, ShieldAlert, X } from "lucide-react";
+import { AlertTriangle, Ban, Check, ChevronDown, ChevronRight, Globe, Info, Loader2, RotateCw, ShieldAlert, X } from "lucide-react";
 import logo from "../assets/logo.svg";
 import type { Mode } from "../lib/agent/prompt";
 import type { Segment, UiMessage } from "./types";
@@ -18,7 +18,7 @@ export type Progress = { message: string; step: number; maxSteps: number; elapse
 
 type Props = {
   messages: UiMessage[];
-  approval: { label: string; confirm?: import("../lib/tools/executor").ConfirmPayload; resolve: (ok: boolean) => void } | null;
+  approval: { label: string; confirm?: import("../lib/tools/executor").ConfirmPayload; windowStop?: import("../lib/tools/executor").OtherWindowStop; resolve: (ok: boolean) => void } | null;
   mode: Mode;
   onSuggest: (text: string) => void;
   onRetry?: () => void;
@@ -104,7 +104,9 @@ function MessageView({ message, approval, onRetry, showSteps, showRunDetails, pr
           ? <Steps tools={tools} thinking={message.thinking} working={working} progress={progress} />
           : working && <WorkingLine progress={progress} />
       )}
-      {awaiting && approval && <ApprovalCard label={approval.label} confirm={approval.confirm} onDecide={approval.resolve} />}
+      {awaiting && approval && (approval.windowStop
+        ? <OtherWindowCard stop={approval.windowStop} onCancel={() => approval.resolve(false)} />
+        : <ApprovalCard label={approval.label} confirm={approval.confirm} onDecide={approval.resolve} />)}
       {texts.map((s, i) => (
         <div key={i} className={`md ${working && i === texts.length - 1 ? "cursor-blink" : ""}`}>
           <Markdown remarkPlugins={[remarkGfm]} components={visualComponents}>{s.text}</Markdown>
@@ -179,7 +181,9 @@ function Steps({ tools, thinking, working, progress }: {
 /** The outcome after a reply, folded: what finished, what failed, and any notice. */
 function RunDetails({ message }: { message: UiMessage }) {
   const s = message.summary;
-  const outcome = !s ? t.details : s.outcome === "finished" ? t.done : s.outcome === "needs_input" ? t.needsInput : t.notComplete;
+  // A stop with its own reason names it (tab in another window) instead of "Needs your input".
+  const outcome = !s ? t.details : s.reason === "other_window" ? t.otherWindowStopped
+    : s.outcome === "finished" ? t.done : s.outcome === "needs_input" ? t.needsInput : t.notComplete;
   return (
     <details className="group text-xs text-zinc-500">
       <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md py-0.5 pr-1 transition hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
@@ -189,7 +193,7 @@ function RunDetails({ message }: { message: UiMessage }) {
       <div className="mt-1.5 flex flex-col gap-1 border-l border-ink-700 pl-3">
         {s && <div>{t.toolResults(s.succeeded, s.failed)}</div>}
         {s && s.succeeded > 0 && <div>{t.toolConfirm}</div>}
-        {message.note && <div>{message.note}</div>}
+        {message.note && message.note !== outcome && <div>{message.note}</div>}
       </div>
     </details>
   );
@@ -212,6 +216,59 @@ function ToolChip({ seg }: { seg: Extract<Segment, { kind: "tool" }> }) {
       {open && seg.output !== undefined && (
         <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-ink-900 px-2 py-1.5 text-[11px] leading-snug text-zinc-400">{seg.output}</pre>
       )}
+    </div>
+  );
+}
+
+/** Shortens a tab title for the card; the full title stays in the tooltip. */
+export function shortTitle(title: string, max = 80): string {
+  const clean = title.replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  return clean.length > max ? clean.slice(0, max - 1).trimEnd() + "\u2026" : clean;
+}
+
+/**
+ * The step targets a tab in another window. Same card as the 0.8.11 confirms, but a stop rather
+ * than a question: there is only Cancel, and nothing here can act in the other window. The tab
+ * title comes from the page, so it is rendered as plain text only.
+ */
+function OtherWindowCard({ stop, onCancel }: { stop: import("../lib/tools/executor").OtherWindowStop; onCancel: () => void }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { cancelRef.current?.focus(); }, []);
+  const name = shortTitle(stop.title) || t.otherWindowUntitled;
+  return (
+    <div
+      role="alertdialog"
+      aria-label={t.otherWindowAria}
+      aria-modal="false"
+      data-testid="other-window-card"
+      className="rounded-xl border border-ink-700 bg-ink-900 px-3 py-3 text-xs"
+    >
+      <div className="flex items-start gap-2 text-zinc-100">
+        {/* Neutral info icon (Ink): this is a stop, not a warning, so it uses the muted palette. */}
+        <span className="mt-0.5 grid h-[26px] w-[26px] shrink-0 place-items-center rounded-lg bg-zinc-400/15 text-zinc-300" data-testid="other-window-icon">
+          <Info size={15} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold leading-snug text-zinc-50">{t.otherWindowTitle}</div>
+          {/* Tab chip (Ink): always the globe icon, never the page's favicon. */}
+          <div className="mt-1 flex min-w-0 items-center gap-1.5" data-testid="other-window-chip">
+            <Globe size={16} className="shrink-0 text-zinc-400" aria-hidden />
+            <span className="min-w-0 truncate text-[12px] leading-snug text-zinc-300" title={stop.title || undefined} data-testid="other-window-tab">{name}</span>
+          </div>
+        </div>
+      </div>
+      <p className="mt-2 text-[12px] leading-snug text-zinc-300 break-words" data-testid="other-window-body">{t.otherWindowBody}</p>
+      <p className="mt-1 text-[12px] leading-snug text-zinc-400" data-testid="other-window-hint">{t.otherWindowHint}</p>
+      <div className="mt-3 grid grid-cols-1">
+        <button
+          ref={cancelRef}
+          type="button"
+          autoFocus
+          onClick={onCancel}
+          className="h-[34px] rounded-lg text-[13px] font-semibold transition border border-ink-600 bg-transparent text-zinc-200 hover:bg-ink-800"
+        >{t.deny}</button>
+      </div>
     </div>
   );
 }

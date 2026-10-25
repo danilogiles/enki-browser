@@ -43,6 +43,37 @@ export type ConfirmPayload = {
   destinationUnknown?: boolean;
 };
 
+/**
+ * The tab a step would act on is in another browser window. Enki only ever acts in the window its
+ * panel belongs to, so this is a stop, never a question: the panel shows it in the confirm card
+ * with Cancel only, and nothing runs in the other window.
+ */
+export type OtherWindowStop = {
+  tabId: number;
+  /** The tab's title as the browser reports it: page-controlled text, shown as plain text only. */
+  title: string;
+};
+
+export class TabInOtherWindowError extends Error {
+  readonly stop: OtherWindowStop;
+  constructor(stop: OtherWindowStop) {
+    // The message reaches the model and the logs; it carries no page text.
+    super("That tab is in another window. Enki only acts in the window it was opened in, so this task stopped.");
+    this.name = "TabInOtherWindowError";
+    this.stop = stop;
+  }
+}
+
+export function isTabInOtherWindow(e: unknown): e is TabInOtherWindowError {
+  return e instanceof TabInOtherWindowError || (!!e && typeof e === "object" && (e as { name?: string }).name === "TabInOtherWindowError" && !!(e as { stop?: unknown }).stop);
+}
+
+/** What the card needs from a tab, capped so a huge title cannot bloat the event or the card. */
+function otherWindowStop(tab: chrome.tabs.Tab): OtherWindowStop {
+  const title = (tab.title ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+  return { tabId: tab.id ?? -1, title };
+}
+
 export type ToolPlan = {
   /** Human-readable description shown in the UI, e.g. `Click "Sign in"`. */
   label: string;
@@ -225,7 +256,9 @@ export class BrowserExecutor {
   async currentTab(): Promise<chrome.tabs.Tab> {
     if (this.lockedTabId !== null) {
       const tab = await chrome.tabs.get(this.lockedTabId).catch(() => null);
-      if (!tab || tab.windowId !== this.windowId) throw new Error("The controlled tab was closed or moved. Choose a tab before continuing.");
+      if (!tab) throw new Error("The controlled tab was closed or moved. Choose a tab before continuing.");
+      // Moved to another window (dragged out, or merged elsewhere): stop, never follow it there.
+      if (tab.windowId !== this.windowId) throw new TabInOtherWindowError(otherWindowStop(tab));
       return tab;
     }
     const [tab] = await chrome.tabs.query({ active: true, windowId: this.windowId });
@@ -811,13 +844,19 @@ export class BrowserExecutor {
       }
       case "switch_tab": {
         const tabId = num("tab_id");
+        // A tab in another window is refused before anything runs, and again at run time in case
+        // it moved in between: Enki never switches to, or acts in, another window's tab.
+        if (tabId !== undefined) {
+          const planned = await chrome.tabs.get(tabId).catch(() => null);
+          if (planned && planned.windowId !== this.windowId) throw new TabInOtherWindowError(otherWindowStop(planned));
+        }
         return {
           label: `Switch to tab ${tabId}`,
           sensitive: false,
           run: async () => {
             if (tabId === undefined) throw new Error("tab_id is required.");
             const target = await chrome.tabs.get(tabId);
-            if (target.windowId !== this.windowId) throw new Error("Choose a tab in this window.");
+            if (target.windowId !== this.windowId) throw new TabInOtherWindowError(otherWindowStop(target));
             const tab = await chrome.tabs.update(tabId, { active: true });
             this.retarget(tabId);
             await this.applyOverlay();
