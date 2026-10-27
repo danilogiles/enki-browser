@@ -200,6 +200,26 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     assert.equal(h[h.length - 1].parts[0].content[0].text.length, 15000); // the newest stays whole
     assert.match(h[2].parts[0].content[0].text, /cut to fit the context budget/);
   });
+  check('connection presets are well-formed, unique and never connect by themselves', () => {
+    const src = fs.readFileSync(require.resolve('../src/lib/connectors/index.ts'), 'utf8');
+    const block = src.slice(src.indexOf('export const PRESETS'), src.indexOf('];', src.indexOf('export const PRESETS')));
+    const presets = [...block.matchAll(/\{ id: "([^"]+)", name: "([^"]+)", url: "([^"]+)", auth: "(oauth|token|none)"/g)].map((m) => ({ id: m[1], name: m[2], url: m[3], auth: m[4] }));
+    assert.ok(presets.length >= 11);
+    for (const p of presets) {
+      const u = new URL(p.url);
+      assert.equal(u.protocol, 'https:', p.id);
+      assert.ok(!u.search && !u.username && !u.password, p.id + ' URL must carry no query or credentials');
+    }
+    assert.equal(new Set(presets.map((p) => p.id)).size, presets.length);
+    assert.equal(new Set(presets.map((p) => p.url)).size, presets.length);
+    for (const id of ['cloudflare-docs', 'cloudflare', 'huggingface', 'neon', 'supabase', 'webflow']) assert.ok(presets.some((p) => p.id === id), id);
+    assert.ok(!presets.some((p) => /stripe|paypal|squareup/.test(p.url)), 'payment services are not offered as presets');
+    assert.ok(!/(sk|pk|ghp|xox[bp])_[A-Za-z0-9]{8,}/.test(block), 'no secrets in presets');
+    // Presets only appear in the list; connecting happens in ConnectionsTab's click handler.
+    const tab = fs.readFileSync(require.resolve('../src/sidepanel/ConnectionsTab.tsx'), 'utf8');
+    assert.match(tab, /onClick=\{\(\) => \(p\.auth === "token" \? setTokenFor/);
+    assert.ok(!/useEffect\([^)]*PRESETS/.test(tab));
+  });
   check('saved tasks and @apps expand at the start of a message', () => {
     const { expand, suggestions } = require('../src/lib/shortcuts.ts');
     const tasks = [{ id: '1', name: 'Daily Standup', prompt: 'List my open tickets', mode: 'act' }];
