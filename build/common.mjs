@@ -247,6 +247,41 @@ const CHROMIUM_LOGOS = [
 ];
 
 /**
+ * One file under chrome/app/theme at a Chromium tag: its bytes, or null when the tag has no such
+ * file (a 404). Chromium's own Gitiles comes first and GitHub's mirror second; rate limits (429),
+ * server errors and network failures are retried and then fail the build. Treating them as
+ * "missing" is what let a fresh cache hide most of the logo hashes and replace only 1–4 images.
+ */
+async function fetchChromiumTheme(tag, rel) {
+  const sources = [
+    { url: `https://chromium.googlesource.com/chromium/src/+/refs/tags/${tag}/chrome/app/theme/${rel}?format=TEXT`, base64: true },
+    { url: `https://raw.githubusercontent.com/chromium/chromium/${tag}/chrome/app/theme/${rel}`, base64: false },
+  ];
+  const errors = [];
+  for (const { url, base64 } of sources) {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      let res;
+      try {
+        res = await fetch(url);
+      } catch (err) {
+        errors.push(`${url}: ${err.message}`);
+        await new Promise((r) => setTimeout(r, attempt * 2000));
+        continue;
+      }
+      if (res.status === 404) return null;
+      if (res.ok) {
+        const body = Buffer.from(await res.arrayBuffer());
+        return base64 ? Buffer.from(body.toString("ascii"), "base64") : body;
+      }
+      errors.push(`${url}: HTTP ${res.status}`);
+      const wait = Number(res.headers.get("retry-after")) * 1000 || attempt * 2000;
+      await new Promise((r) => setTimeout(r, Math.min(wait, 30000)));
+    }
+  }
+  throw new Error(`could not fetch chrome/app/theme/${rel} at Chromium ${tag}:\n  ${errors.slice(-4).join("\n  ")}`);
+}
+
+/**
  * Replaces Chromium's logo inside the resource paks (the About page, the profile menu and other
  * WebUI) with Enki's unplated mark (brand/logo-master.png), at the same pixel size. The logo images
  * are identified by being byte-for-byte the PNGs in Chromium's source at this exact version — never
@@ -260,12 +295,13 @@ export async function replaceLogos(chromiumDir, chromiumVersion) {
   for (const rel of CHROMIUM_LOGOS) {
     const file = path.join(dir, rel.replaceAll("/", "_"));
     if (!existsSync(file)) {
-      const res = await fetch(`https://raw.githubusercontent.com/chromium/chromium/${tag}/chrome/app/theme/${rel}`);
-      if (!res.ok) continue; // not every file exists in every version
-      writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+      const data = await fetchChromiumTheme(tag, rel);
+      if (!data) continue; // not every file exists in every version (a 404, never a failed request)
+      writeFileSync(file, data);
     }
     known.add(hash(file));
   }
+  console.log(`  ${known.size} of ${CHROMIUM_LOGOS.length} Chromium logo files exist at ${tag}`);
   const source = readFileSync(path.join(brand, "logo-master.png"));
   let replaced = 0;
   for (const name of ["chrome_100_percent.pak", "chrome_200_percent.pak", "resources.pak"]) {
