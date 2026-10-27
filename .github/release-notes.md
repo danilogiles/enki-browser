@@ -1,10 +1,8 @@
 Early alpha. Read *Known gaps* in the README first.
 
-**New in 0.8.11: safer Act.** Text from web pages now reaches your AI model clearly marked as page content, so the model can tell it apart from what you wrote. This lowers the risk of a page giving Act instructions; Act still asks before sensitive steps. Act asks before it submits a form, sends a message or does other sensitive steps, and when a form's destination can't be told, the confirm card says so in amber. A search box on the same site still goes through without asking.
+**New in 0.8.12: newer Chromium base.** Windows and Linux now run on ungoogled-chromium 156.0.8078.47 and macOS on 155.0.8059.84, with the security fixes in those releases.
 
-**Fixed:** Act started from Enki Home now runs in the window you typed it in, not in another open window's side panel.
-
-**Also new:** *Attach a screenshot to every message* is now off by default and is turned off once for profiles that had it on; you can turn it back on in Settings. Enki still takes a screenshot when it needs to see the page. Charts and mind maps in Enki's answers work with the keyboard and screen readers. The privacy policy (Version 6) now lists every host the browser contacts on its own and the exact permissions of its built-in extensions, and a test checks both.
+**Also new:** Enki can use an AI model running on this computer over plain HTTP (for example `http://localhost`), and a local-network IP address if you allow that exact address in Settings → Model (*Allow HTTP for this local address*). Host names and public addresses over HTTP are refused, and your API key is never sent over HTTP outside this computer. When Act's next step is in a tab in another window, Enki stops and shows a card that explains it only acts in the window you asked from.
 
 **Private windows:** Private windows don't block ads or trackers unless you allow uBlock Origin Lite in Incognito. To turn it on, go to the extensions page, open uBlock Origin Lite's *Details*, and switch on *Allow in Incognito*. While Enki AI setup is still pending, the side panel also offers *Open uBlock settings* as a shortcut.
 
