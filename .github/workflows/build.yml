@@ -101,7 +101,23 @@ jobs:
         with:
           path: cache/*.tar.xz
           key: upstream-linux-${{ hashFiles('upstream.json') }}
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unzip xz-utils xdotool
+      # apt can stall with no output: on PR #106 (run 40576015277) "apt-get update -qq"
+      # sat silent for the whole 40 minutes and the job was cancelled before anything was built,
+      # where the job normally takes 8 to 10. Bound each call, retry, and print progress so a slow
+      # mirror shows up in the log instead of eating the job timeout.
+      - name: Install Linux test packages
+        timeout-minutes: 12
+        run: |
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120"
+          for i in 1 2 3; do
+            if timeout 180 sudo apt-get $apt_opts update -q &&
+               timeout 300 sudo apt-get $apt_opts install -y -q xvfb unzip xz-utils xdotool; then
+              exit 0
+            fi
+            echo "::warning::apt attempt $i failed or timed out"
+            sleep 10
+          done
+          exit 1
       # An extension that changed since the last release must change its version too: Chromium
       # keeps the worker registered for an unchanged version, so after the update its background
       # did not run (0.8.4). Only the tags are needed, not the history.
