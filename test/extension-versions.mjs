@@ -8,7 +8,7 @@
 // people see honest as well, and covers uBlock, whose version only changes with uBlock.
 //
 //   node test/extension-versions.mjs [previous-tag]    default: the newest v* tag not at HEAD
-// Needs the tag: `git fetch --depth=1 origin 'refs/tags/v*:refs/tags/v*'` in a shallow clone.
+// Needs the tag: `git fetch --depth=1 origin '+refs/tags/v*:refs/tags/v*'` in a shallow clone.
 import { changedSince, previousTag, shipped } from "./shipped.mjs";
 
 const previous = process.argv[2] ?? previousTag();

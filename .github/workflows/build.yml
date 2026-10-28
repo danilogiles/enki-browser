@@ -101,13 +101,33 @@ jobs:
         with:
           path: cache/*.tar.xz
           key: upstream-linux-${{ hashFiles('upstream.json') }}
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unzip xz-utils xdotool
+      # apt can stall with no output: on PR #106 (run 40576015277) "apt-get update -qq"
+      # sat silent for the whole 40 minutes and the job was cancelled before anything was built,
+      # where the job normally takes 8 to 10. Bound each call, retry, and print progress so a slow
+      # mirror shows up in the log instead of eating the job timeout.
+      - name: Install Linux test packages
+        timeout-minutes: 12
+        run: |
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120"
+          for i in 1 2 3; do
+            if timeout 180 sudo apt-get $apt_opts update -q &&
+               timeout 300 sudo apt-get $apt_opts install -y -q xvfb unzip xz-utils xdotool; then
+              exit 0
+            fi
+            echo "::warning::apt attempt $i failed or timed out"
+            sleep 10
+          done
+          exit 1
       # An extension that changed since the last release must change its version too: Chromium
       # keeps the worker registered for an unchanged version, so after the update its background
       # did not run (0.8.4). Only the tags are needed, not the history.
+      # The leading + is needed on a v* tag build: checkout has already made refs/tags/<this tag>
+      # as a lightweight tag on the commit, and the annotated tag from origin is a different
+      # object, so without + git refuses it ("would clobber existing tag") and the job fails
+      # (v0.8.12). Both name the same commit, and these refs live only in this runner's clone.
       - name: Extension versions changed with their code
         run: |
-          git fetch --no-tags --depth=1 origin 'refs/tags/v*:refs/tags/v*'
+          git fetch --no-tags --depth=1 origin '+refs/tags/v*:refs/tags/v*'
           node test/extension-versions.mjs
       - run: node test/ico.mjs && node test/shield-welcome.mjs
       - run: node build/build-linux.mjs
@@ -127,12 +147,17 @@ jobs:
           ENKI_LINUX_DIR="$HOME/.local/opt/enki-browser" xvfb-run -a node test/shield-amp.mjs
       # Fresh profiles hide what an update breaks: the latest published release runs on a profile
       # first, then this build on the same one (extension workers, Ctrl+Shift+E, Act refusals).
+      # That is the newest published release with a Linux build: a release can ship without one
+      # (v0.8.12 did), and Linux users then still update from the one before.
       - name: Update from the latest release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           prev=$(mktemp -d)
-          gh release download --repo "${{ github.repository }}" --pattern 'enki-browser-*-linux-x64.tar.gz' --dir "$prev"
+          tag=$(gh api "repos/${{ github.repository }}/releases?per_page=30" --jq \
+            '[.[] | select((.draft or .prerelease) | not) | select(any(.assets[]; .name | test("^enki-browser-.+-linux-x64[.]tar[.]gz$")))][0].tag_name // empty')
+          if [[ -z "$tag" ]]; then echo "::error::no published release has a Linux tar.gz"; exit 1; fi
+          gh release download "$tag" --repo "${{ github.repository }}" --pattern 'enki-browser-*-linux-x64.tar.gz' --dir "$prev"
           tar -xzf "$prev"/enki-browser-*-linux-x64.tar.gz -C "$prev"
           echo "previous release: $(sed -n 's/.*"enkiBrowser": *"\([^"]*\)".*/\1/p' "$prev/enki-browser/version.json")"
           # Ubuntu 24.04 lets Chromium's sandbox use user namespaces only with an AppArmor profile

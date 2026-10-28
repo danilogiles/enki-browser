@@ -40,7 +40,7 @@ const ids = JSON.parse(readFileSync(path.join(newDir, "version.json"), "utf8"));
 const previousRelease = JSON.parse(readFileSync(path.join(oldDir, "version.json"), "utf8")).enkiBrowser;
 const previousTag = `v${previousRelease}`;
 try { git("rev-parse", "--verify", "--quiet", `refs/tags/${previousTag}^{commit}`); } catch {
-  console.error(`The previous release is ${previousRelease}, but tag ${previousTag} is not here: git fetch --depth=1 origin 'refs/tags/v*:refs/tags/v*'`);
+  console.error(`The previous release is ${previousRelease}, but tag ${previousTag} is not here: git fetch --depth=1 origin '+refs/tags/v*:refs/tags/v*'`);
   process.exit(2);
 }
 const thisRelease = JSON.parse(readFileSync(path.join(newDir, "version.json"), "utf8")).enkiBrowser;
