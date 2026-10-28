@@ -1,8 +1,10 @@
 Early alpha. Read *Known gaps* in the README first.
 
-**New in 0.8.12: newer Chromium base.** Windows and Linux now run on ungoogled-chromium 156.0.8078.47 and macOS on 155.0.8059.84, with the security fixes in those releases.
+**New in 0.8.13: Linux is back, and auto-update works again.** 0.8.12 shipped for Windows and macOS only, because a release-build bug stopped the Linux build. That is fixed, so this release includes the Linux `.deb` and `linux-x64.tar.gz` again, and the signed update file is back: Windows installs on 0.8.11 or 0.8.12 update to 0.8.13 on their own.
 
-**Also new:** Enki can use an AI model running on this computer over plain HTTP (for example `http://localhost`), and a local-network IP address if you allow that exact address in Settings → Model (*Allow HTTP for this local address*). Host names and public addresses over HTTP are refused, and your API key is never sent over HTTP outside this computer. When Act's next step is in a tab in another window, Enki stops and shows a card that explains it only acts in the window you asked from.
+**Since 0.8.12: newer Chromium base.** Windows and Linux run on ungoogled-chromium 156.0.8078.47 and macOS on 155.0.8059.84, with the security fixes in those releases. Linux users get this for the first time in 0.8.13.
+
+**Also since 0.8.12:** Enki can use an AI model running on this computer over plain HTTP (for example `http://localhost`), and a local-network IP address if you allow that exact address in Settings → Model (*Allow HTTP for this local address*). Host names and public addresses over HTTP are refused, and your API key is never sent over HTTP outside this computer. When Act's next step is in a tab in another window, Enki stops and shows a card that explains it only acts in the window you asked from.
 
 **Private windows:** Private windows don't block ads or trackers unless you allow uBlock Origin Lite in Incognito. To turn it on, go to the extensions page, open uBlock Origin Lite's *Details*, and switch on *Allow in Incognito*. While Enki AI setup is still pending, the side panel also offers *Open uBlock settings* as a shortcut.
 
