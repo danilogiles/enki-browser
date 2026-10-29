@@ -87,7 +87,7 @@ function clientFor(conn: Connection): McpClient {
       let auth = await authOf(conn.id);
       if (!auth) return {};
       if (conn.auth === "oauth" && auth.expiresAt && auth.expiresAt < Date.now() + 60_000 && auth.refreshToken) {
-        auth = await refresh(auth);
+        auth = await refresh(auth, conn.url);
         await setAuth(conn.id, auth);
       }
       return { Authorization: `Bearer ${auth.accessToken}` };
