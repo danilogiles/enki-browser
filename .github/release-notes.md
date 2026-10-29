@@ -1,10 +1,16 @@
 Early alpha. Read *Known gaps* in the README first.
 
-**New in 0.8.13: Linux is back, and auto-update works again.** 0.8.12 shipped for Windows and macOS only, because a release-build bug stopped the Linux build. That is fixed, so this release includes the Linux `.deb` and `linux-x64.tar.gz` again, and the signed update file is back: Windows installs on 0.8.11 or 0.8.12 update to 0.8.13 on their own.
+**New in 0.8.14: Mac on Chromium 156, safer AI page reads, and Install from the Chrome Web Store.** macOS now runs the same ungoogled-chromium 156.0.8078.47 base as Windows and Linux, with the security fixes in that release.
 
-**Since 0.8.12: newer Chromium base.** Windows and Linux run on ungoogled-chromium 156.0.8078.47 and macOS on 155.0.8059.84, with the security fixes in those releases. Linux users get this for the first time in 0.8.13.
+When Enki's AI reads a page for you, it now asks first before opening an address on your computer or local network that you did not name, or an address it put together after reading web content. If a page redirects somewhere local, Enki stops instead of following. When a page needs JavaScript and opens briefly in a background tab, that tab's requests go out without your cookies or login headers (the tab still uses your profile, so the site's own stored data is still there).
 
-**Also since 0.8.12:** Enki can use an AI model running on this computer over plain HTTP (for example `http://localhost`), and a local-network IP address if you allow that exact address in Settings → Model (*Allow HTTP for this local address*). Host names and public addresses over HTTP are refused, and your API key is never sent over HTTP outside this computer. When Act's next step is in a tab in another window, Enki stops and shows a card that explains it only acts in the window you asked from.
+Apps you connect in Settings → Connections (MCP servers) follow the same rule as your AI model: HTTPS for any address, plain HTTP only on this computer, and no redirects, so a sign-in token is never sent over plain HTTP.
+
+On a Chrome Web Store extension page, Enki Shield adds an *Install in Enki* button. A short note comes first (nothing downloads before you click *Continue*), then Chromium's own prompt asks you to confirm. Shield can also check for updates to extensions you installed this way (off by default); when one is ready, *Update* is the main button.
+
+The built-in Enki extension is now version 0.3.8, which carries these AI changes.
+
+**Since 0.8.13:** Linux builds, and signed auto-update for Windows, work as in 0.8.13: Windows installs on 0.8.11 or later update to 0.8.14 on their own.
 
 **Private windows:** Private windows don't block ads or trackers unless you allow uBlock Origin Lite in Incognito. To turn it on, go to the extensions page, open uBlock Origin Lite's *Details*, and switch on *Allow in Incognito*. While Enki AI setup is still pending, the side panel also offers *Open uBlock settings* as a shortcut.
 
