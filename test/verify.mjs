@@ -7,7 +7,7 @@
 //   ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6 ...       also run one Act task through a local OmniRoute
 //   ENKI_NO_SANDBOX=1 ...                              containers without user namespaces only
 //   ENKI_MOCK_KEYCHAIN=1 ...                           macOS CI runners: no keychain prompt to wait on
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { checkComponents } from "./components.mjs";
 import { judgeThirdPartyCookies, waitForProfileCookieMode } from "./cookie-3p.mjs";
+import { checkWebstoreUnit } from "./shield-webstore-unit.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const linux = process.platform === "linux";
@@ -142,6 +143,20 @@ try {
   const builtIn = [version.enkiExtensionId, version.shieldExtensionId, ublockId];
   check("chrome://extensions shows Enki, Enki Shield and uBlock Origin Lite, all on", builtIn.every((id) => shown.get(id) === true), JSON.stringify(listed));
   check("chrome://extensions shows no other extension", shown.size === builtIn.length, [...shown.keys()].join(", "));
+
+  // ---- Install in Enki on Chrome Web Store pages (docs/WEBSTORE.md). The checkout's code and
+  // words first (no browser needed, so every OS's job runs them), then what this build ships: the
+  // button and its header rule in Shield, and Chromium sending store downloads to its own prompt.
+  checkWebstoreUnit(check);
+  const shippedShield = JSON.parse(readFileSync(path.join(app, "extensions", "shield", "manifest.json"), "utf8"));
+  check("the shipped Shield has the store button and its cookie-free header rule",
+    shippedShield.content_scripts?.some((c) => c.matches?.includes("https://chromewebstore.google.com/*") && c.js?.includes("webstore-page.js"))
+      && shippedShield.declarative_net_request?.rule_resources?.some((r) => r.id === "webstore" && r.enabled)
+      && existsSync(path.join(app, "extensions", "shield", "rules", "webstore.json")));
+  await page.goto("chrome://version/");
+  const commandLine = await page.evaluate(() => document.querySelector("#command_line")?.textContent ?? "");
+  check("Chromium runs with --extension-mime-request-handling=always-prompt-for-install (a store .crx gets its own prompt)",
+    commandLine.includes("--extension-mime-request-handling=always-prompt-for-install"), commandLine ? "" : "no command line on chrome://version");
 
   // ---- search engine: read what the settings page shows the user
   await page.goto("chrome://settings/search");
@@ -467,6 +482,15 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   try { rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }); }
   catch { console.log(`(left temporary profile at ${userData})`); }
+}
+
+// Linux: Install in Enki end to end against this same build (test/shield-webstore.mjs: a local
+// fake store and Google, its own profile), run from here so CI's Linux job runs it as well.
+if (linux && process.env.ENKI_SKIP_WEBSTORE_E2E !== "1") {
+  console.log("\n---- test/shield-webstore.mjs");
+  const e2e = spawnSync(process.execPath, [path.join(root, "test", "shield-webstore.mjs")], { stdio: "inherit", env: { ...process.env, ENKI_LINUX_DIR: installRoot } });
+  if (e2e.status === 2) console.log("SKIP Install in Enki end to end: needs a display and xdotool");
+  else check("Install in Enki works end to end (test/shield-webstore.mjs)", e2e.status === 0, `exit ${e2e.status}`);
 }
 
 const failed = results.filter((r) => !r.ok);

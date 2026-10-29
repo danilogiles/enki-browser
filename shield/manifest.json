@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "120",
@@ -15,7 +15,7 @@
   "options_page": "options.html",
   "permissions": ["declarativeNetRequest", "webNavigation", "webRequest", "tabs", "storage", "alarms", "contentSettings", "browsingData", "nativeMessaging", "contextMenus", "scripting"],
   "host_permissions": ["<all_urls>"],
-  "declarative_net_request": { "rule_resources": [{ "id": "omnibox", "enabled": true, "path": "rules/omnibox.json" }, { "id": "amp", "enabled": true, "path": "amp.json" }] },
-  "content_scripts": [{ "matches": ["https://*/*", "http://*/*"], "js": ["amp.js"], "run_at": "document_end" }],
+  "declarative_net_request": { "rule_resources": [{ "id": "omnibox", "enabled": true, "path": "rules/omnibox.json" }, { "id": "amp", "enabled": true, "path": "amp.json" }, { "id": "webstore", "enabled": true, "path": "rules/webstore.json" }] },
+  "content_scripts": [{ "matches": ["https://*/*", "http://*/*"], "js": ["amp.js"], "run_at": "document_end" }, { "matches": ["https://chromewebstore.google.com/*"], "js": ["webstore-page.js"], "run_at": "document_idle" }],
   "web_accessible_resources": [{ "resources": ["blocked.html"], "matches": ["<all_urls>"] }]
 }

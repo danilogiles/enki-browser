@@ -202,6 +202,7 @@ Malware sites are covered separately by uBlock Origin Lite's *Badware risks* and
 | Ads and trackers | Blocked (EasyList, EasyPrivacy, Peter Lowe's list, uBlock filters) | [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home), with the small Shields patch described in [THIRD_PARTY.md](THIRD_PARTY.md) |
 | Shields button | Right of the address bar: how many trackers and ads were blocked on the site and which, Shields down for one site, blocking level, scripts, cookies and "forget me when I close this site" | Enki Shield (`shield/`) |
 | Burn and shred | **Burn all data** (like DuckDuckGo's Fire Button) closes every tab and deletes history, cookies, site data, cache, download history and autofill, keeping passwords and bookmarks; **Shred this site** (like Brave's) does it for one site; optional burn every time the browser closes | Shields panel and its settings |
+| Chrome Web Store extensions | **Install in Enki** on the store's extension pages: Chromium's own prompt asks before anything installs; the download carries no Google cookies; optional update checks, off by default. See [docs/WEBSTORE.md](docs/WEBSTORE.md) | Enki Shield (`shield/webstore*.js`) |
 | Malware sites | Blocked by uBlock's *Badware risks* and the URLhaus *Malicious URL Blocklist* | uBlock Origin Lite |
 | Address bar search | DuckDuckGo, with no suggestions while typing (nothing leaves until you press Enter). Google, Bing and others are one click away in Settings → Search engine | `config/initial_preferences.json` |
 | Connections | `http://` upgraded to `https://`, with a warning where a site has no HTTPS | same |
@@ -275,6 +276,8 @@ checks what a user would observe, not what the config says:
   all show the warning; another page on the same host does not; *open it anyway* lets the site
   through
 - the Enki panel renders
+- Enki Shield's *Install in Enki*: its unit checks everywhere, Chromium's install-prompt switch, and
+  on Linux the whole flow against a local fake store ([docs/WEBSTORE.md](docs/WEBSTORE.md))
 
 With `ENKI_LIVE_MODEL=cfp/moonshotai/kimi-k2.6` and a local OmniRoute, it also has Enki complete
 a real task inside Enki Browser (navigate to Wikipedia, read the page, answer).
