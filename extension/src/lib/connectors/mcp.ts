@@ -6,7 +6,12 @@
  *
  * The extension's host permissions exempt these requests from CORS, so response headers such as
  * Mcp-Session-Id are readable without the server allowing it.
+ *
+ * Every request passes the connector endpoint rule first (connectors/endpoint.ts: https://, or
+ * http:// to this machine only) and never follows a redirect, so a token cannot leave over
+ * plain http:// or be bounced to another address (AIC-3).
  */
+import { assertConnectorEndpoint, connectorFetch } from "./endpoint";
 
 export const PROTOCOL_VERSION = "2025-06-18";
 
@@ -41,6 +46,8 @@ export class McpClient {
   constructor(private readonly url: string, private readonly headers: () => Promise<Record<string, string>>) {}
 
   private async post(body: unknown, expectResponse: boolean, signal?: AbortSignal): Promise<unknown> {
+    // Before the headers: a refused address must not even trigger a token refresh.
+    assertConnectorEndpoint(this.url);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json, text/event-stream",
@@ -48,7 +55,7 @@ export class McpClient {
     };
     if (this.session?.id) headers["Mcp-Session-Id"] = this.session.id;
     if (this.session) headers["MCP-Protocol-Version"] = this.session.version;
-    const res = await fetch(this.url, { method: "POST", headers, body: JSON.stringify(body), signal, credentials: "omit" });
+    const res = await connectorFetch(this.url, { method: "POST", headers, body: JSON.stringify(body), signal });
     if (!res.ok && res.status !== 202) {
       const detail = (await res.text().catch(() => "")).slice(0, 300);
       throw new McpHttpError(`${this.url} answered ${res.status}${detail ? `: ${detail}` : ""}`, res.status, res.headers.get("www-authenticate"));

@@ -5,6 +5,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronRight, Loader2, Plug, Plus, Trash2 } from "lucide-react";
 import { PRESETS, connect, disconnect, loadConnections, onConnectionsChange, saveConnections, type Connection, type Preset } from "../lib/connectors";
+import { connectorUrlProblem } from "../lib/connectors/endpoint";
 import { handle, loadTasks, saveTasks, type SavedTask } from "../lib/shortcuts";
 
 const inputCls = "w-full rounded-md border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-enki-500/60";
@@ -129,9 +130,12 @@ export function ConnectionsTab() {
               <option value="none">No sign-in</option>
             </select>
             {custom.auth === "token" && <input type="password" autoComplete="off" placeholder="Paste the token" aria-label="Access token" value={custom.token} onChange={(e) => setCustom({ ...custom, token: e.target.value })} className={inputCls} />}
+            {custom.url.trim() && connectorUrlProblem(custom.url.trim()) && (
+              <p role="alert" className="text-xs text-amber-400">{connectorUrlProblem(custom.url.trim())}</p>
+            )}
             <div className="flex justify-end gap-2">
               <button type="button" className={btn} onClick={() => setCustom(null)}>Cancel</button>
-              <button type="button" className={btn} disabled={!/^https?:\/\//.test(custom.url.trim())}
+              <button type="button" className={btn} disabled={!custom.url.trim() || !!connectorUrlProblem(custom.url.trim())}
                 onClick={() => { const c = custom; setCustom(null); void add(c.name, c.url, c.auth, c.auth === "token" ? c.token : undefined); }}>Add and connect</button>
             </div>
           </div>

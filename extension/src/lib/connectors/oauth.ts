@@ -6,7 +6,13 @@
  *
  * Enki never sees the user's password: only the service's page does. What comes back is a token
  * scoped to that service, kept in this browser's local extension storage.
+ *
+ * AIC-3: every URL taken from the server (resource_metadata, authorization servers, and the
+ * authorization, registration and token endpoints) must be https:// (http:// loopback only when
+ * the MCP server is itself on this machine), and no request follows a redirect. Metadata cannot
+ * point the code exchange or a refresh token at plain http://.
  */
+import { assertConnectorEndpoint, assertOAuthEndpoint, connectorFetch, oauthUrlProblem } from "./endpoint";
 
 export type Auth = {
   accessToken: string;
@@ -33,9 +39,11 @@ export function authParams(header: string | null): Record<string, string> {
   return out;
 }
 
-async function json<T>(url: string): Promise<T | null> {
+async function json<T>(url: string, mcpUrl: string): Promise<T | null> {
+  // A discovery address that is not https:// is skipped, never fetched.
+  if (oauthUrlProblem(url, mcpUrl, "metadata address")) return null;
   try {
-    const res = await fetch(url, { credentials: "omit", headers: { Accept: "application/json" } });
+    const res = await connectorFetch(url, { headers: { Accept: "application/json" } });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
@@ -50,21 +58,26 @@ function wellKnown(issuer: string, name: string): string[] {
 }
 
 export async function discover(mcpUrl: string, wwwAuthenticate: string | null): Promise<{ server: ServerMetadata; scope?: string; resource: string }> {
+  assertConnectorEndpoint(mcpUrl);
   const params = authParams(wwwAuthenticate);
   const u = new URL(mcpUrl);
   const resourceUrls = params.resource_metadata
     ? [params.resource_metadata]
     : [...wellKnown(mcpUrl, "oauth-protected-resource"), `${u.origin}/.well-known/oauth-protected-resource`];
   let resource: { resource?: string; authorization_servers?: string[]; scopes_supported?: string[] } | null = null;
-  for (const url of resourceUrls) if ((resource = await json(url))) break;
+  for (const url of resourceUrls) if ((resource = await json(url, mcpUrl))) break;
   // Without resource metadata (Atlassian), the MCP server's origin is the authorization server.
   const issuer = resource?.authorization_servers?.[0] ?? u.origin;
+  assertOAuthEndpoint(issuer, mcpUrl, "authorization server");
   let server: ServerMetadata | null = null;
   for (const url of [...wellKnown(issuer, "oauth-authorization-server"), ...wellKnown(issuer, "openid-configuration")]) {
-    if ((server = await json<ServerMetadata>(url))?.authorization_endpoint) break;
+    if ((server = await json<ServerMetadata>(url, mcpUrl))?.authorization_endpoint) break;
     server = null;
   }
   if (!server) throw new Error(`${new URL(issuer).host} does not publish how to sign in (no OAuth metadata). Use a token instead.`);
+  assertOAuthEndpoint(server.authorization_endpoint, mcpUrl, "sign-in page (authorization_endpoint)");
+  assertOAuthEndpoint(server.token_endpoint, mcpUrl, "token endpoint");
+  if (server.registration_endpoint !== undefined) assertOAuthEndpoint(server.registration_endpoint, mcpUrl, "registration endpoint");
   return { server, scope: params.scope, resource: resource?.resource ?? mcpUrl };
 }
 
@@ -76,10 +89,12 @@ async function pkce(): Promise<{ verifier: string; challenge: string }> {
   return { verifier, challenge: b64url(digest) };
 }
 
-async function tokenRequest(endpoint: string, body: Record<string, string>, clientSecret?: string): Promise<Auth & { raw: Record<string, unknown> }> {
+async function tokenRequest(endpoint: string, mcpUrl: string, body: Record<string, string>, clientSecret?: string): Promise<Auth & { raw: Record<string, unknown> }> {
+  // Checked at the request, not only at discovery: a token endpoint saved before 0.8.14 is re-judged.
+  assertOAuthEndpoint(endpoint, mcpUrl, "token endpoint");
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
   if (clientSecret) headers.Authorization = `Basic ${btoa(`${body.client_id}:${clientSecret}`)}`;
-  const res = await fetch(endpoint, { method: "POST", headers, body: new URLSearchParams(body), credentials: "omit" });
+  const res = await connectorFetch(endpoint, { method: "POST", headers, body: new URLSearchParams(body) });
   const raw = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok || typeof raw.access_token !== "string") {
     throw new Error(`Sign-in failed at ${new URL(endpoint).host}: ${String(raw.error_description ?? raw.error ?? res.status)}`);
@@ -134,10 +149,9 @@ export async function signIn(mcpUrl: string, wwwAuthenticate: string | null): Pr
   if (!server.registration_endpoint) {
     throw new Error(`${new URL(server.authorization_endpoint).host} needs an app registered in advance, which Enki cannot do for you. Use a personal access token instead.`);
   }
-  const reg = await fetch(server.registration_endpoint, {
+  const reg = await connectorFetch(server.registration_endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    credentials: "omit",
     body: JSON.stringify({
       client_name: "Enki",
       client_uri: "https://github.com/danilogiles/enki-browser",
@@ -165,16 +179,16 @@ export async function signIn(mcpUrl: string, wwwAuthenticate: string | null): Pr
   const code = answer.searchParams.get("code");
   if (!code) throw new Error(`Sign-in was refused: ${answer.searchParams.get("error_description") ?? answer.searchParams.get("error") ?? "no code"}`);
 
-  const token = await tokenRequest(server.token_endpoint, {
+  const token = await tokenRequest(server.token_endpoint, mcpUrl, {
     grant_type: "authorization_code", code, redirect_uri: redirectUri, client_id: client.client_id, code_verifier: verifier, resource,
   }, client.client_secret);
   return { ...token, raw: undefined, clientId: client.client_id, clientSecret: client.client_secret, tokenEndpoint: server.token_endpoint, resource } as Auth;
 }
 
-export async function refresh(auth: Auth): Promise<Auth> {
+export async function refresh(auth: Auth, mcpUrl: string): Promise<Auth> {
   if (!auth.refreshToken || !auth.tokenEndpoint || !auth.clientId) throw new Error("This connection's sign-in expired. Connect it again.");
   const body: Record<string, string> = { grant_type: "refresh_token", refresh_token: auth.refreshToken, client_id: auth.clientId };
   if (auth.resource) body.resource = auth.resource;
-  const token = await tokenRequest(auth.tokenEndpoint, body, auth.clientSecret);
+  const token = await tokenRequest(auth.tokenEndpoint, mcpUrl, body, auth.clientSecret);
   return { ...auth, accessToken: token.accessToken, refreshToken: token.refreshToken ?? auth.refreshToken, expiresAt: token.expiresAt };
 }
