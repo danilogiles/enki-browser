@@ -47,7 +47,7 @@ export type EndpointVerdict = {
   hostClass?: HostClass;
 };
 
-function parseIPv4(host: string): number[] | null {
+export function parseIPv4(host: string): number[] | null {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (!m) return null;
   const parts = m.slice(1).map(Number);
@@ -63,7 +63,7 @@ function classifyIPv4([a, b]: number[]): HostClass {
 }
 
 /** Expands an IPv6 literal (no brackets) to eight 16-bit groups, or null. */
-function parseIPv6(host: string): number[] | null {
+export function parseIPv6(host: string): number[] | null {
   if (!/^[0-9a-f:.]+$/i.test(host) || !host.includes(":")) return null;
   let h = host;
   // An embedded IPv4 tail (::ffff:1.2.3.4); the URL parser normally rewrites it to hex.

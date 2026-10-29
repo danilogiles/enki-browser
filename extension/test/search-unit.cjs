@@ -283,7 +283,7 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     // No new permission for the uBlock line (no "management"): the manifest list is unchanged.
     const man = fs.readFileSync(path.join(__dirname, '..', 'manifest.config.ts'), 'utf8');
     const perms = [...man.match(/\bpermissions:\s*\[([^\]]*)\]/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(perms, ['sidePanel', 'activeTab', 'tabs', 'scripting', 'storage', 'debugger', 'webNavigation']);
+    assert.deepEqual(perms, ['sidePanel', 'activeTab', 'tabs', 'scripting', 'storage', 'debugger', 'webNavigation', 'declarativeNetRequestWithHostAccess']);
     assert.ok(!man.includes('"management"'));
   }
   console.log('PASS Enki AI only after both steps: pending flag, reconcile enables/pauses, DuckDuckGo clears; bad replies = no Shield');

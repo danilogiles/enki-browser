@@ -6,6 +6,7 @@ import { EndpointNoticeCard } from "./EndpointNoticeCard";
 import { onHandoff, takeHandoff, type Handoff } from "../lib/handoff";
 import { createProvider } from "../lib/providers";
 import { BrowserExecutor, isRestrictedUrl } from "../lib/tools/executor";
+import { priorUntrustedFrom } from "../lib/tools/read-url-policy";
 import { toolsForMode } from "../lib/tools/definitions";
 import { runTurn, type AgentEvent } from "../lib/agent/loop";
 import { buildSystemPrompt, type Mode } from "../lib/agent/prompt";
@@ -488,6 +489,8 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         startedFromAsk,
         filled: [],
         startUrl: current?.url,
+        // AIC-2: earlier tool results are still in context; read_url treats them as web content.
+        priorUntrusted: priorUntrustedFrom(history),
       });
       const parts: Array<TextPart | ImagePart> = [{ type: "text", text: `${nowLine()}\n${context}${hint}\n\n${userRequest}` }];
       let thumb: string | undefined;

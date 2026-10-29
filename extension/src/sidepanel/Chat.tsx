@@ -282,7 +282,11 @@ function ApprovalCard({ label, confirm, onDecide }: {
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { cancelRef.current?.focus(); }, []);
   const verb = confirm?.verb || label;
-  const origin = confirm?.destinationUnknown ? t.approvalUnknownDestination : (confirm?.origin ?? "");
+  const subtitle = (confirm?.subtitle ?? "").trim();
+  // AIC-2: Why lives in subtitle; skip mono origin so the reason isn't doubled under the verb.
+  const origin = subtitle
+    ? ""
+    : (confirm?.destinationUnknown ? t.approvalUnknownDestination : (confirm?.origin ?? ""));
   const originUnknown = !!confirm?.destinationUnknown;
   const value = confirm?.value ?? "";
   const filled = confirm?.filled;
@@ -297,6 +301,7 @@ function ApprovalCard({ label, confirm, onDecide }: {
           return i >= 0 ? { name: line.slice(0, i), value: line.slice(i + 2) } : { name: "", value: line };
         })
       : [];
+  // Address on AIC-2 cards: clamp only long values; Show all expands fully. Why is never here.
   const needsClamp = rows.length > 4 || rows.some((r) => r.value.length > 80);
   const shownRows = !needsClamp || expanded ? rows : rows.slice(0, 4);
   const allowLabel = pageRequested ? t.allowAnyway : t.allow;
@@ -315,6 +320,9 @@ function ApprovalCard({ label, confirm, onDecide }: {
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold leading-snug text-zinc-50">{verb}</div>
+          {subtitle && (
+            <div className="mt-0.5 text-[12px] leading-snug text-zinc-300 break-words" data-testid="approval-why">{subtitle}</div>
+          )}
           {origin && (
             <div
               className={`mt-0.5 font-mono text-[12px] leading-snug truncate ${originUnknown ? "text-amber-300/80" : "text-zinc-400"}`}
@@ -335,7 +343,7 @@ function ApprovalCard({ label, confirm, onDecide }: {
             {shownRows.map((r, i) => (
               <Fragment key={i}>
                 <dt className="text-zinc-500">{r.name || "—"}</dt>
-                <dd className={`m-0 text-zinc-200 ${expanded ? "whitespace-pre-wrap break-words" : "truncate"}`}>{r.value}</dd>
+                <dd className={`m-0 text-zinc-200 ${expanded ? "whitespace-pre-wrap break-words" : "line-clamp-2 break-all"}`}>{r.value}</dd>
               </Fragment>
             ))}
           </dl>

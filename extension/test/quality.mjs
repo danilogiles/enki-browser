@@ -215,9 +215,16 @@ try {
 
   // The web: a page that builds its content with JavaScript is rendered in a background tab,
   // read, and closed again; the user's tab never moves.
+  // AIC-2: mock-web reads http://127.0.0.1 — that is a local device address the user did not
+  // name, so the card asks first (never auto-approved). Approve it like other sensitive steps.
   await configure("mock-web", "ask");
   const tabsBefore = await panel.evaluate(async () => (await chrome.tabs.query({})).length);
-  await newChat(); await send("what are the live results");
+  await newChat();
+  await panel.fill("textarea", "what are the live results"); await panel.press("textarea", "Enter");
+  await panel.waitForSelector("button:has-text('Allow')", { timeout: 20000 });
+  const webCard = await panel.textContent("body");
+  check("read_url to a local address waits for approval", /Read a page on this computer|local network|127\.0\.0\.1/i.test(webCard) && webCard.includes("Allow"));
+  await panel.click("button:has-text('Allow')"); await idle(); await panel.waitForTimeout(300);
   check("read_url reads a page that builds itself with JavaScript", (await panel.textContent("body")).includes("candidate A 51.2%"));
   check("read_url closes the tab it opened", await panel.evaluate(async () => (await chrome.tabs.query({})).length) === tabsBefore);
   await configure("mock-echo", "ask");
