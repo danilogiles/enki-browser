@@ -24,6 +24,8 @@ import {
   textHardBlock,
 } from "../agent/actions";
 import { fence, newNonce, safeRole, type UntrustedSource } from "../agent/untrusted";
+import { readUrlGate, readUrlReach, redirectAllowed, seenVerbatim, userNamedHost } from "./read-url-policy";
+import { READ_URL_STRINGS } from "./read-url-strings";
 
 export type ToolOutput = { content: Array<TextPart | ImagePart>; isError?: boolean };
 
@@ -34,6 +36,11 @@ export type ConfirmPayload = {
   verb: string;
   origin: string;
   value: string;
+  /**
+   * Always-visible reason under the verb (AIC-2 read_url cards). Not collapsed behind Show all.
+   * When set, Chat renders this instead of the mono origin line.
+   */
+  subtitle?: string;
   pageRequested: boolean;
   /** Full category list for the policy / diagnostics. */
   categories: ActionCategory[];
@@ -97,6 +104,12 @@ export type TurnSafety = {
   filled: FilledField[];
   /** The tab Enki started this Act turn on (origin of "cross-origin from Ask"). */
   startUrl?: string;
+  /**
+   * AIC-2: text of untrusted tool results from earlier turns of this conversation (bounded).
+   * pageData starts empty each turn, but those results are still in the model's context, so
+   * read_url treats them as "web content was read" (read-url-policy.ts).
+   */
+  priorUntrusted?: string[];
 };
 
 const RESTRICTED_URL = /^(chrome|edge|brave|opera|vivaldi|arc|about|chrome-extension|devtools|view-source|file|javascript|data):/i;
@@ -122,6 +135,38 @@ const HARD_BLOCK_TEXT = {
   payment: "Security restriction: Enki is prevented from typing into payment fields for safety. Please enter payment details manually.",
   frame: "Security restriction: focus is inside an embedded frame Enki cannot inspect, so Enki will not type there. Click into the field you mean, or type it yourself.",
 } as const;
+
+/**
+ * AIC-2: the cookieless background tab's session rule. One rule per tab id, in a range of its own
+ * so it never collides with other session rules. Every resource type is listed: an omitted
+ * resourceTypes would skip main_frame, the very request that matters.
+ */
+const COOKIELESS_RULE_BASE = 4_200_000;
+export function cookielessRuleId(tabId: number): number {
+  return COOKIELESS_RULE_BASE + (Math.abs(tabId) % 1_000_000);
+}
+export function cookielessRule(id: number, tabId: number): chrome.declarativeNetRequest.Rule {
+  return {
+    id,
+    priority: 1,
+    action: {
+      type: "modifyHeaders" as chrome.declarativeNetRequest.RuleActionType,
+      requestHeaders: [
+        { header: "cookie", operation: "remove" as chrome.declarativeNetRequest.HeaderOperation },
+        // Cloak nit: also drop Authorization so cached HTTP auth / NTLM does not ride along.
+        { header: "authorization", operation: "remove" as chrome.declarativeNetRequest.HeaderOperation },
+      ],
+      responseHeaders: [{ header: "set-cookie", operation: "remove" as chrome.declarativeNetRequest.HeaderOperation }],
+    },
+    condition: {
+      tabIds: [tabId],
+      resourceTypes: [
+        "main_frame", "sub_frame", "stylesheet", "script", "image", "font", "object",
+        "xmlhttprequest", "ping", "csp_report", "media", "websocket", "webtransport", "webbundle", "other",
+      ] as chrome.declarativeNetRequest.ResourceType[],
+    },
+  };
+}
 
 const text = (t: string): TextPart => ({ type: "text", text: t });
 const ok = (t: string): ToolOutput => ({ content: [text(t)] });
@@ -155,7 +200,10 @@ export class BrowserExecutor {
   private connections: Connection[] = [];
   setConnections(list: Connection[]): void { this.connections = list; }
   beginTurn(safety: TurnSafety): void {
-    this.turn = { ...safety, filled: [...safety.filled], pageData: [...safety.pageData] };
+    this.turn = {
+      ...safety, filled: [...safety.filled], pageData: [...safety.pageData],
+      priorUntrusted: safety.priorUntrusted ? [...safety.priorUntrusted] : undefined,
+    };
     this.keyRows.clear();
   }
   /** Rows in turn.filled built from press_key text, keyed by origin + field name. */
@@ -218,6 +266,7 @@ export class BrowserExecutor {
         verb,
         origin: c.origin,
         value: c.value,
+        subtitle: c.subtitle,
         pageRequested: c.pageRequested,
         categories: c.categories,
         filled: c.filled,
@@ -274,20 +323,38 @@ export class BrowserExecutor {
    * A page's text without touching the user's tab. A plain fetch is enough for most pages; a page
    * that builds itself with JavaScript (the TSE's live results, dashboards) says almost nothing in
    * its HTML, so it is opened in a background tab, read once it has rendered, and closed.
+   *
+   * AIC-2: neither path sends the user's cookies or Authorization (fetch: credentials "omit"; tab: cookie/authorization headers
+   * stripped, see inBackgroundTab), and a redirect may not land on a local host other than the
+   * one that was approved (read-url-policy.ts redirectAllowed), on either path.
    */
   private async readUrl(url: string, max: number): Promise<string> {
     const cut = (t: string) => (t.length > max ? `${t.slice(0, max)}\n[…truncated at ${max} characters]` : t);
-    try {
-      const res = await fetch(url, { credentials: "omit" });
-      const type = res.headers.get("content-type") ?? "";
-      if (res.ok && /json|text\/plain|csv/.test(type)) return cut(`${url}\n\n${await res.text()}`);
-      if (res.ok && /html/.test(type)) {
-        const page = textOfHtml(await res.text());
-        if (page.text.length > 800) return cut(`${page.title} — ${res.url}\n\n${page.text}`);
+    const refuseRedirect = (finalUrl: string | undefined) => {
+      if (finalUrl && !redirectAllowed(url, finalUrl)) {
+        let host = finalUrl;
+        try { host = new URL(finalUrl).host; } catch { /* keep the raw value */ }
+        throw new Error(READ_URL_STRINGS.redirectedLocal(host));
       }
+    };
+    let res: Response | null = null;
+    try {
+      res = await fetch(url, { credentials: "omit" });
     } catch { /* blocked by CORS or the network: try rendering it */ }
+    if (res) {
+      refuseRedirect(res.url || url); // outside the catch: a refused redirect must not fall back to a tab
+      try {
+        const type = res.headers.get("content-type") ?? "";
+        if (res.ok && /json|text\/plain|csv/.test(type)) return cut(`${url}\n\n${await res.text()}`);
+        if (res.ok && /html/.test(type)) {
+          const page = textOfHtml(await res.text());
+          if (page.text.length > 800) return cut(`${page.title} — ${res.url}\n\n${page.text}`);
+        }
+      } catch { /* unreadable body: try rendering it */ }
+    }
     return this.inBackgroundTab(url, async (tabId) => {
       const fresh = await chrome.tabs.get(tabId);
+      refuseRedirect(fresh.url ?? fresh.pendingUrl);
       const body = await this.send<string>(tabId, { type: "enki:text", maxChars: max });
       return cut(`${fresh.title ?? ""} — ${fresh.url ?? url}\n\n${body}`);
     });
@@ -295,15 +362,31 @@ export class BrowserExecutor {
 
   /**
    * Opens `url` in a tab the user does not switch to, lets it render, reads it and closes it.
+   *
+   * AIC-2: the tab lives in the user's profile, so it is opened on about:blank first, a session
+   * declarativeNetRequest rule for that tab alone strips Cookie and Authorization on the request
+   * and Set-Cookie on the response, and only then does it navigate. No rule, no tab (fail closed).
+   * Page script in that tab can still see first-party storage (document.cookie, localStorage);
+   * stripping request headers does not wipe that storage.
    */
   private async inBackgroundTab<T>(url: string, read: (tabId: number) => Promise<T>): Promise<T> {
-    const tab = await chrome.tabs.create({ url, windowId: this.windowId, active: false });
+    const dnr = (chrome as unknown as { declarativeNetRequest?: typeof chrome.declarativeNetRequest }).declarativeNetRequest;
+    if (!dnr?.updateSessionRules) throw new Error(READ_URL_STRINGS.noCookielessTab);
+    const tab = await chrome.tabs.create({ url: "about:blank", windowId: this.windowId, active: false });
+    const ruleId = cookielessRuleId(tab.id!);
     try {
+      try {
+        await dnr.updateSessionRules({ removeRuleIds: [ruleId], addRules: [cookielessRule(ruleId, tab.id!)] });
+      } catch {
+        throw new Error(READ_URL_STRINGS.noCookielessTab);
+      }
+      await chrome.tabs.update(tab.id!, { url });
       await this.waitForLoad(tab.id!, 20000);
       await sleep(2500); // let live content arrive after load
       return await read(tab.id!);
     } finally {
       await chrome.tabs.remove(tab.id!).catch(() => undefined);
+      await dnr.updateSessionRules({ removeRuleIds: [ruleId] }).catch(() => undefined);
     }
   }
 
@@ -607,15 +690,30 @@ export class BrowserExecutor {
         if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
         if (!isValidWebNavigationUrl(url)) throw new Error(`read_url only reads http/https web pages, not "${url}".`);
         const max = Math.max(500, Math.min(num("max_chars") ?? 15000, 60000));
-        return {
-          label: `Read ${new URL(url).host}`,
-          sensitive: false,
-          run: async () => {
-            const raw = await this.readUrl(url, max);
-            this.rememberPageData(raw);
-            return ok(this.wrap(raw, "read_url", url));
-          },
+        const host = new URL(url).host;
+        const run = async (): Promise<ToolOutput> => {
+          const raw = await this.readUrl(url, max);
+          this.rememberPageData(raw);
+          return ok(this.wrap(raw, "read_url", url));
         };
+        // AIC-2: local hosts the user did not name, and addresses the model built after reading
+        // web content, ask first (read-url-policy.ts). Everything else reads as before.
+        const seenData = [...(this.turn?.pageData ?? []), ...(this.turn?.priorUntrusted ?? [])];
+        const reach = readUrlReach(new URL(url).hostname);
+        const gate = readUrlGate({
+          reach,
+          userNamed: userNamedHost(url, this.turn?.userRequest ?? ""),
+          untrustedInContext: seenData.length > 0,
+          seen: seenVerbatim(url, seenData),
+        });
+        if (gate === "none") return { label: `Read ${host}`, sensitive: false, run };
+        const meta = this.planFrom({
+          tool: "read_url",
+          destinationUrl: url,
+          label: `Read ${host}`,
+          readUrl: { gate, reach, url },
+        });
+        return { ...meta, run };
       }
       case "navigate": {
         let url = (str("url") ?? "").trim();

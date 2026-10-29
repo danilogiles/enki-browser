@@ -54,6 +54,9 @@ export default defineManifest({
     "storage",
     "debugger",
     "webNavigation",
+    // AIC-2 (0.8.14): strips Cookie / Set-Cookie for read_url's background tab only (session
+    // rule scoped to that tab id). The WithHostAccess variant adds no install warning.
+    "declarativeNetRequestWithHostAccess",
   ],
   host_permissions: ["<all_urls>"],
   // AI search (0.8.9): Enki Shield's search page hands an "Ask Enki" query over to search.html.

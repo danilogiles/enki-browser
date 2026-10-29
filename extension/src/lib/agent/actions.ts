@@ -10,6 +10,7 @@
  * Pure functions, no chrome APIs, so test/safety-unit.cjs can cover every category.
  */
 import { SENSITIVE_ACTION } from "../protocol";
+import { READ_URL_STRINGS } from "../tools/read-url-strings";
 
 export type ActionCategory =
   | "form_submit"
@@ -23,7 +24,11 @@ export type ActionCategory =
   | "connector_write"
   | "purchase"
   | "sensitive_click"
-  | "page_requested";
+  | "page_requested"
+  /** AIC-2: read_url to this computer or the local network, a host the user did not name. */
+  | "local_network_read"
+  /** AIC-2: read_url to an address the model built after reading web content. */
+  | "untrusted_url_read";
 
 /** Facts about the element a step acts on, gathered by the content script. */
 export type ElementFacts = {
@@ -103,6 +108,11 @@ export type ActionFacts = {
   connector?: { app: string; tool: string; readOnly: boolean; allowed?: boolean };
   incognito?: boolean;
   label: string;
+  /**
+   * read_url only (AIC-2): which card read-url-policy.ts asked for. The executor computes it
+   * (it knows the conversation's untrusted content); unset means the read needs no card.
+   */
+  readUrl?: { gate: "local" | "untrusted"; reach: "device" | "network" | "public"; url: string };
 };
 
 export type TurnContext = {
@@ -124,6 +134,8 @@ export type Classification = {
   target: string;
   origin: string;
   value: string;
+  /** Always-visible Why line for AIC-2 read_url cards (see ConfirmPayload.subtitle). */
+  subtitle?: string;
   pageRequested: boolean;
   requiresConfirm: boolean;
   /** For connector writes the user allowed by name in Connections. */
@@ -420,6 +432,10 @@ export function maskFilledValue(field: FilledField): string {
 }
 
 function summarizeValue(action: ActionFacts, turn: TurnContext, cats: ActionCategory[]): string {
+  if (action.readUrl && (cats.includes("local_network_read") || cats.includes("untrusted_url_read"))) {
+    // Why goes on ConfirmPayload.subtitle (always visible). Address alone is the value box.
+    return `${READ_URL_STRINGS.rowAddress}: ${action.readUrl.url}`;
+  }
   if (cats.includes("form_submit")) {
     // Field list for the card / transcript — never repeat the verb, never show passwords.
     return turn.filled
@@ -451,6 +467,8 @@ export function verbFor(primary: ActionCategory | null, target: string, cats: Ac
     case "sensitive_input": return t ? `Type into ${t}` : "Type into a sensitive field";
     case "page_requested": return t || "Run page-requested action";
     case "sensitive_click": return t || "Sensitive action";
+    case "local_network_read": return t || READ_URL_STRINGS.localNetworkVerb;
+    case "untrusted_url_read": return t || READ_URL_STRINGS.untrustedVerb("this address");
     default:
       if (cats.length) return t || "Sensitive action";
       return t || "Action";
@@ -460,7 +478,8 @@ export function verbFor(primary: ActionCategory | null, target: string, cats: Ac
 const PRIORITY: ActionCategory[] = [
   "page_requested", "purchase", "send_message", "delete", "account_settings",
   "file_upload", "download", "form_submit", "sensitive_input",
-  "cross_origin_navigation", "connector_write", "sensitive_click",
+  "cross_origin_navigation", "connector_write", "local_network_read", "untrusted_url_read",
+  "sensitive_click",
 ];
 
 function pickPrimary(cats: ActionCategory[]): ActionCategory | null {
@@ -473,6 +492,15 @@ function push(cats: ActionCategory[], c: ActionCategory): void {
 }
 
 // ---------- classifier ----------
+
+/** The card's verb for a read_url gate (also the target, so page_requested keeps it). */
+function readUrlVerb(r: NonNullable<ActionFacts["readUrl"]>): string {
+  const S = READ_URL_STRINGS;
+  if (r.gate === "local") return r.reach === "device" ? S.localDeviceVerb : S.localNetworkVerb;
+  let host = "";
+  try { host = new URL(r.url).host; } catch { /* below */ }
+  return S.untrustedVerb(host || "this address");
+}
 
 export function classifyAction(action: ActionFacts, turn: TurnContext): Classification {
   const cats: ActionCategory[] = [];
@@ -579,6 +607,11 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
 
   if (action.connector && !action.connector.readOnly) push(cats, "connector_write");
 
+  // read_url (AIC-2): the gate comes from read-url-policy.ts via the executor.
+  if (action.tool === "read_url" && action.readUrl) {
+    push(cats, action.readUrl.gate === "local" ? "local_network_read" : "untrusted_url_read");
+  }
+
   if (pageRequested && cats.length) push(cats, "page_requested");
   // A page that ordered an action Enki would otherwise take without confirming still needs one.
   if (pageRequested && !cats.length && (action.tool === "click" || action.tool === "navigate" || action.tool === "new_tab" || action.tool === "type" || action.tool === "press_key" || !!action.connector)) {
@@ -598,8 +631,12 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
   const origin = destinationUnknown
     ? ""
     : destOrigin || currentOrigin || (action.connector ? action.connector.app : "");
-  const target = name || (action.connector ? `${action.connector.app}: ${action.connector.tool}` : "") || (dest ? siteOf(dest) : "");
+  const readTarget = action.tool === "read_url" && action.readUrl ? readUrlVerb(action.readUrl) : "";
+  const target = readTarget || name || (action.connector ? `${action.connector.app}: ${action.connector.tool}` : "") || (dest ? siteOf(dest) : "");
   const value = summarizeValue(action, turn, cats);
+  const subtitle = action.readUrl && (cats.includes("local_network_read") || cats.includes("untrusted_url_read"))
+    ? (action.readUrl.gate === "local" ? READ_URL_STRINGS.localWhy : READ_URL_STRINGS.untrustedWhy)
+    : undefined;
   const sameOrigin = destinationUnknown
     ? false
     : !destOrigin || !currentOrigin || destOrigin === currentOrigin;
@@ -618,6 +655,7 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     target,
     origin,
     value,
+    subtitle,
     pageRequested: cats.includes("page_requested"),
     requiresConfirm: cats.length > 0,
     connectorAllowed: !!action.connector?.allowed,
@@ -640,6 +678,9 @@ export function mayAutoApprove(c: Classification): boolean {
   if (c.incognito) return false;
   if (c.pageRequested) return false;
   if (c.categories.includes("cross_origin_navigation")) return false;
+  // AIC-2: a local read or a model-built address after web content always asks (Cloak).
+  if (c.categories.includes("local_network_read")) return false;
+  if (c.categories.includes("untrusted_url_read")) return false;
   if (c.categories.includes("download")) return false;
   if (c.categories.includes("file_upload")) return false;
   if (c.categories.includes("account_settings")) return false;

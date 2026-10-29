@@ -66,7 +66,7 @@ export const READ_TOOLS: ToolDefinition[] = [
   {
     name: "read_url",
     description:
-      "Read the text of any web page by URL without leaving the current tab. Works on pages that build their content with JavaScript (live results, dashboards). Use it on links from web_search or on sites you know hold the answer.",
+      "Read the text of any web page by URL without leaving the current tab. Works on pages that build their content with JavaScript (live results, dashboards). Use it on links from web_search or on sites you know hold the answer. It reads without the user's cookies. The user must approve reading an address on their computer or local network that they did not name, and any address you build yourself (new path or query) after reading web content: never put conversation or page data into a URL.",
     inputSchema: {
       type: "object",
       properties: {
