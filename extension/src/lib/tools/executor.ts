@@ -151,7 +151,11 @@ export function cookielessRule(id: number, tabId: number): chrome.declarativeNet
     priority: 1,
     action: {
       type: "modifyHeaders" as chrome.declarativeNetRequest.RuleActionType,
-      requestHeaders: [{ header: "cookie", operation: "remove" as chrome.declarativeNetRequest.HeaderOperation }],
+      requestHeaders: [
+        { header: "cookie", operation: "remove" as chrome.declarativeNetRequest.HeaderOperation },
+        // Cloak nit: also drop Authorization so cached HTTP auth / NTLM does not ride along.
+        { header: "authorization", operation: "remove" as chrome.declarativeNetRequest.HeaderOperation },
+      ],
       responseHeaders: [{ header: "set-cookie", operation: "remove" as chrome.declarativeNetRequest.HeaderOperation }],
     },
     condition: {
@@ -320,7 +324,7 @@ export class BrowserExecutor {
    * that builds itself with JavaScript (the TSE's live results, dashboards) says almost nothing in
    * its HTML, so it is opened in a background tab, read once it has rendered, and closed.
    *
-   * AIC-2: neither path sends the user's cookies (fetch: credentials "omit"; tab: cookie headers
+   * AIC-2: neither path sends the user's cookies or Authorization (fetch: credentials "omit"; tab: cookie/authorization headers
    * stripped, see inBackgroundTab), and a redirect may not land on a local host other than the
    * one that was approved (read-url-policy.ts redirectAllowed), on either path.
    */
@@ -360,10 +364,10 @@ export class BrowserExecutor {
    * Opens `url` in a tab the user does not switch to, lets it render, reads it and closes it.
    *
    * AIC-2: the tab lives in the user's profile, so it is opened on about:blank first, a session
-   * declarativeNetRequest rule for that tab alone strips the Cookie request header and the
-   * Set-Cookie response header, and only then does it navigate. No rule, no tab (fail closed).
+   * declarativeNetRequest rule for that tab alone strips Cookie and Authorization on the request
+   * and Set-Cookie on the response, and only then does it navigate. No rule, no tab (fail closed).
    * Page script in that tab can still see first-party storage (document.cookie, localStorage);
-   * what never leaves the browser is the cookie on the request.
+   * stripping request headers does not wipe that storage.
    */
   private async inBackgroundTab<T>(url: string, read: (tabId: number) => Promise<T>): Promise<T> {
     const dnr = (chrome as unknown as { declarativeNetRequest?: typeof chrome.declarativeNetRequest }).declarativeNetRequest;

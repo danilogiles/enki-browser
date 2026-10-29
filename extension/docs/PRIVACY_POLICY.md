@@ -35,7 +35,7 @@ We believe privacy is a fundamental human right. Enki operates on a **Local-Firs
 ### 2.4 Web Search and Reading Sources
 - To answer questions about current events, Enki can search the web (`web_search`) and read pages (`read_url`) without leaving your tab.
 - **What is sent:** only the search words, to Brave Search and, if it does not answer, DuckDuckGo; and an ordinary request to each page Enki reads. These requests carry no cookies.
-- Pages that need JavaScript are opened briefly in a background tab of your browser, read, and closed. Since 0.8.14 that tab's requests have their cookies removed (`declarativeNetRequestWithHostAccess`, a rule for that tab only).
+- Pages that need JavaScript are opened briefly in a background tab of your browser, read, and closed. Since 0.8.14 that tab's requests have Cookie and Authorization removed (`declarativeNetRequestWithHostAccess`, a rule for that tab only). The tab still uses your profile, so page script can still read that site's first-party storage.
 - Enki asks before reading an address on your computer or local network (for example `localhost` or `192.168.x.x`) that you did not name, and before reading an address it built itself after reading web content.
 
 ### 2.5 Connected Apps (MCP)

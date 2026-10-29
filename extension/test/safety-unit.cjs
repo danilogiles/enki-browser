@@ -1294,7 +1294,10 @@ check('[SENSITIVE-INPUT] sensitive_input blocks auto-approve even next to a skip
       const rule = log[1][1].addRules[0];
       assert.deepEqual(rule.condition.tabIds, [8]);
       assert.ok(rule.condition.resourceTypes.includes('main_frame'));
-      assert.deepEqual(rule.action.requestHeaders, [{ header: 'cookie', operation: 'remove' }]);
+      assert.deepEqual(rule.action.requestHeaders, [
+        { header: 'cookie', operation: 'remove' },
+        { header: 'authorization', operation: 'remove' },
+      ]);
       assert.deepEqual(rule.action.responseHeaders, [{ header: 'set-cookie', operation: 'remove' }]);
       assert.deepEqual(log[2], ['update', 8, 'https://spa.test/live']);
       const tail = log.slice(-2);

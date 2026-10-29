@@ -20,5 +20,5 @@ export const READ_URL_STRINGS = {
   redirectedLocal: (host: string) =>
     `Stopped: the page redirected to ${host}, an address on this computer or your local network. Enki doesn't follow redirects there. Ask the user to name that address if they want it read.`,
   noCookielessTab:
-    "This page needs JavaScript to read, and Enki could not open it without your cookies, so it was not opened.",
+    "This page needs JavaScript to read, and Enki could not open a tab that strips Cookie and Authorization from its requests, so it was not opened.",
 } as const;
