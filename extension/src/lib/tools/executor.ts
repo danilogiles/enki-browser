@@ -36,6 +36,11 @@ export type ConfirmPayload = {
   verb: string;
   origin: string;
   value: string;
+  /**
+   * Always-visible reason under the verb (AIC-2 read_url cards). Not collapsed behind Show all.
+   * When set, Chat renders this instead of the mono origin line.
+   */
+  subtitle?: string;
   pageRequested: boolean;
   /** Full category list for the policy / diagnostics. */
   categories: ActionCategory[];
@@ -257,6 +262,7 @@ export class BrowserExecutor {
         verb,
         origin: c.origin,
         value: c.value,
+        subtitle: c.subtitle,
         pageRequested: c.pageRequested,
         categories: c.categories,
         filled: c.filled,

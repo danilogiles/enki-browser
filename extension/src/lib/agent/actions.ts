@@ -134,6 +134,8 @@ export type Classification = {
   target: string;
   origin: string;
   value: string;
+  /** Always-visible Why line for AIC-2 read_url cards (see ConfirmPayload.subtitle). */
+  subtitle?: string;
   pageRequested: boolean;
   requiresConfirm: boolean;
   /** For connector writes the user allowed by name in Connections. */
@@ -431,9 +433,8 @@ export function maskFilledValue(field: FilledField): string {
 
 function summarizeValue(action: ActionFacts, turn: TurnContext, cats: ActionCategory[]): string {
   if (action.readUrl && (cats.includes("local_network_read") || cats.includes("untrusted_url_read"))) {
-    const S = READ_URL_STRINGS;
-    const why = action.readUrl.gate === "local" ? S.localWhy : S.untrustedWhy;
-    return `${S.rowAddress}: ${action.readUrl.url}\n${S.rowWhy}: ${why}`;
+    // Why goes on ConfirmPayload.subtitle (always visible). Address alone is the value box.
+    return `${READ_URL_STRINGS.rowAddress}: ${action.readUrl.url}`;
   }
   if (cats.includes("form_submit")) {
     // Field list for the card / transcript — never repeat the verb, never show passwords.
@@ -633,6 +634,9 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
   const readTarget = action.tool === "read_url" && action.readUrl ? readUrlVerb(action.readUrl) : "";
   const target = readTarget || name || (action.connector ? `${action.connector.app}: ${action.connector.tool}` : "") || (dest ? siteOf(dest) : "");
   const value = summarizeValue(action, turn, cats);
+  const subtitle = action.readUrl && (cats.includes("local_network_read") || cats.includes("untrusted_url_read"))
+    ? (action.readUrl.gate === "local" ? READ_URL_STRINGS.localWhy : READ_URL_STRINGS.untrustedWhy)
+    : undefined;
   const sameOrigin = destinationUnknown
     ? false
     : !destOrigin || !currentOrigin || destOrigin === currentOrigin;
@@ -651,6 +655,7 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     target,
     origin,
     value,
+    subtitle,
     pageRequested: cats.includes("page_requested"),
     requiresConfirm: cats.length > 0,
     connectorAllowed: !!action.connector?.allowed,

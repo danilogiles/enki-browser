@@ -1235,7 +1235,8 @@ check('[SENSITIVE-INPUT] sensitive_input blocks auto-approve even next to a skip
     assert.equal(plan.confirm.category, 'local_network_read');
     assert.equal(plan.confirm.verb, READ_URL_STRINGS.localNetworkVerb);
     assert.equal(plan.confirm.origin, 'http://192.168.1.1');
-    assert.match(plan.confirm.value, /^Address: http:\/\/192\.168\.1\.1\/status\nWhy: /);
+    assert.equal(plan.confirm.subtitle, READ_URL_STRINGS.localWhy);
+    assert.equal(plan.confirm.value, 'Address: http://192.168.1.1/status');
     assert.equal(confirmDecision(plan.classification, true), 'ask');
     plan = await newExec({ userRequest: 'hi' }).prepare(call('read_url', { url: 'http://localhost:11434/api/tags' }));
     assert.equal(plan.confirm.verb, READ_URL_STRINGS.localDeviceVerb);
@@ -1250,6 +1251,7 @@ check('[SENSITIVE-INPUT] sensitive_input blocks auto-approve even next to a skip
     assert.equal(plan.sensitive, true);
     assert.equal(plan.confirm.category, 'untrusted_url_read');
     assert.equal(plan.confirm.verb, READ_URL_STRINGS.untrustedVerb('collect.test'));
+    assert.equal(plan.confirm.subtitle, READ_URL_STRINGS.untrustedWhy);
     assert.equal(plan.confirm.pageRequested, false);
     assert.equal(confirmDecision(plan.classification, true), 'ask');
     // Earlier turns' tool results count too.
