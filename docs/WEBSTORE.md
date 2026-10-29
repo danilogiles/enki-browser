@@ -12,7 +12,9 @@ Enki Browser is built on ungoogled-chromium, which has no Web Store installs: th
 2. A click opens Ink's access note (mock 02), the same for every extension: Shield never opens a
    .crx itself, so there is no download before Continue and no permission list of its own.
    Chromium's prompt shows the extension's permissions next. Focus starts on **Cancel**; Enter
-   there or Escape closes the note.
+   there or Escape closes the note. While the note is open, **Install in Enki** is held disabled
+   (mock 01b: dimmed, `aria-disabled="true"`, out of the tab order, clicks ignored); closing the
+   note gives it back and focuses it, and Continue switches it to the busy state.
 3. **Continue** sends `enki-shield:cws-install` to the worker (`shield/webstore.js`) with the id
    in the tab's address at that moment, which must still be the id the card was drawn for. The
    worker reads the id from the address of the store page the message came from (`sender.url`, as
@@ -73,7 +75,7 @@ records the current one as a baseline instead of offering an update.
   against Google's server: this minimal set is answered (gupdate XML); unknown ids come back as
   `status="error-unknownApplication"` and are ignored.
 - A newer version shows Ink's notice (mock 05) in the Shields panel and in settings: **Later**
-  hides it for that version, **Update** opens the same .crx address as the button, so Chromium's
+  (outlined) hides it for that version, **Update** (the filled primary, with the initial focus) opens the same .crx address as the button, so Chromium's
   prompt asks again.
 - Settings say what is sent: ids, versions and the browser version, no cookies, no Google account.
 
@@ -108,7 +110,7 @@ edit and a re-run of the script. Placeholders are numbered in the order name, ve
 |---|---|---|
 | `test/shield-webstore-unit.mjs` | id rules, store addresses, Continue's id cross-check (sent id must equal the address's), the update switch's 44x44 target, exact query of both Google addresses (and the forbidden params), update reply parsing, version from file name, rule scope, manifest permissions unchanged, locales | called by `test/verify.mjs`: **Windows** (`npm run verify`), **Linux** (verify step after the .tar.gz install), **macOS** (verify step) |
 | `test/verify.mjs` (new checks) | the shipped Shield has the button and rule; chrome://version shows the always-prompt switch | the same three jobs |
-| `test/shield-webstore.mjs` | end to end in the built browser: closed shadow root, untrusted clicks ignored, access note focus/Enter/Escape, Cancel at Chromium's prompt (leftover .crx), Add (installed in the profile), no Cookie/Referer/X-Client-Data on either clients2 host with a google.com cookie in the jar (and a control host that gets it), Set-Cookie not kept, record and version, update switch 38x22 with a 44x44 target and 2px focus ring, switch/alarm/exact query/notice/Update/off, Forget | called by `test/verify.mjs` on **Linux only** (needs xvfb and xdotool, which the Linux job installs); `ENKI_SKIP_WEBSTORE_E2E=1` skips it |
+| `test/shield-webstore.mjs` | end to end in the built browser: closed shadow root, untrusted clicks ignored, access note focus/Enter/Escape and Install held disabled while it is open, Cancel at Chromium's prompt (leftover .crx), Add (installed in the profile), no Cookie/Referer/X-Client-Data on either clients2 host with a google.com cookie in the jar (and a control host that gets it), Set-Cookie not kept, record and version, update switch 38x22 with a 44x44 target and 2px focus ring, switch/alarm/exact query/notice/Update/off, Forget | called by `test/verify.mjs` on **Linux only** (needs xvfb and xdotool, which the Linux job installs); `ENKI_SKIP_WEBSTORE_E2E=1` skips it |
 
 ```
 node test/shield-webstore-unit.mjs
@@ -132,7 +134,8 @@ native prompt has to be answered by a person. Before release, on Windows (Danilo
    extension). The **Install in Enki** card is at the top right.
 3. Press F12 on that tab, Network tab, tick **Preserve log**.
 4. Click **Install in Enki**. The access note opens, focus is on **Cancel** (press Enter: it
-   closes). Click again, press Escape: it closes. Nothing appears in Network.
+   closes). Click again: Install is dimmed and clicking it does nothing; press Escape: the note
+   closes and Install is back to normal, focused. Nothing appears in Network.
 5. Click **Install in Enki**, then **Continue**. Chromium asks *Add "…"?*. Click **Cancel**.
    Expected: nothing installed; `%USERPROFILE%\Downloads\<ID>_<version>.crx` (macOS:
    `~/Downloads`) is left (the documented leftover). Delete it.

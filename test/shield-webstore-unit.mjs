@@ -66,6 +66,20 @@ export function checkWebstoreUnit(check) {
   check("update switch: drawn 38x22, target at least 44x44, 2px focus ring", base?.[1] === "38" && base?.[2] === "22" && tw >= 44 && th >= 44
     && /\.switch:focus-visible \{ outline: 2px solid/.test(css), `${base?.slice(1).join("x")} → ${tw}x${th}`);
 
+  // ---- 0.8.14 polish (Ink's POLISH.md): Update is the filled primary (mock 05); Install is held
+  // disabled, not busy, while the access note is open (mock 01b). The browser test checks behavior.
+  const ui = readFileSync(path.join(root, "shield", "webstore-ui.js"), "utf8");
+  const pg = readFileSync(path.join(root, "shield", "webstore-page.js"), "utf8");
+  check("update notice: Update is .pill.primary on the accent, Later stays .pill.quiet, Update gets focus",
+    /^\.pill\.primary \{ background: var\(--accent\); border-color: var\(--accent\); color: #06202d; \}/m.test(css)
+      && /className: "pill primary", textContent: t\("update_now"/.test(ui) && /className: "pill quiet", textContent: t\("update_later"/.test(ui)
+      && /\.pill\.primary"\)\?\.focus\(\)/.test(ui));
+  check("update notice: light theme primary uses #0369a1 + white for AA",
+    /@media \(prefers-color-scheme: light\)[\s\S]*?\.pill\.primary \{ background: #0369a1; border-color: #0369a1; color: #fff; \}/m.test(css));
+  check("access note: Install held disabled (dimmed, not-allowed, not the busy look) and out of the tab order",
+    /\.btn\.primary\.held\{opacity:1;background:#1f3a47;color:#6f8f9e;border-color:#2b4a58;cursor:not-allowed\}/.test(pg)
+      && /install\.tabIndex = on \? -1 : 0/.test(pg) && /busy \|\| held\) return/.test(pg));
+
   // ---- the install address: exactly these parameters, in this order
   const install = query(crxUrl(A, V));
   check("install address: Google's update server", install.base === UPDATE_URL, install.base);

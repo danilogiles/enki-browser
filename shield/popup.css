@@ -37,6 +37,11 @@ select { background: var(--card); color: var(--text); border: 1px solid var(--li
 .burn { display: flex; gap: 8px; margin-top: 12px; }
 .pill.fire { background: #e8590c; border-color: #e8590c; color: #fff; }
 .pill.quiet { color: var(--text); font-weight: 500; }
+.pill.primary { background: var(--accent); border-color: var(--accent); color: #06202d; }
+@media (prefers-color-scheme: light) {
+  /* Ink: light primary needs AA; #fff on #0284c7 is ~4.1, so bump to #0369a1 + white */
+  .pill.primary { background: #0369a1; border-color: #0369a1; color: #fff; }
+}
 .confirm { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--card); border: 1px solid rgba(232, 89, 12, .45); }
 .confirm p { margin: 0 0 10px; }
 .confirm-title { font-weight: 650; font-size: 14px; margin-bottom: 2px; }

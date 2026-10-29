@@ -26,6 +26,8 @@
 .btn.primary{background:#38bdf8;color:#06202d;border:1px solid #38bdf8}
 .btn.ghost{background:transparent;color:#e8e8e6;border:1px solid #5a5c5b}
 .btn[aria-disabled=true]{opacity:.7;cursor:progress}
+.btn.primary.held{opacity:1;background:#1f3a47;color:#6f8f9e;border-color:#2b4a58;cursor:not-allowed}
+.btn.primary.held svg{opacity:.6}
 .btn:focus-visible{outline:2px solid #38bdf8;outline-offset:2px}
 .hint{display:flex;gap:6px;align-items:flex-start;margin:8px 2px 0;font-size:11.5px;color:#b7b8b5}
 .note{margin:6px 2px 0;font-size:11.5px;color:#9a9c99}
@@ -86,23 +88,31 @@ li.hl{color:#e8e8e6}
     (document.body ?? document.documentElement).append(host);
 
     let busy = false;
+    let held = false; // the access note is open: Install looks and acts disabled (mock 01b)
     const setBusy = (on) => {
       busy = on;
       install.textContent = on ? t("cws_install_busy") : t("cws_install_button");
-      install.setAttribute("aria-disabled", String(on));
+      install.setAttribute("aria-disabled", String(on || held));
+    };
+    const hold = (on) => {
+      held = on;
+      install.classList.toggle("held", on);
+      install.setAttribute("aria-disabled", String(on || busy));
+      install.tabIndex = on ? -1 : 0;
     };
     const fail = (key) => { setBusy(false); err.textContent = t(key); err.hidden = false; };
-    const close = () => { card.hidden = true; install.focus(); };
+    const close = () => { card.hidden = true; hold(false); install.focus(); };
     failNow = fail;
 
     install.addEventListener("click", (e) => {
-      if (!e.isTrusted || busy) return;
+      if (!e.isTrusted || busy || held) return;
       err.hidden = true;
       if (!idHere()) return fail("cws_error_id");
       const now = nameHere() || id; // the store may fill in its heading after the card appeared
       h2.textContent = t("access_title_generic", now);
       install.setAttribute("aria-label", t("cws_install_button_aria", now));
       card.hidden = false;
+      hold(true);
       cancel.focus();
     });
     cancel.addEventListener("click", (e) => { if (e.isTrusted) close(); });
@@ -110,6 +120,7 @@ li.hl{color:#e8e8e6}
     go.addEventListener("click", async (e) => {
       if (!e.isTrusted || busy) return;
       card.hidden = true;
+      hold(false);
       setBusy(true);
       install.focus();
       let r;

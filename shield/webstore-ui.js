@@ -28,13 +28,14 @@ export async function renderNotices(box, after = () => {}) {
     card.setAttribute("aria-labelledby", title.id);
     card.setAttribute("aria-describedby", body.id);
     const later = el("button", { type: "button", className: "pill quiet", textContent: t("update_later", "Later") });
-    const now = el("button", { type: "button", className: "pill", textContent: t("update_now", "Update") });
+    const now = el("button", { type: "button", className: "pill primary", textContent: t("update_now", "Update") });
     later.onclick = async () => { await ask("cws-later", { id: u.id }); await renderNotices(box, after); after(); };
     now.onclick = async () => { await ask("cws-update", { id: u.id }); await renderNotices(box, after); after(); };
     card.append(title, versions, body, el("div", { className: "buttons" }, later, now));
     return card;
   }));
   box.hidden = !list.length;
+  box.querySelector(".cws-notice .pill.primary")?.focus(); // mock 05: Update has the initial focus
   return list;
 }
 

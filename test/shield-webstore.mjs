@@ -185,6 +185,7 @@ try {
     const card = inside.find((n) => attr(n, "role") === "alertdialog");
     const err = inside.find((n) => attr(n, "role") === "alert");
     return { host, shadowType: host.shadowRoots?.[0]?.shadowRootType, install: buttons[0], cancel: buttons[1], go: buttons[2],
+      installDisabled: attr(buttons[0], "aria-disabled"), installTab: attr(buttons[0], "tabindex"),
       cardOpen: card ? attr(card, "hidden") === null : false, errorShown: err ? attr(err, "hidden") === null : false };
   };
   const click = async (which) => { // nodes are fetched again: every DOM.getDocument renumbers them
@@ -211,14 +212,21 @@ try {
   await click("install");
   n = await until(async () => { const x = await nodes(); return x.cardOpen && x; }, 5000);
   check("a real click opens the access note first", !!n?.cardOpen);
+  check("…and holds Install disabled while it is open (aria-disabled, out of the tab order)", n?.installDisabled === "true" && n?.installTab === "-1", `${n?.installDisabled} ${n?.installTab}`);
   await page.keyboard.press("Enter"); // focus starts on Cancel: Enter cancels
   await sleep(400);
   check("…with focus on Cancel (Enter closes it)", !(await nodes()).cardOpen);
   await click("install");
   await until(async () => (await nodes()).cardOpen, 5000);
+  await click("install"); // the dimmed Install, while the note is open
+  await sleep(400);
+  check("…where a real click on the held Install does nothing", (await nodes()).cardOpen && crxRequests().length === 0);
+  await page.keyboard.press("Tab"); // Install is out of the tab order: Tab lands in the note again
   await page.keyboard.press("Escape");
   await sleep(400);
-  check("…and Escape closes it", !(await nodes()).cardOpen);
+  n = await nodes();
+  check("…and Escape closes it", !n.cardOpen);
+  check("…and gives Install back (aria-disabled false, tabindex 0)", n.installDisabled === "false" && n.installTab === "0", `${n.installDisabled} ${n.installTab}`);
   check("…and nothing was requested while it was open or after cancelling", crxRequests().length === 0, crxRequests().map((r) => r.url).join(" "));
 
   // Continue, then Chromium's own "Add …?" prompt: first Cancel (its default button), then Add.
