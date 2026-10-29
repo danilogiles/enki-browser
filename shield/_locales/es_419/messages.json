@@ -1,0 +1,169 @@
+{
+  "cws_install_button": {
+    "message": "Instalar en Enki",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "cws_install_button_aria": {
+    "message": "Instalar $NAME$ en Enki",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "cws_install_hint": {
+    "message": "Enki solo contacta a Google cuando haces clic. No se envían cookies.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "cws_install_busy": {
+    "message": "Abriendo…",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "cws_store_button_note": {
+    "message": "El botón de la tienda no funciona en Enki.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "cws_error_id": {
+    "message": "Enki no pudo leer el ID de esta extensión. Recarga la página e inténtalo de nuevo.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "cws_error_download": {
+    "message": "La descarga no empezó. Revisa tu conexión e inténtalo de nuevo.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "access_badge": {
+    "message": "Antes de instalar",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "access_title": {
+    "message": "$NAME$ puede leer y cambiar todos los sitios que visitas",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "access_title_generic": {
+    "message": "Revisa a qué puede acceder $NAME$",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "access_body_read": {
+    "message": "Muchas extensiones ven las páginas que abres, incluido lo que escribes, y pueden actuar en ellas.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "access_body_data": {
+    "message": "Todo lo que envía va a su desarrollador. Eso queda fuera de la protección de Enki Shield.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "access_body_next": {
+    "message": "Después, Chromium muestra la lista completa de permisos. No se instala nada hasta que hagas clic en Agregar extensión.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "access_cancel": {
+    "message": "Cancelar",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "access_continue": {
+    "message": "Continuar",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "native_label": {
+    "message": "Diálogo nativo de Chromium (no es de Enki)",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "settings_section": {
+    "message": "Extensiones de la tienda",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "settings_updates_title": {
+    "message": "Buscar actualizaciones de las extensiones de la tienda",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "settings_updates_sub": {
+    "message": "Desactivado de forma predeterminada. Si lo activas, más o menos una vez al día Enki envía a Google solo los ID y las versiones de las extensiones que instaló Enki, además de la versión del navegador. Sin cookies ni cuenta de Google.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "settings_list_title": {
+    "message": "Instaladas por Enki",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "settings_list_row": {
+    "message": "Instalada por Enki · versión registrada $VERSION$",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      }
+    }
+  },
+  "settings_list_help": {
+    "message": "Enki no sabe cuándo quitas una extensión. Olvidar hace que deje de buscar actualizaciones para ella.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "settings_forget": {
+    "message": "Olvidar",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "settings_forget_aria": {
+    "message": "Olvidar $NAME$",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "settings_forgotten": {
+    "message": "$NAME$ olvidada. Enki no buscará actualizaciones para ella.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "settings_list_empty": {
+    "message": "Todavía no hay extensiones instaladas con Enki.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "update_title": {
+    "message": "Actualización disponible para $NAME$",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "update_versions": {
+    "message": "$FROM$ → $TO$",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval).",
+    "placeholders": {
+      "from": {
+        "content": "$1"
+      },
+      "to": {
+        "content": "$2"
+      }
+    }
+  },
+  "update_body": {
+    "message": "Chromium te pedirá que confirmes de nuevo. No cambia nada hasta que hagas clic en Agregar extensión.",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "update_now": {
+    "message": "Actualizar",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "update_later": {
+    "message": "Más tarde",
+    "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  }
+}

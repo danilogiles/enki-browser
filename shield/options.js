@@ -5,6 +5,7 @@ import { DOWNLOAD, check, compare, native, restart, restartWithFallback, status 
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
 import { showWidevine } from "./widevine.js";
 import { GPC, gpcOn } from "./gpc.js";
+import { renderNotices, renderSettings } from "./webstore-ui.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -157,3 +158,13 @@ $("show-guide").onclick = () => {
 // Protected video (widevine.js).
 await showWidevine($, native, restart);
 document.documentElement.dataset.widevine = "ready"; // tests wait for this before reading or clicking
+
+// Store extensions installed with "Install in Enki" (webstore.js): the update switch, the list
+// with Forget, and any update notice.
+const cwsSettings = $("cws-settings");
+const cwsNotices = $("cws-notices");
+const renderStore = () => Promise.all([renderSettings(cwsSettings), renderNotices(cwsNotices)]);
+await renderStore();
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && Object.keys(changes).some((k) => k.startsWith("shields:cws-") && k !== "shields:cws-updates")) void renderStore();
+});
