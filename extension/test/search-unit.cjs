@@ -65,6 +65,31 @@ const md = (src) => renderToStaticMarkup(React.createElement(Markdown, safeMarkd
     assert.match(out, /rel="noopener noreferrer"/);
     assert.match(out, /Image: pixel/);
   });
+  await check('[ALLOW-SITE] Shield Burn/Shred wipe: only from Shield, only valid scopes, clears Always allow sites', async () => {
+    let wiped = 0;
+    const io = { clearAllowedSites: async () => { wiped++; } };
+    const shield = { id: S.SHIELD_EXTENSION_ID };
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:privacyWipe', scope: 'burn' }, { id: 'evil' }, io), { ok: false, error: 'forbidden' });
+    assert.deepEqual(await S.handleExternalMessage({ type: 'enki:privacyWipe', scope: 'burn' }, {}, io), { ok: false, error: 'forbidden' });
+    for (const bad of [{ type: 'enki:privacyWipe' }, { type: 'enki:privacyWipe', scope: 'all' }, { type: 'enki:privacyWipe', scope: 'burn', host: 'x.test' }])
+      assert.deepEqual(await S.handleExternalMessage(bad, shield, io), { ok: false, error: 'invalid message' });
+    assert.equal(wiped, 0);
+    for (const scope of ['burn', 'shred', 'auto-burn'])
+      assert.deepEqual(await S.handleExternalMessage({ type: 'enki:privacyWipe', scope }, shield, io), { ok: true });
+    assert.equal(wiped, 3);
+    // Default io: the real navigate-allowlist storage is cleared.
+    const NAV = require('../src/lib/agent/navigate-allowlist.ts');
+    const store = { [NAV.NAVIGATE_ALLOWLIST_KEY]: ['www.reddit.com'] };
+    const prev = global.chrome;
+    global.chrome = { storage: { local: {
+      get: async (k) => ({ [k]: store[k] }), set: async (o) => { Object.assign(store, o); }, remove: async (k) => { delete store[k]; },
+    } } };
+    try {
+      assert.deepEqual(await S.handleExternalMessage({ type: 'enki:privacyWipe', scope: 'burn' }, shield, { ...S.storageExternalIO }), { ok: true });
+      assert.equal(store[NAV.NAVIGATE_ALLOWLIST_KEY], undefined);
+      assert.deepEqual(await NAV.getAllowedHosts(), []);
+    } finally { global.chrome = prev; }
+  });
   await check('Shield messages: wrong sender rejected, bad values/fields rejected, get/set work; first search finishes pending setup', async () => {
     const mk = (engine, pending) => { const io = { engine, pending, just: 0,
       get: async () => io.engine, setEngine: async (v) => { io.engine = v; }, getPending: async () => io.pending,

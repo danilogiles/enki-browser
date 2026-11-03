@@ -46,7 +46,11 @@ export type RunOptions = {
   executor: BrowserExecutor;
   maxSteps: number;
   autoApprove: boolean;
-  requestApproval: (label: string, call: ToolCallPart, confirm?: ConfirmPayload) => Promise<boolean>;
+  /**
+   * Resolves true (Allow), false (Cancel), or "remember": Allow with the card's
+   * "Always allow {host}" box ticked (#114; only offered when confirm.rememberHost is set).
+   */
+  requestApproval: (label: string, call: ToolCallPart, confirm?: ConfirmPayload) => Promise<boolean | "remember">;
   /**
    * Shows the "tab in another window" card and resolves when it is cancelled or dismissed (Stop,
    * Escape, New chat). There is nothing to allow: whatever it resolves with, the step never runs
@@ -364,8 +368,11 @@ export async function runTurn(o: RunOptions): Promise<void> {
                 pageRequested: !!plan.confirm?.pageRequested, requiresConfirm: true,
                 unnamedRecipient: false, incognito: false,
                 connectorAllowed: false, sameOrigin: true, formHasSensitiveFilled: false,
-              }, o.autoApprove, plan.alwaysAsk)
+              }, o.autoApprove, plan.alwaysAsk, plan.siteAllowed)
             : "skip";
+          if (decision === "allow" && plan.siteAllowed) {
+            log.info("tool", "Always allow: card skipped for an allowed host", { host: plan.classification?.rememberHost });
+          }
           if (decision === "ask") {
             onEvent({ type: "approval_request", call, label: plan.label, confirm: plan.confirm });
             onEvent({ type: "status", message: "Waiting for your approval", step: step + 1 });
@@ -373,6 +380,7 @@ export async function runTurn(o: RunOptions): Promise<void> {
             // Stop may resolve the approval while the user is deciding. Never run the
             // pending action, even if an approval click raced with cancellation.
             if (o.signal.aborted) throw new DOMException("Aborted", "AbortError");
+            if (approved === "remember" && plan.confirm?.rememberHost) plan.remember?.();
             if (!approved) {
               declined = true;
               const r = result(call, { content: [{ type: "text", text: DECLINED_TEXT }], isError: true });

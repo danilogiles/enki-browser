@@ -26,6 +26,7 @@ import {
 import { fence, newNonce, safeRole, type UntrustedSource } from "../agent/untrusted";
 import { readUrlGate, readUrlReach, redirectAllowed, seenVerbatim, userNamedHost } from "./read-url-policy";
 import { READ_URL_STRINGS } from "./read-url-strings";
+import { allowHost, allowlistHost, isHostAllowed, landedOnHost } from "../agent/navigate-allowlist";
 
 export type ToolOutput = { content: Array<TextPart | ImagePart>; isError?: boolean };
 
@@ -48,6 +49,11 @@ export type ConfirmPayload = {
   filled?: FilledField[];
   /** Submit destination could not be read: the card says so instead of naming this site. */
   destinationUnknown?: boolean;
+  /**
+   * #114: exact host for the card's "Always allow {host}" checkbox (Go to / Open new tab only,
+   * see mayRememberSite). Unset: no checkbox.
+   */
+  rememberHost?: string;
 };
 
 /**
@@ -92,6 +98,16 @@ export type ToolPlan = {
   confirm?: ConfirmPayload;
   /** Classification used by mayAutoApprove; set whenever sensitive is true. */
   classification?: Classification;
+  /**
+   * #114: the user ticked "Always allow {host}" for this exact host earlier (chrome.storage.local).
+   * Only ever set together with classification.rememberHost; confirmDecision re-checks the shape.
+   */
+  siteAllowed?: boolean;
+  /**
+   * #114: the user ticked "Always allow {host}" and pressed Allow. The host is stored only after
+   * run() lands on that very host (redirect re-check), never before.
+   */
+  remember?: () => void;
   run: () => Promise<ToolOutput>;
 };
 
@@ -271,6 +287,43 @@ export class BrowserExecutor {
         categories: c.categories,
         filled: c.filled,
         destinationUnknown: c.destinationUnknown,
+        rememberHost: c.rememberHost,
+      },
+    };
+  }
+  /**
+   * #114: wraps a Go to / Open new tab run with the "Always allow {host}" bookkeeping. A remembered
+   * host is stored only when the tab really landed on it; a step that skipped the card because the
+   * host was allowed, but was redirected to another host, reports that instead of a plain success
+   * (Cloak: re-check origin on redirect, like AIC-2 redirectAllowed).
+   */
+  private async withSiteMemory<T extends { label: string; sensitive: boolean; classification?: Classification }>(
+    meta: T,
+    approvedUrl: string,
+    go: () => Promise<{ finalUrl: string | undefined; out: ToolOutput }>,
+  ): Promise<T & { siteAllowed?: boolean; remember?: () => void; run: () => Promise<ToolOutput> }> {
+    const host = meta.classification?.rememberHost;
+    const siteAllowed = host ? await isHostAllowed(approvedUrl) : false;
+    let rememberAsked = false;
+    return {
+      ...meta,
+      siteAllowed: siteAllowed || undefined,
+      remember: host ? () => { rememberAsked = true; } : undefined,
+      run: async () => {
+        const { finalUrl, out } = await go();
+        const landed = landedOnHost(approvedUrl, finalUrl);
+        if (host && rememberAsked && landed) await allowHost(host).catch(() => undefined);
+        if (host && (siteAllowed || rememberAsked) && !landed) {
+          const where = allowlistHost(finalUrl) || "another site";
+          return {
+            ...out,
+            content: [
+              ...out.content,
+              text(`Note: the page redirected away from ${host} to ${where}. ${rememberAsked ? `${host} was not added to Always allow.` : `Always allow covers ${host} only, not ${where}.`} Ask the user before acting on this site.`),
+            ],
+          };
+        }
+        return out;
       },
     };
   }
@@ -734,19 +787,16 @@ export class BrowserExecutor {
           incognito: !!tab.incognito,
           label: isHistory ? `Go ${url}` : `Go to ${url}`,
         });
-        return {
-          ...meta,
-          run: async () => {
-            const tabId = tab.id ?? (await this.currentTabId());
-            if (url === "back") await chrome.tabs.goBack(tabId);
-            else if (url === "forward") await chrome.tabs.goForward(tabId);
-            else await chrome.tabs.update(tabId, { url });
-            await this.waitForLoad(tabId);
-            const fresh = await chrome.tabs.get(tabId);
-            const where = this.wrap(`${fresh.title ?? ""} — ${fresh.url ?? ""}`, "navigate", fresh.url);
-            return ok(`Now on ${where}. Call read_page to see its content.`);
-          },
-        };
+        return this.withSiteMemory(meta, url, async () => {
+          const tabId = tab.id ?? (await this.currentTabId());
+          if (url === "back") await chrome.tabs.goBack(tabId);
+          else if (url === "forward") await chrome.tabs.goForward(tabId);
+          else await chrome.tabs.update(tabId, { url });
+          await this.waitForLoad(tabId);
+          const fresh = await chrome.tabs.get(tabId);
+          const where = this.wrap(`${fresh.title ?? ""} — ${fresh.url ?? ""}`, "navigate", fresh.url);
+          return { finalUrl: fresh.url, out: ok(`Now on ${where}. Call read_page to see its content.`) };
+        });
       }
       case "click": {
         const ref = str("ref");
@@ -983,17 +1033,14 @@ export class BrowserExecutor {
               label: `Open new tab: ${targetUrl}`,
             })
           : { label: "Open new tab", sensitive: false as boolean };
-        return {
-          ...meta,
-          run: async () => {
-            const tab = await chrome.tabs.create({ url: targetUrl, windowId: this.windowId, active: true });
-            if (tab.id) this.retarget(tab.id);
-            if (tab.id) await this.waitForLoad(tab.id);
-            const fresh = tab.id ? await chrome.tabs.get(tab.id) : tab;
-            const where = this.wrap(`${fresh.title ?? ""} — ${fresh.url ?? ""}`, "new_tab", fresh.url);
-            return ok(`Opened ${where} in a new tab (id ${fresh.id}).`);
-          },
-        };
+        return this.withSiteMemory(meta, targetUrl, async () => {
+          const tab = await chrome.tabs.create({ url: targetUrl, windowId: this.windowId, active: true });
+          if (tab.id) this.retarget(tab.id);
+          if (tab.id) await this.waitForLoad(tab.id);
+          const fresh = tab.id ? await chrome.tabs.get(tab.id) : tab;
+          const where = this.wrap(`${fresh.title ?? ""} — ${fresh.url ?? ""}`, "new_tab", fresh.url);
+          return { finalUrl: fresh.url, out: ok(`Opened ${where} in a new tab (id ${fresh.id}).`) };
+        });
       }
       default: {
         const found = findTool(this.connections, call.name);

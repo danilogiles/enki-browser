@@ -26,6 +26,7 @@ import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
+import { clearAllowedHosts, getAllowedHosts, NAVIGATE_ALLOWLIST_KEY, revokeHost } from "../lib/agent/navigate-allowlist";
 import { legalLinks } from "../lib/legal";
 import { SEARCH_SETTINGS_URL } from "../lib/legacy-search";
 import { chooseDdgEngine, chooseEnkiEngine, chooseOtherEngine, enkiOptionText, providerShortName, storedHasModel, SEARCH_OPTION_TEXT, getSearchEngine, onSearchEngineChange, reconcileSearchSetup, SETUP_PENDING_KEY, storageSetupIO, SEARCH_ENGINES_PAGE, SHIELD_EXTENSIONS_PAGE, UBLOCK_EXTENSIONS_PAGE, SHIELD_SEARCH_URL, queryShieldStatus, type ShieldStatus, type SearchEngine } from "../lib/search";
@@ -423,7 +424,7 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
               />
               <Toggle
                 label="Auto-approve sensitive actions"
-                hint="Skip the card for send / buy / delete style clicks only. Never skips page-requested actions, new sites, downloads, uploads, account changes, sensitive typing, or anything in Incognito."
+                hint="Skip the card for send / buy / delete style clicks only. Never skips page-requested actions, new sites (see Allowed sites), downloads, uploads, account changes, sensitive typing, or anything in Incognito."
                 checked={draft.autoApprove}
                 onChange={(v) => set("autoApprove", v)}
               />
@@ -448,6 +449,10 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
               <p className="text-xs text-zinc-500">
                 Give up if the model sends nothing for this long. Raise it for large local models on slower hardware.
               </p>
+            </Section>
+
+            <Section title="Allowed sites">
+              <AllowedSites />
             </Section>
 
             <Section title="Developer">
@@ -641,6 +646,57 @@ const inputCls =
   "w-full rounded-md border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-enki-500/60";
 const iconBtn =
   "shrink-0 rounded-md border border-ink-700 bg-ink-900 px-2 text-zinc-400 transition hover:text-zinc-100 disabled:opacity-50";
+
+/**
+ * #114: hosts the user ticked "Always allow {host}" for on a Go to card. Stored apart from
+ * Settings (chrome.storage.local, this profile), so it takes effect without Save. Shields Burn /
+ * Shred / burn-on-close wipe it (enki:privacyWipe). Remove one or clear all here.
+ */
+function AllowedSites() {
+  const [hosts, setHosts] = useState<string[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () => { getAllowedHosts().then((h) => { if (live) setHosts(h); }); };
+    load();
+    const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "local" && NAVIGATE_ALLOWLIST_KEY in changes) load();
+    };
+    chrome.storage?.onChanged?.addListener(onChange);
+    return () => { live = false; chrome.storage?.onChanged?.removeListener(onChange); };
+  }, []);
+  return (
+    <div data-testid="allowed-sites" className="space-y-2">
+      <p className="text-xs text-zinc-400">
+        Sites Enki may go to in Act without asking first, because you ticked "Always allow" on its card. Exact host only (www.reddit.com is not reddit.com). Never covers downloads, forms, sending, account pages, local addresses, requests from a page, or Incognito. Stays on this device; Burn and Shred clear it.
+      </p>
+      {hosts === null ? null : hosts.length === 0 ? (
+        <p className="text-xs text-zinc-500">No sites yet.</p>
+      ) : (
+        <>
+          <ul className="divide-y divide-ink-800 rounded-md border border-ink-700 bg-ink-900">
+            {hosts.map((h) => (
+              <li key={h} className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+                <span className="min-w-0 truncate font-mono text-[12px] text-zinc-200" title={h}>{h}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${h}`}
+                  className="shrink-0 rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:text-zinc-100"
+                  onClick={() => { revokeHost(h).then(setHosts); }}
+                >Remove</button>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            data-testid="allowed-sites-clear"
+            className="text-xs text-enki-400 underline"
+            onClick={() => { clearAllowedHosts().then(() => setHosts([])); }}
+          >Clear all</button>
+        </>
+      )}
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

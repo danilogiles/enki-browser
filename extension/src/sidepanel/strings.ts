@@ -83,6 +83,8 @@ const en = {
   approvalOrigin: "Site",
   approvalValue: "Details",
   approvalAria: "Confirm a sensitive action",
+  // #114: the host follows in semibold ("Always allow www.reddit.com").
+  alwaysAllowPre: "Always allow ",
   // 0.8.12 "tab in another window" stop card. All strings are Ink-approved final copy.
   otherWindowAria: "Stopped: tab in another window",
   otherWindowTitle: "That tab is in another window",
@@ -185,6 +187,7 @@ const pt: Strings = {
   approvalOrigin: "Site",
   approvalValue: "Detalhes",
   approvalAria: "Confirmar uma ação sensível",
+  alwaysAllowPre: "Sempre permitir ",
   otherWindowAria: "Parado: aba em outra janela",
   otherWindowTitle: "Essa aba está em outra janela",
   otherWindowBody: "O Enki só age na janela em que você fez o pedido.",
@@ -284,6 +287,7 @@ const es: Strings = {
   approvalOrigin: "Sitio",
   approvalValue: "Detalles",
   approvalAria: "Confirmar una acción sensible",
+  alwaysAllowPre: "Permitir siempre ",
   otherWindowAria: "Detenido: pestaña en otra ventana",
   otherWindowTitle: "Esa pestaña está en otra ventana",
   otherWindowBody: "Enki solo actúa en la ventana desde la que lo pediste.",

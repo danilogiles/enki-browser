@@ -6,11 +6,28 @@
 // extensions keep (Enki's settings and chats): browsingData only touches website data unless
 // asked otherwise. Shred is Brave's "shred site data": one site's data and tabs.
 //
+// One exception, a product lock (#114): Burn, Shred and burn-on-close also wipe Enki's
+// "Always allow" sites (the hosts Enki may go to without a card). browsingData cannot reach
+// another extension's storage, so Shield asks Enki to do it ({type:"enki:privacyWipe"}); Enki
+// accepts it from Shield's id only. Enki missing or disabled: nothing to wipe.
+//
 // "Burn when the browser closes" sets cookies to last only for the session, so cookies and site
 // data die with the last window, and wipes the rest (history, cache) when the browser next opens,
 // before anything else runs: Chromium gives extensions no moment at shutdown to do it then.
 
+import { ENKI_ID } from "./omnibox.js";
+
 export const AUTO_BURN = "shields:auto-burn";
+
+/** Asks Enki to clear its "Always allow" sites. Resolves true when Enki confirmed. */
+export async function wipeEnkiAllowedSites(scope, tries = [0]) {
+  for (const delay of tries) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    const res = await chrome.runtime.sendMessage(ENKI_ID, { type: "enki:privacyWipe", scope }).catch(() => null);
+    if (res?.ok) return true;
+  }
+  return false;
+}
 
 const EVERYTHING = {
   cache: true, cacheStorage: true, cookies: true, downloads: true, fileSystems: true, formData: true,
@@ -24,6 +41,7 @@ export async function burnAll() {
   const others = (await chrome.tabs.query({})).filter((t) => t.id !== fresh.id).map((t) => t.id);
   if (others.length) await chrome.tabs.remove(others).catch(() => {});
   await chrome.browsingData.remove({ since: 0 }, EVERYTHING);
+  await wipeEnkiAllowedSites("burn");
   return { closed: others.length };
 }
 
@@ -38,6 +56,7 @@ export async function shredSite(host) {
   await chrome.browsingData.remove({ origins }, {
     cacheStorage: true, cookies: true, fileSystems: true, indexedDB: true, localStorage: true, serviceWorkers: true, webSQL: true,
   });
+  await wipeEnkiAllowedSites("shred");
   return { closed: tabs.length };
 }
 
@@ -61,6 +80,8 @@ chrome.storage.session.get("shields:session").then(async (v) => {
       await closeRestoredTabs();
     }
     await chrome.browsingData.remove({ since: 0 }, { ...EVERYTHING, cookies: true });
+    // Enki's worker may still be starting this early: try again for a few seconds.
+    await wipeEnkiAllowedSites("auto-burn", [0, 1500, 4000, 8000]);
   }
 });
 

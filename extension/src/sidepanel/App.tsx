@@ -92,7 +92,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [running, setRunning] = useState(false);
   // `windowStop` turns the card into the Cancel-only "tab in another window" stop.
-  const [approval, setApproval] = useState<{ label: string; confirm?: ConfirmPayload; windowStop?: OtherWindowStop; resolve: (ok: boolean) => void } | null>(null);
+  const [approval, setApproval] = useState<{ label: string; confirm?: ConfirmPayload; windowStop?: OtherWindowStop; resolve: (ok: boolean | "remember") => void } | null>(null);
   // The active tab is tracked for the tab picker in the "more" menu; nothing else shows it now.
   const [, setTab] = useState<TabInfo | null>(null);
   const [usage, setUsage] = useState({ input: 0, output: 0 });
@@ -400,9 +400,9 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
 
   const requestApproval = useCallback(
     (label: string, _call: ToolCallPart, confirm?: ConfirmPayload) =>
-      new Promise<boolean>((resolve) => {
+      new Promise<boolean | "remember">((resolve) => {
         const signal = abortRef.current?.signal;
-        const finish = (ok: boolean) => {
+        const finish = (ok: boolean | "remember") => {
           signal?.removeEventListener("abort", cancel);
           setApproval(null);
           resolve(ok);
