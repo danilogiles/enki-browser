@@ -1081,6 +1081,36 @@ check('[ALLOW-SITE] never for clicks, submits, sends, AIC-2 read_url', () => {
   }
 });
 
+
+const ALLOW_SITE_LOCAL = ['https://192.168.1.1/', 'https://10.0.0.2/admin', 'https://172.16.0.5/', 'https://127.0.0.1:11434/', 'https://[::1]/', 'https://[fe80::1]/', 'https://169.254.169.254/latest', 'https://100.64.0.1/', 'https://0.0.0.0/', 'https://localhost/', 'https://localhost:8443/', 'https://app.localhost/', 'https://nas.local/', 'https://printer.lan/', 'https://router/', 'https://router./', 'https://wiki.corp/', 'https://[::ffff:192.168.0.1]/'];
+
+check('[ALLOW-SITE] Cloak High: never for LAN / loopback / localhost / .local / link-local (AIC-2 readUrlReach)', () => {
+  for (const u of ALLOW_SITE_LOCAL) {
+    assert.equal(NAV.allowlistHost(u), '', u);
+    const c = goTo(u);
+    assert.ok(c.categories.includes('cross_origin_navigation'), u);
+    assert.equal(c.rememberHost, undefined, `box not offered: ${u}`);
+    assert.equal(mayRememberSite(c), false, u);
+    assert.equal(confirmDecision(c, true, false, true), 'ask', `card not skipped: ${u}`);
+    assert.equal(confirmDecision(c, false, false, true), 'ask', u);
+    const tab = classifyAction({ tool: 'new_tab', currentUrl: 'https://a.test/', destinationUrl: u, label: 'Open' }, navTurn);
+    assert.equal(tab.rememberHost, undefined, `new_tab: ${u}`);
+    assert.equal(NAV.hostAllowed([new URL(u).host], u), false, `stored entry ignored: ${u}`);
+    assert.equal(NAV.landedOnHost(u, u), false, u);
+  }
+  for (const h of ['localhost', '127.0.0.1', '192.168.1.1', '10.0.0.2', '[::1]', 'nas.local', 'router', 'localhost:8443']) {
+    assert.equal(NAV.normalizeHost(h), '', h);
+    assert.deepEqual(NAV.addHost([], h), [], h);
+  }
+  assert.deepEqual(NAV.sanitizeList(['www.reddit.com', 'localhost', '192.168.1.1', 'nas.local']), ['www.reddit.com'], 'tampered storage: local entries dropped');
+  // Public hosts (and public IPs) still work; trailing dot is the same host.
+  assert.equal(NAV.allowlistHost('https://8.8.8.8/'), '8.8.8.8');
+  assert.equal(NAV.allowlistHost('https://www.reddit.com./r/x'), 'www.reddit.com');
+  assert.equal(NAV.allowlistHost('https://shop.test.:8443/'), 'shop.test:8443');
+  assert.ok(NAV.landedOnHost('https://www.reddit.com/a', 'https://www.reddit.com./b'));
+  assert.equal(NAV.normalizeHost('www.reddit.com.'), '', 'stored keys are canonical (no trailing dot)');
+});
+
 (async () => {
   // chrome.storage mock for settings lock
   const store = {};
@@ -1494,6 +1524,23 @@ check('[ALLOW-SITE] never for clicks, submits, sends, AIC-2 read_url', () => {
       assert.equal(plan.confirm.rememberHost, undefined);
       assert.equal(plan.siteAllowed, undefined);
       assert.equal(confirmDecision(plan.classification, true, plan.alwaysAsk, plan.siteAllowed), 'ask');
+    });
+
+    await acheck('[ALLOW-SITE] (executor) Cloak High: LAN / loopback Go to never offers the box or skips the card', async () => {
+      for (const u of ['https://192.168.1.1/', 'https://127.0.0.1:11434/', 'https://[::1]/', 'https://localhost/', 'https://nas.local/', 'https://169.254.169.254/latest', 'https://router/']) {
+        // Even a tampered store that lists the host must not skip the card.
+        store[KEY] = [new URL(u).host];
+        navChrome(u);
+        const plan = await newExec().prepare(call('navigate', { url: u }));
+        assert.equal(plan.sensitive, true, u);
+        assert.equal(plan.confirm.rememberHost, undefined, `box not offered: ${u}`);
+        assert.equal(plan.siteAllowed, undefined, u);
+        assert.equal(confirmDecision(plan.classification, true, plan.alwaysAsk, plan.siteAllowed), 'ask', `card not skipped: ${u}`);
+        delete store[KEY];
+        if (plan.remember) plan.remember();
+        await plan.run();
+        assert.equal(store[KEY], undefined, `never stored: ${u}`);
+      }
     });
 
     await acheck('[ALLOW-SITE] storage: allow / revoke / clear on chrome.storage.local', async () => {

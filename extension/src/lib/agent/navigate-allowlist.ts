@@ -19,13 +19,21 @@
  * Settings → Allowed sites lists it, removes one host, or clears all.
  */
 
+import { isLocalReach, readUrlReach } from "../tools/read-url-policy";
+
 export const NAVIGATE_ALLOWLIST_KEY = "enki:navigate-allowlist";
 /** Bound the list so a runaway loop cannot grow storage without limit. */
 export const NAVIGATE_ALLOWLIST_MAX = 500;
 
 /**
  * The host key for a URL, or "" when the URL cannot be remembered. https only: an http page
- * (or a LAN dev server) always shows the card, because anyone on the path can stand in for it.
+ * always shows the card, because anyone on the path can stand in for it.
+ *
+ * Cloak High (#114): never for a local host either. Same AIC-2 rule as read_url
+ * (read-url-policy readUrlReach, reused here, not re-implemented): loopback / localhost
+ * ("device") and private, link-local, CGNAT, single-label and .local/.lan/... names ("network")
+ * always show the card, https or not, so a page can never get a remembered LAN host navigated
+ * without the user. The trailing dot is dropped (example.com. is example.com), as readUrlReach does.
  */
 export function allowlistHost(url: string | undefined): string {
   if (!url) return "";
@@ -33,7 +41,9 @@ export function allowlistHost(url: string | undefined): string {
   try { u = new URL(url); } catch { return ""; }
   if (u.protocol !== "https:") return "";
   if (u.username || u.password) return "";
-  return u.host.toLowerCase();
+  const hostname = u.hostname.toLowerCase().replace(/\.$/, "");
+  if (!hostname || isLocalReach(readUrlReach(hostname))) return "";
+  return u.port ? `${hostname}:${u.port}` : hostname;
 }
 
 /** Normalize one stored or typed entry; "" if it is not a valid host key. */
