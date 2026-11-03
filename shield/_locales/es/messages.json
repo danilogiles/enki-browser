@@ -86,14 +86,8 @@
   "deletesHead": {
     "message": "✕ Borra"
   },
-  "deletesList": {
-    "message": "Historial, cookies y datos de sitios, caché, historial de descargas, autocompletar (direcciones y tarjetas guardadas)"
-  },
   "keptHead": {
     "message": "✓ Conserva"
-  },
-  "keptList": {
-    "message": "Contraseñas, marcadores y los chats, ajustes y claves de API de Enki. Los ajustes de Shields también."
   },
   "cancel": {
     "message": "Cancelar"
@@ -618,5 +612,57 @@
   "update_later": {
     "message": "Más tarde",
     "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "dAllowed": {
+    "message": "Sitios permitidos de Enki",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "deletesListAllowed": {
+    "message": "Historial, cookies y datos de sitios, caché, historial de descargas, autocompletar (direcciones y tarjetas guardadas), sitios permitidos de Enki",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "keptListRest": {
+    "message": "Marcadores y los chats, ajustes y claves de API de Enki. Los ajustes de Shields también.",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwMove": {
+    "message": "Borrar →",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwKeep": {
+    "message": "← Conservar",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwMoveAria": {
+    "message": "Mover Contraseñas a Se borra",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwKeepAria": {
+    "message": "Conservar Contraseñas",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwNoteOff": {
+    "message": "Solo Contraseñas se puede mover — desactivado por defecto, solo en este burn.",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwNoteOffPopup": {
+    "message": "Solo Contraseñas se puede mover — solo en este burn.",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwNoteOnLead": {
+    "message": "Las contraseñas se borrarán en este burn. ",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "pwNoteOnTail": {
+    "message": " las devuelve.",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "burnQuestion": {
+    "message": "¿Cerrar todas las pestañas y borrar historial, cookies y datos de sitios, caché, historial de descargas, autocompletar (direcciones y tarjetas guardadas) y sitios permitidos de Enki? Se conservan: contraseñas, marcadores y los chats, ajustes y claves de API de Enki, además de los ajustes de Shields. No se puede deshacer.",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
+  },
+  "burnQuestionPw": {
+    "message": "¿Cerrar todas las pestañas y borrar historial, cookies y datos de sitios, caché, historial de descargas, autocompletar (direcciones y tarjetas guardadas), sitios permitidos de Enki y contraseñas guardadas? Se conservan: marcadores, chats, ajustes y claves de API de Enki, además de los ajustes de Shields. No se puede deshacer.",
+    "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
   }
 }

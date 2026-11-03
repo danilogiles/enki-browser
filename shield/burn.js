@@ -6,6 +6,10 @@
 // extensions keep (Enki's settings and chats): browsingData only touches website data unless
 // asked otherwise. Shred is Brave's "shred site data": one site's data and tabs.
 //
+// Passwords can join one Burn (post-0.8.15, Ink's 0.8.15-burn-optional): the person moves them to
+// Deletes in the confirm, and only that message carries {passwords: true}. Off unless that exact
+// boolean is sent; never remembered; burn-on-close and Shred never delete passwords.
+//
 // One exception, a product lock (#114): Burn, Shred and burn-on-close also wipe Enki's
 // "Always allow" sites (the hosts Enki may go to without a card). browsingData cannot reach
 // another extension's storage, so Shield asks Enki to do it ({type:"enki:privacyWipe"}); Enki
@@ -34,15 +38,16 @@ const EVERYTHING = {
   history: true, indexedDB: true, localStorage: true, serviceWorkers: true, webSQL: true,
 };
 
-/** Closes every tab, leaving one new tab, then deletes the browsing data. */
-export async function burnAll() {
+/** Closes every tab, leaving one new tab, then deletes the browsing data (and saved passwords,
+ *  only when this burn's confirm moved them to Deletes). */
+export async function burnAll({ passwords = false } = {}) {
   const win = await chrome.windows.getLastFocused().catch(() => null);
   const fresh = await chrome.tabs.create({ url: "chrome://newtab/", windowId: win?.id, active: true });
   const others = (await chrome.tabs.query({})).filter((t) => t.id !== fresh.id).map((t) => t.id);
   if (others.length) await chrome.tabs.remove(others).catch(() => {});
-  await chrome.browsingData.remove({ since: 0 }, EVERYTHING);
+  await chrome.browsingData.remove({ since: 0 }, passwords === true ? { ...EVERYTHING, passwords: true } : EVERYTHING);
   await wipeEnkiAllowedSites("burn");
-  return { closed: others.length };
+  return { closed: others.length, passwords: passwords === true };
 }
 
 /** One site: its tabs closed (the panel's own tab gets a new tab instead) and its data deleted. */
@@ -62,7 +67,7 @@ export async function shredSite(host) {
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id) return;
-  if (msg?.type === "shields:burn") { burnAll().then(reply, (e) => reply({ error: String(e) })); return true; }
+  if (msg?.type === "shields:burn") { burnAll({ passwords: msg.passwords === true }).then(reply, (e) => reply({ error: String(e) })); return true; }
   if (msg?.type === "shields:shred" && typeof msg.host === "string") { shredSite(msg.host).then(reply, (e) => reply({ error: String(e) })); return true; }
 });
 

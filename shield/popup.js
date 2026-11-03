@@ -2,6 +2,7 @@
 import { t } from "./i18n.js";
 import { BADGE, LEVELS, blocker, blockerId, forgetList, inIncognito, setDown, setForget, setSite, sites } from "./sites.js";
 import { renderNotices } from "./webstore-ui.js";
+import { movablePasswords } from "./burn-passwords.js";
 
 const $ = (id) => document.getElementById(id);
 const DOCS = "https://github.com/danilogiles/enki-browser/blob/main/";
@@ -116,12 +117,18 @@ $("global").onclick = () => chrome.runtime.openOptionsPage();
 // Burn (everything) and shred (this site) both ask first: they cannot be undone.
 // Cancel has the focus, so Enter cancels, and so does Esc; Burn or Shred is never the default.
 let pending = null;
+const pw = movablePasswords({
+  row: $("burn-pw"), del: document.querySelector("#burn-lists .del"), keep: document.querySelector("#burn-lists .keep"),
+  note: $("burn-pw-note"), question: $("burn-question"), cancel: $("burn-cancel"), popup: true,
+});
 const confirmBox = (kind) => {
   pending = kind;
   const burn = kind === "burn";
+  pw.reset(); // every confirm starts with Passwords kept; the last choice is not reused
   $("burn-title").hidden = !burn;
   $("burn-lists").hidden = !burn;
   $("burn-confirm").setAttribute("aria-labelledby", burn ? "burn-title" : "burn-text");
+  $("burn-confirm").setAttribute("aria-describedby", burn ? "burn-question" : "burn-text");
   if (burn) $("burn-text").replaceChildren(t("everyTabCloses", "Every tab closes. "), Object.assign(document.createElement("strong"), { textContent: t("cannotUndo", "This cannot be undone.") }));
   else $("burn-text").textContent = t("shredAsk", `Delete ${host}'s cookies and site data and close its tabs?`, host);
   $("burn-go").textContent = burn ? t("burn", "Burn") : t("shred", "Shred");
@@ -142,10 +149,14 @@ $("burn-cancel").onclick = cancelBox;
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("burn-confirm").hidden && !$("burn-go").disabled) { e.preventDefault(); cancelBox(); }
 });
-$("burn-go").onclick = async () => {
+// Only a real click or key press burns or shreds (a script's .click() is ignored); Burn sends this
+// burn's Passwords choice, Shred never deletes passwords.
+$("burn-go").onclick = async (e) => {
+  if (!e.isTrusted || $("burn-go").disabled || !pending) return;
   $("burn-go").disabled = $("burn-cancel").disabled = true;
+  pw.lock(true);
   $("burn-go").textContent = pending === "burn" ? t("burning", "Burning…") : t("shredding", "Shredding…");
-  await chrome.runtime.sendMessage(pending === "burn" ? { type: "shields:burn" } : { type: "shields:shred", host });
+  await chrome.runtime.sendMessage(pending === "burn" ? { type: "shields:burn", passwords: pw.passwords() } : { type: "shields:shred", host });
   window.close();
 };
 void BADGE;
