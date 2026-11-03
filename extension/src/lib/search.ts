@@ -5,6 +5,7 @@
  */
 import type { ChatRequest } from "./types";
 import { DEFAULT_SETTINGS, presetOf, SETTINGS_KEY, type Settings } from "./settings";
+import { clearAllowedHosts } from "./agent/navigate-allowlist";
 
 /** "other": the user keeps (or picks) another engine in Chromium's own settings. For search.html it
  *  behaves exactly like DuckDuckGo: no AI call, the query goes to DuckDuckGo with only q. */
@@ -286,19 +287,24 @@ export type ExternalReply = { ok: true; value?: SearchEngine | null } | { ok: fa
 export type ExternalIO = SetupIO & {
   get: () => Promise<SearchEngine | undefined>;
   setJustSetUp: () => Promise<void>;
+  /** #114: Burn / Shred / burn-on-close wipe the "Always allow" sites (navigate allowlist). */
+  clearAllowedSites?: () => Promise<void>;
 };
 
 export const storageExternalIO: ExternalIO = {
   ...storageSetupIO,
   get: getSearchEngine,
   setJustSetUp: async () => { await chrome.storage.local.set({ [JUST_SET_UP_KEY]: true }); },
+  clearAllowedSites: clearAllowedHosts,
 };
 
 /**
- * Shield talks to Enki through chrome.runtime.onMessageExternal. Only Shield, only two messages:
+ * Shield talks to Enki through chrome.runtime.onMessageExternal. Only Shield, only three messages:
  * - {type:"enki:getSearchEngine", incognitoAllowed?: boolean}: the current engine. When Shield
  *   reports incognito access and Enki AI is pending, the first search finishes the setup.
  * - {type:"enki:setSearchEngine", value:"enki"|"ddg"}: Shield's own switch (already checked).
+ * - {type:"enki:privacyWipe", scope:"burn"|"shred"|"auto-burn"}: Shield just burned or shredded;
+ *   Enki clears its "Always allow" sites (#114). The only effect is deleting that list.
  */
 export async function handleExternalMessage(msg: unknown, sender: { id?: string }, io: ExternalIO = storageExternalIO): Promise<ExternalReply> {
   if (sender?.id !== SHIELD_EXTENSION_ID) return { ok: false, error: "forbidden" };
@@ -320,6 +326,12 @@ export async function handleExternalMessage(msg: unknown, sender: { id?: string 
   if (m.type === "enki:setSearchEngine") {
     if (m.value !== "enki" && m.value !== "ddg") return { ok: false, error: "invalid value" };
     await io.setEngine(m.value);
+    return { ok: true };
+  }
+  if (m.type === "enki:privacyWipe") {
+    const extra = Object.keys(m).filter((k) => k !== "type" && k !== "scope");
+    if (extra.length || !["burn", "shred", "auto-burn"].includes(m.scope as string)) return { ok: false, error: "invalid message" };
+    await (io.clearAllowedSites ?? clearAllowedHosts)();
     return { ok: true };
   }
   return { ok: false, error: "unknown message" };

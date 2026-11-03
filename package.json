@@ -8,7 +8,8 @@
   "scripts": {
     "build": "node build/build.mjs",
     "verify": "node test/verify.mjs",
-    "test:burn": "node test/burn-confirm.mjs"
+    "test:burn": "node test/burn-confirm.mjs",
+    "test:burn-wipe": "node test/burn-wipe-unit.mjs"
   },
   "engines": {
     "node": ">=22"

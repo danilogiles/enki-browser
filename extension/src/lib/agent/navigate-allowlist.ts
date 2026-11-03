@@ -12,8 +12,10 @@
  * non-default port). www.reddit.com and reddit.com are different entries; no eTLD+1 grouping.
  *
  * Storage: chrome.storage.local of this profile only (never storage.sync, never sent anywhere).
- * Burn all data / Shred this site (Shields) use chrome.browsingData, which deletes website data,
- * not extension storage, so they do NOT clear this list (same as Enki's settings and chats).
+ * Burn all data, Shred this site, and burn-when-the-browser-closes (Shields) DO clear this list:
+ * chrome.browsingData only deletes website data, so Shield also sends Enki
+ * {type:"enki:privacyWipe"} (lib/search.ts handleExternalMessage, Shield's id only), which calls
+ * clearAllowedHosts(). Enki's settings, chats and API keys stay, as before.
  * Settings → Allowed sites lists it, removes one host, or clears all.
  */
 

@@ -649,8 +649,8 @@ const iconBtn =
 
 /**
  * #114: hosts the user ticked "Always allow {host}" for on a Go to card. Stored apart from
- * Settings (chrome.storage.local, this profile), so it takes effect without Save and survives
- * Burn / Shred (they clear website data, not Enki's). Remove one or clear all here.
+ * Settings (chrome.storage.local, this profile), so it takes effect without Save. Shields Burn /
+ * Shred / burn-on-close wipe it (enki:privacyWipe). Remove one or clear all here.
  */
 function AllowedSites() {
   const [hosts, setHosts] = useState<string[] | null>(null);
@@ -667,7 +667,7 @@ function AllowedSites() {
   return (
     <div data-testid="allowed-sites" className="space-y-2">
       <p className="text-xs text-zinc-400">
-        Sites Enki may go to in Act without asking first, because you ticked "Always allow" on its card. Exact host only (www.reddit.com is not reddit.com). Never covers downloads, forms, sending, account pages, local addresses, requests from a page, or Incognito. Stays on this device; Burn all data doesn't clear it.
+        Sites Enki may go to in Act without asking first, because you ticked "Always allow" on its card. Exact host only (www.reddit.com is not reddit.com). Never covers downloads, forms, sending, account pages, local addresses, requests from a page, or Incognito. Stays on this device; Burn and Shred clear it.
       </p>
       {hosts === null ? null : hosts.length === 0 ? (
         <p className="text-xs text-zinc-500">No sites yet.</p>
