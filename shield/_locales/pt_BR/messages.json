@@ -642,11 +642,11 @@
     "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
   },
   "pwNoteOff": {
-    "message": "Só Senhas pode mudar — desligado por padrão, só neste burn.",
+    "message": "Só Senhas pode se mover — desligado por padrão, só neste burn.",
     "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
   },
   "pwNoteOffPopup": {
-    "message": "Só Senhas pode mudar — só neste burn.",
+    "message": "Só Senhas pode se mover — só neste burn.",
     "description": "Burn confirm, movable Passwords (Ink 0.8.15-burn-optional)."
   },
   "pwNoteOnLead": {
