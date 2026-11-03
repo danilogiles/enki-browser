@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type Keybo
 import { ArrowUp, Globe, MessageCircle, MousePointerClick, ShieldCheck } from "lucide-react";
 import logo from "../assets/logo.svg";
 import { putHandoff } from "../lib/handoff";
+import { followOwnWindow } from "../lib/own-window";
 import { History } from "./History";
 // Loaded only when someone actually asks. A static import would put the whole panel — ~730 kB of
 // it — in the new tab page's critical path, and a new tab has to paint instantly.
@@ -118,20 +119,21 @@ export function Home() {
   const [current, setCurrent] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   // sidePanel.open must run inside the click, before any await, so the window is known up front.
+  // Kept current when this tab is torn off into another window (#115), not read once at mount.
   const windowId = useRef<number | undefined>(undefined);
   const input = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     document.title = t.tab;
     document.documentElement.lang = lang;
-    void chrome.windows.getCurrent().then((w) => { windowId.current = w.id; });
+    const unfollow = followOwnWindow((id) => { windowId.current = id; });
     void loadSettings().then((s) => { setSettings(s); applyHomeTheme(s); });
     void chrome.storage.local.get("enki:mode").then((s) => { if (s["enki:mode"] === "act") setMode("act"); });
     const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === "local" && "enki:current-chat" in changes) setCurrent((changes["enki:current-chat"].newValue as string) || null);
     };
     chrome.storage.onChanged.addListener(onChange);
-    return () => chrome.storage.onChanged.removeListener(onChange);
+    return () => { unfollow(); chrome.storage.onChanged.removeListener(onChange); };
   }, []);
 
   const openPanel = () => {
