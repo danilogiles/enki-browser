@@ -18,7 +18,7 @@ export type Progress = { message: string; step: number; maxSteps: number; elapse
 
 type Props = {
   messages: UiMessage[];
-  approval: { label: string; confirm?: import("../lib/tools/executor").ConfirmPayload; windowStop?: import("../lib/tools/executor").OtherWindowStop; resolve: (ok: boolean) => void } | null;
+  approval: { label: string; confirm?: import("../lib/tools/executor").ConfirmPayload; windowStop?: import("../lib/tools/executor").OtherWindowStop; resolve: (ok: boolean | "remember") => void } | null;
   mode: Mode;
   onSuggest: (text: string) => void;
   onRetry?: () => void;
@@ -276,9 +276,13 @@ function OtherWindowCard({ stop, onCancel }: { stop: import("../lib/tools/execut
 function ApprovalCard({ label, confirm, onDecide }: {
   label: string;
   confirm?: import("../lib/tools/executor").ConfirmPayload;
-  onDecide: (ok: boolean) => void;
+  onDecide: (ok: boolean | "remember") => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // #114 (Ink mock 0.8.15-always-allow): unchecked every time the card shows; ticking it does
+  // nothing on its own. Only Allow + ticked remembers the host; Cancel ignores it.
+  const [always, setAlways] = useState(false);
+  const rememberHost = confirm?.pageRequested ? "" : (confirm?.rememberHost ?? "");
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { cancelRef.current?.focus(); }, []);
   const verb = confirm?.verb || label;
@@ -366,6 +370,26 @@ function ApprovalCard({ label, confirm, onDecide }: {
       {!rows.length && !confirm && (
         <div className="mt-2 text-zinc-300">{t.approvalPre}<strong>{label}</strong>{t.approvalPost}</div>
       )}
+      {rememberHost && (
+        <label
+          data-testid="approval-always-allow"
+          className={`mt-2.5 flex cursor-pointer select-none items-center gap-2 px-0.5 py-0.5 text-[12.5px] ${always ? "text-zinc-100" : "text-zinc-300"}`}
+        >
+          <input
+            type="checkbox"
+            className="peer sr-only"
+            checked={always}
+            onChange={(e) => setAlways(e.target.checked)}
+          />
+          <span
+            aria-hidden="true"
+            className={`grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border-[1.5px] peer-focus-visible:ring-2 peer-focus-visible:ring-[#38bdf8]/60 ${always
+              ? "border-[#38bdf8] bg-[#38bdf8] text-[#06202d]"
+              : "border-[#5a5c5b] bg-ink-950 text-transparent"}`}
+          ><Check size={12} strokeWidth={2.5} /></span>
+          <span className="min-w-0 break-all">{t.alwaysAllowPre}<span className="font-semibold text-zinc-50">{rememberHost}</span></span>
+        </label>
+      )}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           ref={cancelRef}
@@ -378,7 +402,7 @@ function ApprovalCard({ label, confirm, onDecide }: {
         >{t.deny}</button>
         <button
           type="button"
-          onClick={() => onDecide(true)}
+          onClick={() => onDecide(rememberHost && always ? "remember" : true)}
           className={`h-[34px] rounded-lg text-[13px] font-semibold transition ${pageRequested
             ? "border border-amber-500/60 bg-transparent text-amber-300 hover:bg-amber-500/10"
             : "border border-[#38bdf8] bg-[#38bdf8] text-[#06202d] hover:bg-sky-300"}`}

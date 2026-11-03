@@ -11,6 +11,7 @@
  */
 import { SENSITIVE_ACTION } from "../protocol";
 import { READ_URL_STRINGS } from "../tools/read-url-strings";
+import { allowlistHost } from "./navigate-allowlist";
 
 export type ActionCategory =
   | "form_submit"
@@ -153,6 +154,12 @@ export type Classification = {
   formHasSensitiveFilled: boolean;
   /** Structured rows for the confirm card (form submit). */
   filled?: FilledField[];
+  /**
+   * #114: the exact host the "Always allow {host}" box would remember. Set only when
+   * mayRememberSite() holds (navigate / new_tab, cross_origin_navigation alone, https, not
+   * Incognito, not page-requested). Unset means the card has no checkbox.
+   */
+  rememberHost?: string;
 };
 
 // ---------- origins ----------
@@ -649,7 +656,7 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     ? turn.filled.map((f) => ({ ...f, value: maskFilledValue(f) }))
     : undefined;
 
-  return {
+  const result: Classification = {
     categories: cats,
     primary,
     target,
@@ -667,6 +674,30 @@ export function classifyAction(action: ActionFacts, turn: TurnContext): Classifi
     formHasSensitiveFilled,
     filled,
   };
+  if (action.tool === "navigate" || action.tool === "new_tab") {
+    const host = allowlistHost(dest);
+    if (host && rememberableShape(result)) result.rememberHost = host;
+  }
+  return result;
+}
+
+/** Everything but the host: only a plain "go to a new site" step may be remembered. */
+function rememberableShape(c: Classification): boolean {
+  return c.categories.length === 1
+    && c.categories[0] === "cross_origin_navigation"
+    && !c.pageRequested
+    && !c.incognito;
+}
+
+/**
+ * #114: may "Always allow {host}" skip this card? Separate from mayAutoApprove (which still
+ * refuses cross_origin_navigation). Exactly one category, cross_origin_navigation, from a
+ * navigate / new_tab step (rememberHost is only set for those), https, outside Incognito, not
+ * page-requested. Any other category on the step (download, account_settings, page_requested,
+ * form_submit, send_message, local_network_read, untrusted_url_read, …) keeps the card.
+ */
+export function mayRememberSite(c: Classification): boolean {
+  return !!c.rememberHost && rememberableShape(c);
 }
 
 /**
@@ -700,10 +731,15 @@ export function mayAutoApprove(c: Classification): boolean {
 
 export type ConfirmDecision = "allow" | "ask" | "skip";
 
-/** Combines the classification with the user's autoApprove toggle. */
-export function confirmDecision(c: Classification, autoApprove: boolean, alwaysAsk?: boolean): ConfirmDecision {
+/**
+ * Combines the classification with the user's autoApprove toggle and, for a plain Go to step,
+ * whether the user ticked "Always allow {host}" for that exact host before (siteAllowed: the
+ * caller checked c.rememberHost against the stored list).
+ */
+export function confirmDecision(c: Classification, autoApprove: boolean, alwaysAsk?: boolean, siteAllowed?: boolean): ConfirmDecision {
   if (!c.requiresConfirm && !alwaysAsk) return "skip";
   if (alwaysAsk) return "ask";
+  if (siteAllowed && mayRememberSite(c)) return "allow";
   if (autoApprove && mayAutoApprove(c)) return "allow";
   return "ask";
 }

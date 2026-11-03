@@ -53,6 +53,7 @@ The agent loop runs inside the extension side panel. Unlike ephemeral popup wind
   1. Streams model completions and tool call proposals.
   2. Parses tool calls and checks for sensitive actions.
   3. Pauses for human confirmation if `plan.sensitive === true` and `autoApprove === false`.
+     - **Always allow {host}** (#114, `navigate-allowlist.ts`): a plain cross-site Go to / Open new tab card shows an "Always allow {host}" box. Allow + ticked stores the exact https host (`www.reddit.com`, not eTLD+1) in `chrome.storage.local` key `enki:navigate-allowlist` (this profile only), but only after the tab lands on that host (redirect re-check). Next time `confirmDecision(..., siteAllowed)` skips that card only. Never for clicks, forms, sends, downloads, account pages, AIC-2 `read_url` gates, page-requested steps, http, or Incognito; `mayAutoApprove` still excludes `cross_origin_navigation`. Settings > Allowed sites lists, removes, and clears hosts. Shields Burn / Shred (`chrome.browsingData`) do not clear it.
   4. Dispatches tool execution to `BrowserExecutor`.
   5. Feeds tool results back into history for the subsequent turn until the model signals `done` or hits `maxSteps`.
 - **`prompt.ts (`buildSystemPrompt`)`**: Constructs the static system prompt based on mode (`ask` or `act`), instilling safety directives, element citation requirements, and indirect prompt injection defenses.
