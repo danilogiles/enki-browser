@@ -21,3 +21,7 @@
 --extension-mime-request-handling=always-prompt-for-install
 
 --no-default-browser-check
+
+# Let a click on the tab speaker icon mute/unmute that tab (Chromium EnableTabMuting;
+# otherwise the click only focuses the tab and mute is via right-click → Mute site).
+--enable-features=EnableTabMuting
