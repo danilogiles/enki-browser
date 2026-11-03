@@ -31,6 +31,7 @@ import { legalLinks, TERMS_VERSION } from "../lib/legal";
 import { LegacySearchCard } from "./LegacySearchCard";
 import { showLegacyCard } from "../lib/legacy-search";
 import { t } from "./strings";
+import { followOwnWindow } from "../lib/own-window";
 
 const MODE_KEY = "enki:mode";
 
@@ -254,25 +255,41 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     };
     // Normally the panel controls the window it is docked in. When the panel is opened as a
     // regular tab (debugging, automated tests), `?window=<id>` selects the window to control.
+    // Hosted in a page (Enki Home), the window is the page's own and follows the tab when it is
+    // torn off into another window (#115); a task already running keeps its executor, the next
+    // one controls the new window.
     const override = Number(new URLSearchParams(location.search).get("window"));
-    const resolveWindow = override ? Promise.resolve({ id: override }) : chrome.windows.getCurrent();
-    resolveWindow.then((w) => {
-      windowId = w.id;
-      windowRef.current = w.id;
-      if (w.id !== undefined) executorRef.current = new BrowserExecutor(w.id);
-      refresh();
-    });
+    const bind = (id: number) => {
+      if (id === windowId) return;
+      windowId = id;
+      windowRef.current = id;
+      executorRef.current = new BrowserExecutor(id);
+      void refresh();
+    };
+    const unfollow = override ? (bind(override), () => undefined) : followOwnWindow(bind);
     const onActivated = (info: chrome.tabs.OnActivatedInfo) => {
       if (info.windowId === windowId) refresh();
     };
     const onUpdated = (_id: number, change: chrome.tabs.OnUpdatedInfo, t: chrome.tabs.Tab) => {
       if (t.active && t.windowId === windowId && (change.title || change.url || change.status === "complete")) refresh();
     };
+    // A tab torn out of (or dropped into) this window changes the tab list and maybe the active tab.
+    const onDetached = (_id: number, info: chrome.tabs.OnDetachedInfo) => {
+      if (info.oldWindowId === windowId) refresh();
+    };
+    const onAttached = (_id: number, info: chrome.tabs.OnAttachedInfo) => {
+      if (info.newWindowId === windowId) refresh();
+    };
     chrome.tabs.onActivated.addListener(onActivated);
     chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.onDetached.addListener(onDetached);
+    chrome.tabs.onAttached.addListener(onAttached);
     return () => {
+      unfollow();
       chrome.tabs.onActivated.removeListener(onActivated);
       chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onDetached.removeListener(onDetached);
+      chrome.tabs.onAttached.removeListener(onAttached);
     };
   }, []);
 

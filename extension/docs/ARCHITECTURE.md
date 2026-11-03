@@ -63,6 +63,7 @@ Encapsulates all interaction with the active browser window:
 - **Chrome DevTools Protocol (CDP)**: Uses `chrome.debugger` (`Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText`) to execute hardware-level user interactions that bypass synthetic event listeners.
 - **DOM Fallback**: When CDP cannot attach (e.g. permission constraints), falls back to DOM events (`element.click()`, `setValue()`, `element.focus()`).
 - **Safety Gate**: Verifies URLs with `isValidWebNavigationUrl()` and blocks typing into password fields via `target.isPassword`.
+- **Which window**: one executor per window. The side panel controls the window it is docked in (`windows.getCurrent()`, fixed for its life). Enki Home, a page in a tab, follows its own tab through `tabs.onAttached` (`src/lib/own-window.ts`), so after a tear-off "Ask Enki" opens the panel in, and hands the request to, the window the tab is in now (#115). A tab moved out of the panel's window is not followed: the 0.8.12 "tab is in another window" stop applies.
 
 ### 2.4 Content Script (`src/content/content-script.ts`)
 Injected on `<all_urls>` at `document_idle`.
