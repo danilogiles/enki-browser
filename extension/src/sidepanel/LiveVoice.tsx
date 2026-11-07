@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RealtimeVoice, audioDestination, validateRealtime, type RealtimeConfig, type RealtimeState } from "../lib/voice/realtime";
+import { RealtimeVoice, audioDestination, validateRealtime, realtimeCapability, type RealtimeConfig, type RealtimeState } from "../lib/voice/realtime";
 import { askMicrophonePermission } from "../lib/voice";
 
 export function LiveVoice({ config, act, disabled, onSettings, onSession }: {
@@ -14,6 +14,7 @@ export function LiveVoice({ config, act, disabled, onSettings, onSession }: {
   // Closing settings/mode/panel must synchronously invalidate queued work and stop the mic.
   useEffect(() => () => { session.current?.end(); onSession(null); }, [config, onSession]);
   const invalid = validateRealtime(config);
+  const capability = config ? realtimeCapability(config.protocol) : null;
   const live = ["connecting", "listening", "working", "speaking"].includes(state);
   const start = () => {
     if (live || disabled || invalid || !config) return;
@@ -28,7 +29,7 @@ export function LiveVoice({ config, act, disabled, onSettings, onSession }: {
   };
   return <section aria-label="Live voice" className="mx-3 mb-2 rounded-xl border border-cyan-600/40 bg-ink-900 p-3 text-xs">
     <h2 className="font-medium text-cyan-200">Chat · Live voice</h2>
-    {invalid ? <div role="alert"><p className="mt-2">Realtime Chat isn’t configured</p><p>Open Settings → Model Provider Setup → Realtime Chat. Enter a protocol, provider, endpoint, model, transcription model, voice and credential.</p><button className="mt-2 underline" onClick={onSettings}>Open settings</button></div> : <>
+    {invalid ? <div role="alert"><p className="mt-2">{capability && !capability.implemented ? capability.label : "Realtime Chat isn’t configured"}</p>{capability && !capability.implemented && <p>{capability.reason}</p>}<p>Open Settings → Model Provider Setup → Realtime Chat. Enter a protocol, provider, endpoint, model, transcription model, voice and credential.</p><button className="mt-2 underline" onClick={onSettings}>Open settings</button></div> : <>
       <p className="mt-2 break-words">Audio destination: {config!.provider} · {audioDestination(config!)}. Microphone audio leaves this computer for that provider’s negotiated WebRTC media servers.</p>
       <details open={!live} className="mt-1 text-zinc-400"><summary className="cursor-pointer">Permissions and data flow</summary>
       <p className="mt-1">Chat can act in this browser under the same Act permissions; it is not Auto. Page context goes to your existing AI provider, and the final answer also goes to the voice provider for speech. Sensitive actions require an on-screen click, key or tap — never spoken approval. Passwords and payments stay blocked. Page playback is not authorization; use headphones. Speaker identity cannot be verified.</p>
@@ -40,7 +41,7 @@ export function LiveVoice({ config, act, disabled, onSettings, onSession }: {
       </div>
     </>}
     {notice && <p role="alert" className="mt-2">{notice}</p>}
-    {state === "error" && <button onClick={askMicrophonePermission} className="mt-2 underline">Open microphone permission page (no provider connection)</button>}
+    {state === "error" && <button onClick={() => askMicrophonePermission("realtime")} className="mt-2 underline">Open microphone permission page (no provider connection)</button>}
     {!!transcript.length && <ol aria-label="Voice transcript" aria-live="polite" className="mt-2 max-h-32 overflow-auto">{transcript.map((line, i) => <li key={i} className="mt-1 whitespace-pre-wrap"><strong>{line.role === "user" ? "You" : "Enki"}: </strong>{line.text}</li>)}</ol>}
   </section>;
 }

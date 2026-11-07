@@ -80,8 +80,10 @@ export function transcribe(audio: Float32Array, onProgress: (percent: number) =>
 }
 
 /** Opens Enki's microphone permission page in a tab. */
-export function askMicrophonePermission(): void {
-  void chrome.tabs.create({ url: chrome.runtime.getURL("src/mic/index.html") });
+export function askMicrophonePermission(purpose: "dictation" | "realtime" = "dictation"): void {
+  const url = new URL(chrome.runtime.getURL("src/mic/index.html"));
+  url.searchParams.set("purpose", purpose); // Purpose only: never send endpoint, model or credential in a URL.
+  void chrome.tabs.create({ url: url.href });
 }
 
 /** The two-letter language of the browser's UI, as a hint to Whisper (it still detects). */

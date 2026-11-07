@@ -115,5 +115,19 @@ try {
   await panel.getByRole('button', { name: 'Chat', exact: true }).click();
   await panel.waitForFunction(() => __voiceTest.mic === 3 && __voiceTest.stopped === 3);
   pass('selecting Chat disposes the separate local dictation recorder');
+  const beforeNvidia = await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]);
+  await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByLabel('Realtime protocol').selectOption('nvidia-voicechat');
+  assert.equal(await panel.getByLabel('Realtime credential', { exact: true }).inputValue(), '');
+  assert.equal(await panel.getByLabel('Endpoint (unverified; not connected)', { exact: true }).inputValue(), '');
+  await panel.getByRole('button', { name: 'Validate configuration (offline)' }).click();
+  await panel.getByText(/NVIDIA VoiceChat is not implemented/).first().waitFor();
+  await panel.getByRole('button', { name: 'Save', exact: true }).click();
+  await panel.getByText('NVIDIA Nemotron VoiceChat · integration blocked', { exact: true }).waitFor();
+  assert.equal(await panel.getByRole('button', { name: 'Start voice', exact: true }).count(), 0);
+  assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), beforeNvidia);
+  pass('NVIDIA capability selection clears prior key and endpoint, reports blocked status and never falls back');
+  await panel.screenshot({ path: 'test-results/nvidia-capability-blocked.png' });
+
 } finally { await context.close(); }
 console.log(`${checks} mocked realtime UI checks passed. Live provider and physical microphone smoke NOT run.`);

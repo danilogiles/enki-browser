@@ -2,9 +2,11 @@
 
 Not a release announcement. Live provider/microphone validation and security/visual review are still required.
 
+NVIDIA is now visible as an explicitly **unimplemented, blocked capability**, not a preset or a working adapter. See [NVIDIA-VOICECHAT.md](./NVIDIA-VOICECHAT.md) for official API findings, hosted-access blockers, Portuguese status and the safe integration requirements.
+
 ## Setup and supported protocol
 
-Settings → Model Provider Setup → **Realtime Chat**. All fields are user supplied:
+Settings → Model Provider Setup → **Realtime Chat**. For the implemented GA WebRTC adapter, all fields are user supplied:
 provider label, protocol, full calls endpoint, realtime model, transcription model, output voice,
 and credential. Nothing is inherited from the text provider, and no endpoint/model/vendor is selected by default.
 
@@ -30,7 +32,7 @@ No live key was supplied or used during development.
 Ask and Act remain unchanged. Chat selects a separate voice interface without connecting or
 opening the mic. Missing configuration shows “Realtime Chat isn’t configured” and setup instructions.
 Start voice explicitly requests microphone access after showing the destination and data flows.
-The mic permission page is available via an explicit button if Chromium refuses the panel prompt.
+The mic permission page is available via an explicit button if Chromium refuses the panel prompt. It receives only `purpose=realtime` in its URL and reads the configured destination from extension-local settings, never a key or raw endpoint in URL parameters. The page uses realtime-specific egress copy and requires a separate permission click; it stops tracks immediately and never connects to a provider. Return to Enki and press Start voice to begin. The existing dictation permission route keeps its distinct local-only copy.
 
 The microphone streams to the chosen realtime provider. VAD completed utterances, not interim
 transcript deltas, enter the **existing Act agent** using the existing text provider/model and browser
@@ -83,7 +85,7 @@ If a physical browser command was already submitted when interrupted, its outcom
 credential redaction/redirect policy, Mute/End disposal, interruption and cancellation races,
 late/duplicate events, disconnects, and the real Act loop cancellation gates.
 `xvfb-run -a npm run test:realtime-ui` uses a mocked realtime peer/microphone in the built extension
-with the real browser Act executor and local scripted text provider. It is **not** a live provider test.
+with the real browser Act executor and local scripted text provider. It also runs the actual permission-page bundle with mocked getUserMedia to verify distinct route copy, safe destination display, no automatic capture/network and permission-only disposal. It is **not** a live provider test.
 
 Before release: actual supported-account authentication and WebRTC negotiation, physical mic
 permission/capture on Windows/macOS/Linux (including the real side panel), full spoken conversation,
@@ -97,3 +99,6 @@ No version, merge, tag or release is created by this implementation PR.
 ![Real Act approval while mocked voice is active](images/realtime/realtime-confirmation.png)
 ![Session stopped and microphone disposed](images/realtime/realtime-stopped.png)
 ![Saved credential is not rendered into Settings](images/realtime/realtime-settings.png)
+
+![NVIDIA capability is explicitly blocked, not an implemented adapter](images/realtime/nvidia-capability-blocked.png)
+![Realtime permission page identifies destination and requires an explicit permission click](images/realtime/mic-realtime-permission.png)

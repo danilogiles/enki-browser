@@ -245,3 +245,34 @@ test('a real committed spoken yes cannot approve a sensitive action through the 
   assert.equal(approvals, 2); // It can request another card, not resolve it as approved.
   h.voice.end(); await tick(); assert.equal(runs, 0);
 });
+
+
+test('NVIDIA selection is explicitly unavailable, inert and never an OpenAI fallback', async () => {
+  const { realtimeCapability, NVIDIA_VOICECHAT_BLOCKER } = require('../src/lib/voice/realtime.ts');
+  const pending = { ...config, protocol: 'nvidia-voicechat', provider: 'NVIDIA' };
+  assert.equal(realtimeCapability(pending.protocol).implemented, false);
+  assert.equal(validateRealtime(pending), NVIDIA_VOICECHAT_BLOCKER);
+  const h = harness({ config: pending }); await h.voice.start();
+  assert.equal(h.counts().peerCalls, 0); assert.equal(h.counts().micCalls, 0);
+  assert.equal(h.requests.length, 0); assert.equal(h.acts.length, 0);
+  assert.ok(h.notices[0].includes('not implemented'));
+});
+
+test('permission copy distinguishes realtime transmission from local dictation without leaking route credentials', () => {
+  const { microphoneDisclosure, microphonePurpose } = require('../src/lib/voice/microphone-disclosure.ts');
+  assert.equal(microphonePurpose(''), 'dictation');
+  assert.equal(microphonePurpose('?purpose=realtime'), 'realtime');
+  assert.equal(microphonePurpose('?purpose=unexpected'), 'invalid');
+  assert.equal(microphonePurpose('?purpose=realtime&purpose=dictation'), 'invalid');
+  const local = microphoneDisclosure('dictation'); assert.equal(local.enabled, true);
+  assert.match(local.description, /not sent to a provider/); assert.match(local.next, /dictation microphone/);
+  const live = microphoneDisclosure('realtime', { ...config, provider: `Chosen provider ${config.credential}` });
+  assert.equal(live.enabled, true); assert.match(live.description, /audio leaves this computer/);
+  assert.match(live.next, /press Start voice/); assert.match(live.description, /does not start a connection/);
+  assert.ok(!JSON.stringify(live).includes(config.credential)); assert.ok(!JSON.stringify(live).includes('/v1/realtime/calls'));
+  for (const c of [undefined, { ...config, endpoint: 'https://voice.test?key=do-not-display' }, { ...config, protocol: 'nvidia-voicechat' }]) {
+    const blocked = microphoneDisclosure('realtime', c); assert.equal(blocked.enabled, false);
+    assert.ok(!JSON.stringify(blocked).includes('do-not-display'));
+  }
+  assert.equal(microphoneDisclosure('invalid', config).enabled, false);
+});

@@ -20,7 +20,7 @@
     "test:shortcut": "node test/shortcut.mjs",
     "test:tearoff": "node test/tearoff.mjs",
     "test:realtime": "node test/realtime-unit.cjs",
-    "test:realtime-ui": "node test/realtime-ui.mjs"
+    "test:realtime-ui": "node test/realtime-ui.mjs && node test/microphone-permission.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

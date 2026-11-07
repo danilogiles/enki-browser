@@ -67,7 +67,7 @@ Mute/End/Stop close tracks and transport, discard buffers and abort queued actio
 cannot reconnect or replay actions automatically. Already submitted browser commands cannot be undone.
 Microphone speaker identity is not verified; page playback is never approval. No audio is recorded
 by Enki; providers may have their own retention. The final Act answer also goes to the voice provider.
-Live-account, actual microphone, media playback, packaging, security and visual review remain release gates.
+The microphone permission tab distinguishes realtime egress from local dictation, takes only a purpose identifier in its URL, requests permission only after a click and stops all granted tracks immediately without contacting a provider. NVIDIA selection is explicitly blocked before mic/transport creation until its hosted contract and safe adapter are verified; see [NVIDIA-VOICECHAT.md](./NVIDIA-VOICECHAT.md). Live-account, actual microphone, media playback, packaging, security and visual review remain release gates.
 
 ## 3. AI egress rules (non-negotiable)
 

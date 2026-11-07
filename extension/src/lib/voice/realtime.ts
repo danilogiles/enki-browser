@@ -3,7 +3,7 @@
  */
 export type RealtimeConfig = {
   provider: string;
-  protocol: "openai-realtime-webrtc";
+  protocol: "openai-realtime-webrtc" | "nvidia-voicechat";
   endpoint: string;
   model: string;
   transcriptionModel: string;
@@ -15,10 +15,18 @@ export const EMPTY_REALTIME: RealtimeConfig = {
   transcriptionModel: "", voice: "", credential: "",
 };
 
+export const NVIDIA_VOICECHAT_BLOCKER = "NVIDIA VoiceChat is not implemented in this build. The hosted evaluation API contract is not verified; the documented NVIDIA self-hosted WebSocket protocol is different from GA WebRTC. No microphone, connection or fallback will start.";
+export function realtimeCapability(protocol: string | undefined): { implemented: boolean; label: string; reason?: string } {
+  if (protocol === "openai-realtime-webrtc") return { implemented: true, label: "OpenAI GA Realtime · WebRTC" };
+  if (protocol === "nvidia-voicechat") return { implemented: false, label: "NVIDIA Nemotron VoiceChat · integration blocked", reason: NVIDIA_VOICECHAT_BLOCKER };
+  return { implemented: false, label: "Unknown protocol", reason: "Unsupported realtime protocol" };
+}
+
 /** Deliberately local-only: authentication cannot be checked without creating a billable session. */
 export function validateRealtime(c: RealtimeConfig | undefined): string | null {
   if (!c || typeof c !== "object") return "Realtime Chat isn’t configured";
-  if (c.protocol !== "openai-realtime-webrtc") return "Unsupported realtime protocol";
+  const capability = realtimeCapability(c.protocol);
+  if (!capability.implemented) return capability.reason!;
   for (const k of ["provider", "endpoint", "model", "transcriptionModel", "voice", "credential"] as const) {
     if (typeof c[k] !== "string" || !c[k].trim()) return `Enter ${k} in Realtime Chat settings`;
     if (/[\r\n\x00-\x1f\x7f]/.test(c[k])) return "Configuration must not contain control characters";
