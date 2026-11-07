@@ -79,3 +79,25 @@ Other catalog ASR/TTS models advertise multilingual support; that does not estab
 
 Only **OpenAI GA Realtime WebRTC** is implemented in this branch, validated with mocked transport.
 No NVIDIA or OpenAI live provider, real microphone or audible playback validation is claimed.
+
+## Follow-up research — 2026-11-07
+
+The [official NeMo Labs hosted NIM/Riva guide](https://docs.nvidia.com/nemo/labs-voice-agent/build-voice-agents/model-serving/nvidia-nim-riva)
+documents a separate cascaded NVIDIA voice pipeline: hosted ASR and TTS over TLS gRPC
+(`grpc.nvcf.nvidia.com:443`, API key plus deployment function IDs), with an OpenAI-compatible
+text LLM endpoint. The Python/Pipecat server mediates the browser transport. It is not the
+hosted Nemotron VoiceChat speech-to-speech trial, and does not establish that trial's browser
+connection/authentication contract. No server, account, trial or relay was deployed.
+
+This is a documented candidate for NVIDIA-powered voice, not delivered support. Enki would
+need a separately reviewed native/first-party transport boundary for gRPC, explicit destination
+and credential handling, cancellation and reconnect deduplication, and a decision on the
+cascaded experience versus full-duplex VoiceChat. Do not silently substitute it or advertise
+its evaluation limits as the VoiceChat trial's limits. The guide also notes the sample's
+language-setting limitation (effective default en-US), so Portuguese remains unverified.
+
+Re-read the VoiceChat model card and container API reference during this follow-up. The
+model card still describes early-access evaluation without an external hosted session contract;
+the container reference documents PCM24k WebSocket sessions but no browser authentication
+flow or GA response-cancellation operations. Public integration reports found during research
+concern self-hosted serving, not proof of a hosted free-trial integration.
