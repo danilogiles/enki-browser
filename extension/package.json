@@ -14,11 +14,13 @@
     "test:e2e": "node test/e2e.mjs",
     "test:home": "node test/home.mjs",
     "test:resilience": "node test/resilience.mjs",
-    "test:unit": "node test/unit.cjs && node test/search-unit.cjs && node test/safety-unit.cjs && node test/connector-endpoint-unit.cjs && node test/own-window-unit.cjs",
+    "test:unit": "node test/unit.cjs && node test/search-unit.cjs && node test/safety-unit.cjs && node test/connector-endpoint-unit.cjs && node test/own-window-unit.cjs && node test/realtime-unit.cjs",
     "test:quality": "node test/quality.mjs",
     "test:voice": "node test/voice.mjs",
     "test:shortcut": "node test/shortcut.mjs",
-    "test:tearoff": "node test/tearoff.mjs"
+    "test:tearoff": "node test/tearoff.mjs",
+    "test:realtime": "node test/realtime-unit.cjs",
+    "test:realtime-ui": "node test/realtime-ui.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

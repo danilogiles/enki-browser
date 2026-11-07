@@ -20,11 +20,13 @@ type Props = {
   /** Omitted on the answer page, which only answers: acting there would navigate the answer away. */
   onMode?: (m: Mode) => void;
   onSettings: () => void;
+  chatSelected?: boolean;
+  onChat?: () => void;
   /** Saved tasks (/name) and connected apps (@app) matching what is being typed. */
   suggest?: (value: string) => Array<{ insert: string; label: string; detail: string }>;
 };
 
-export function Composer({ disabled, running, onSend, onStop, attachScreenshot, vision, onToggleScreenshot, mode, onMode, onSettings, suggest }: Props) {
+export function Composer({ disabled, running, onSend, onStop, attachScreenshot, vision, onToggleScreenshot, mode, onMode, onSettings, suggest, chatSelected, onChat }: Props) {
   const [value, setValue] = useState("");
   const [pick, setPick] = useState(0);
   const options = suggest?.(value) ?? [];
@@ -41,28 +43,42 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
   // Voice: click to talk, click again to stop; the text lands in the box to check before sending.
   const [voice, setVoice] = useState<VoiceState>({ kind: "idle" });
   const recording = useRef<Recording | null>(null);
-  useEffect(() => () => recording.current?.cancel(), []);
+  const recordingGeneration = useRef(0);
+  useEffect(() => () => { recordingGeneration.current++; recording.current?.cancel(); }, []);
+  // The separate dictation recorder must not stay active behind the live Chat controls.
+  useEffect(() => {
+    if (!chatSelected) return;
+    recordingGeneration.current++;
+    recording.current?.cancel(); recording.current = null;
+    setVoice({ kind: "idle" });
+  }, [chatSelected]);
   const toggleVoice = async () => {
+    if (chatSelected) return;
+    const generation = recordingGeneration.current;
     if (voice.kind === "recording" && recording.current) {
       const rec = recording.current;
       recording.current = null;
       setVoice({ kind: "transcribing" });
       try {
         const audio = await rec.stop();
-        const text = await transcribe(audio, (percent) => setVoice({ kind: "downloading", percent }), uiLanguage());
+        const text = await transcribe(audio, (percent) => { if (generation === recordingGeneration.current) setVoice({ kind: "downloading", percent }); }, uiLanguage());
+        if (generation !== recordingGeneration.current) return;
         setValue((v) => (v.trim() ? `${v.trim()} ${text}` : text));
         setVoice({ kind: "idle" });
         ref.current?.focus();
       } catch (e) {
-        setVoice({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+        if (generation === recordingGeneration.current) setVoice({ kind: "error", message: e instanceof Error ? e.message : String(e) });
       }
       return;
     }
     if (voice.kind === "transcribing" || voice.kind === "downloading") return;
     try {
-      recording.current = await startRecording();
+      const rec = await startRecording();
+      if (generation !== recordingGeneration.current) { rec.cancel(); return; }
+      recording.current = rec;
       setVoice({ kind: "recording", since: Date.now() });
     } catch (e) {
+      if (generation !== recordingGeneration.current) return;
       if (e instanceof Error && e.message === "permission") {
         askMicrophonePermission();
         setVoice({ kind: "error", message: t.micAllow });
@@ -88,8 +104,8 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
       disabled={running}
       onClick={() => onMode?.(m)}
       title={title}
-      aria-pressed={mode === m}
-      className={`rounded-md p-1.5 transition disabled:opacity-50 ${mode === m ? "bg-ink-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-200"}`}
+      aria-pressed={!chatSelected && mode === m}
+      className={`rounded-md p-1.5 transition disabled:opacity-50 ${!chatSelected && mode === m ? "bg-ink-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-200"}`}
     >
       {icon}
     </button>
@@ -116,7 +132,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
           rows={1}
           value={value}
           disabled={disabled}
-          placeholder={mode === "ask" ? t.askPlaceholder : t.actPlaceholder}
+          placeholder={chatSelected ? "Use Start voice to speak" : mode === "ask" ? t.askPlaceholder : t.actPlaceholder}
           aria-label={t.messageEnki}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -144,6 +160,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
             <div className="flex rounded-lg bg-ink-950/60 p-0.5">
               {modeButton("ask", <Search size={15} />, t.modeAsk)}
               {modeButton("act", <Monitor size={15} />, t.modeAct)}
+              {onChat && <button type="button" disabled={running} onClick={onChat} aria-pressed={!!chatSelected} title="Chat · Live voice" className={`rounded-md px-2 text-xs disabled:opacity-50 ${chatSelected ? "bg-ink-800 text-cyan-200" : "text-zinc-500"}`}>Chat</button>}
             </div>
           )}
           <button

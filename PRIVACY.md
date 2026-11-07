@@ -1,6 +1,6 @@
 # Enki Browser Privacy Policy
 
-**Version 6 · Effective 22 October 2026**
+**Version 7 · Draft for the realtime voice change; not yet released**
 
 Enki Browser is an open-source web browser built on ungoogled-chromium, with the Enki AI
 assistant, uBlock Origin Lite and Enki Shield built in. This policy describes what the browser
@@ -26,7 +26,8 @@ included (`extension/`).
 | Pages Enki reads for you (`read_url`) | The website itself | When Enki reads a source. Since 0.8.14, an address on your computer or local network that you did not name, or an address Enki built after reading web content, waits for your approval | Like opening the page yourself for a plain fetch (no cookies). A page that needs JavaScript opens briefly in a background tab whose requests have Cookie and Authorization stripped; the tab still uses your profile, so page script can see that site's stored data |
 | Requests to apps you connect (Jira, Linear, Notion, Sentry, GitHub, or other MCP servers) | That app | Only after you connect it in Settings → Connections, and only when Enki uses it for your request | Disconnect any app at any time; changes in an app wait for your confirmation unless you allow that tool |
 | Your address bar search | DuckDuckGo, the default search engine | Only when you press Enter; suggestions while typing are off by default | Choose another engine, or turn suggestions on, in the browser's settings |
-| Nothing from voice input. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
+| Nothing from the existing dictation microphone. The Whisper speech model itself (about 80 MB) is downloaded once | Hugging Face (`huggingface.co`) | The first time you press Enki's microphone | Your voice is turned into text on your computer and never sent anywhere; the download carries no audio. Microphone permission can be revoked in the browser's site settings |
+| Realtime Chat microphone audio, SDP/network metadata, and the final Act answer to be spoken | The separately configured voice provider and its negotiated WebRTC media servers; the existing AI provider separately receives the committed transcript and page context under the normal Act rules | Only after **Start voice**. Selecting Chat and validating configuration use neither mic nor network | Choose all voice settings yourself, or leave them blank. Mute, Stop and End stop tracks, discard buffers, close the connection and cancel pending actions. No automatic reconnect or provider fallback. Provider retention/billing policies apply |
 | Update checks | GitHub (the browser's release page) | About every two hours while the browser is open, and when you click *Check for updates* (in Enki's Settings › About, the Shields popup, the Shields button's right-click menu or Shields' settings; on Windows). On macOS and Linux, only when you click it: one request for the latest release's number | Create a file named `no-update` next to `EnkiBrowser.exe` to turn updates off |
 | A Chrome Web Store extension you install with *Install in Enki* (Shields' button on the store's extension pages) | Google (`clients2.google.com`, which redirects the download to `clients2.googleusercontent.com`) | Only after you click *Install in Enki* and then *Continue*: one download of that extension, named by the id in the store page's address, plus your browser's version so Google picks a build that runs on it. Without cookies, referrer or Chromium's `X-Client-Data` header, and with no Google account, even after you visited the store. Nothing installs until you click *Add extension* in Chromium's own prompt | Don't use the button. Shields keeps a list of what it installed (name, id and version) on your device only |
 | Update checks for those extensions, only if you turn them on | Google (`clients2.google.com`; an update you accept downloads from `clients2.googleusercontent.com`) | Off by default. When on, about once a day: one request with the ids and recorded versions of the extensions installed with *Install in Enki* and your browser's version, nothing else. No cookies, no Google account. Shields cannot see when you remove an extension, so its id is sent until you *Forget* it | *Check for updates to store extensions* in Shields' settings, and *Forget* for each extension |
@@ -44,7 +45,7 @@ internet, and fails if the browser tries to reach any host that is not listed he
 list cannot be read). *background* means the browser may contact the host without you doing
 anything; *user* means only after an action of yours (a search from the address bar, a button
 in Settings, a question to Enki). Not listed, because you choose them: the websites you open, the
-AI provider you set up in Enki's Settings and the apps you connect to Enki.
+AI and realtime voice providers (including negotiated media servers) you set up in Enki's Settings and the apps you connect to Enki.
 
 <!-- enki-allowed-hosts:begin -->
 ```text
@@ -77,7 +78,8 @@ only, never written to storage).
 | Enki's conversations, the list of chats and saved tasks | the same | Encrypted the same way |
 | Shields' per-site choices and "forget this site" list | Enki Shield's local storage | Encrypted the same way |
 | Saved passwords and cookies (your logins) | your profile folder | Encrypted by Chromium with a key protected by your account: by Windows (in the portable version too), by the login keychain on macOS, by the system keyring on Linux |
-| Your voice, when you use Enki's microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
+| Your voice, when you use the dictation microphone | memory, until it becomes text | Never written to disk or sent; the text lands in the message box for you to edit |
+| Realtime Chat audio | transient capture and playback buffers, also streamed to your chosen provider | Enki saves no audio recording. Completed transcripts and Act responses follow **Save conversations**, encrypted like other chats. The live transcript display is held in memory only |
 | What was blocked on each tab | memory, until the browser closes | Never written to disk |
 | History, bookmarks, cache and the rest of the profile | your profile folder | Not encrypted by the browser — no mainstream browser does. Turn on your disk's encryption (Windows: Settings → Privacy & security → Device encryption, or BitLocker; macOS: FileVault, in System Settings → Privacy & Security) to protect them if someone gets your disk |
 

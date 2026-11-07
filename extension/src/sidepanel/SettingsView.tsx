@@ -1,3 +1,4 @@
+import { RealtimeSettings } from "./RealtimeSettings";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
@@ -334,6 +335,7 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
             <label htmlFor="act-model" className="block text-xs text-zinc-400">Preferred Act model (optional)</label>
             <input id="act-model" list="enki-models" value={draft.actModel} onChange={(e) => set("actModel", e.target.value)} className={inputCls} />
             <p className="text-xs text-zinc-400">Switching Ask/Act selects its preferred model on this provider. Blank keeps the current model.</p>
+            <RealtimeSettings value={draft.realtime} onChange={(v) => set("realtime", v)} />
           </Section>
         )}
 
