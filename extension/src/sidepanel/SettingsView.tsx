@@ -34,6 +34,8 @@ import { chooseDdgEngine, chooseEnkiEngine, chooseOtherEngine, enkiOptionText, p
 
 type Props = {
   settings: Settings;
+  /** Voice warning deep link; normal Settings navigation remains unchanged. */
+  initialSection?: "realtime";
   onSave: (s: Settings) => Promise<void>;
   onClose: () => void;
   /** Revoke deletes the saved HTTP exception for that origin right away (not on Save). */
@@ -42,7 +44,13 @@ type Props = {
 
 type TabId = "model" | "appearance" | "behavior" | "connections";
 
-export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: Props) {
+export function SettingsView({ settings, initialSection, onSave, onClose, onRevokeLocalHttp }: Props) {
+  const realtimeHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (initialSection !== "realtime") return;
+    realtimeHeading.current?.scrollIntoView({ block: "start" });
+    realtimeHeading.current?.focus({ preventScroll: true });
+  }, [initialSection]);
   const [activeTab, setActiveTab] = useState<TabId>("model");
   const [draft, setDraft] = useState<Settings>(settings);
   const [showKey, setShowKey] = useState(false);
@@ -335,7 +343,7 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
             <label htmlFor="act-model" className="block text-xs text-zinc-400">Preferred Act model (optional)</label>
             <input id="act-model" list="enki-models" value={draft.actModel} onChange={(e) => set("actModel", e.target.value)} className={inputCls} />
             <p className="text-xs text-zinc-400">Switching Ask/Act selects its preferred model on this provider. Blank keeps the current model.</p>
-            <RealtimeSettings value={draft.realtime} onChange={(v) => set("realtime", v)} />
+            <RealtimeSettings headingRef={realtimeHeading} value={draft.realtime} onChange={(v) => set("realtime", v)} />
           </Section>
         )}
 

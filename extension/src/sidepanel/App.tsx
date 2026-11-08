@@ -78,6 +78,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   const asPage = isolated || host === "page";
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<"chat" | "settings" | "logs">(PAGE_OPEN_SETTINGS ? "settings" : "chat");
+  const [settingsSection, setSettingsSection] = useState<"realtime" | undefined>();
   const [chatVoice, setChatVoice] = useState(false);
   const voiceRef = useRef<RealtimeVoice | null>(null);
   const setVoiceSession = useCallback((v: RealtimeVoice | null) => { voiceRef.current = v; }, []);
@@ -710,12 +711,14 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
     return (
       <SettingsView
         settings={settings}
+        initialSection={settingsSection}
         onSave={async (s) => {
           await saveSettingsFromUi(s);
           setSettings(s);
+          setSettingsSection(undefined);
           setView("chat");
         }}
-        onClose={() => setView("chat")}
+        onClose={() => { setSettingsSection(undefined); setView("chat"); }}
         onRevokeLocalHttp={revokeHttp}
       />
     );
@@ -791,7 +794,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
       )}
 
       {chatVoice && !asPage && <LiveVoice config={settings.realtime} act={voiceAct} disabled={needsKey || running}
-        onSettings={() => setView("settings")} onSession={setVoiceSession} />}
+        onSettings={() => { setSettingsSection("realtime"); setView("settings"); }} onSession={setVoiceSession} />}
       <Composer
         disabled={needsKey || chatVoice}
         running={running}
