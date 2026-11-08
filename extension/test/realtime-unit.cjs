@@ -8,7 +8,7 @@ require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileS
 const { RealtimeVoice, EMPTY_REALTIME, validateRealtime, audioDestination } = require('../src/lib/voice/realtime.ts');
 const { runTurn } = require('../src/lib/agent/loop.ts');
 const config = { provider: 'Chosen provider', protocol: 'openai-realtime-webrtc', endpoint: 'https://voice.example.test/v1/realtime/calls',
-  model: 'user-chosen-realtime-model', transcriptionModel: 'user-chosen-transcription-model', voice: 'user-chosen-voice', credential: 'test-credential-not-real' };
+  model: 'user-chosen-realtime-model', transcriptionModel: 'user-chosen-transcription-model', voice: 'user-chosen-voice', credential: 'test-credential-not-real', connectionVerified: true };
 const tick = () => new Promise((r) => setImmediate(r));
 function deferred() { let resolve; const promise = new Promise((r) => resolve = r); return { promise, resolve }; }
 function harness(options = {}) {
@@ -275,4 +275,85 @@ test('permission copy distinguishes realtime transmission from local dictation w
     assert.ok(!JSON.stringify(blocked).includes('do-not-display'));
   }
   assert.equal(microphoneDisclosure('invalid', config).enabled, false);
+});
+
+const { testRealtimeConnection } = require('../src/lib/voice/connection-test.ts');
+function probeHarness(options = {}) {
+  const requests = [], transceivers = [];
+  let remoteDescriptions = 0, closed = 0, stopped = 0;
+  const channel = { close() { this.onclose?.(); }, send() { throw new Error('probe must never send tools, actions or response requests'); } };
+  const peer = { connectionState: 'connected', createDataChannel: () => channel,
+    addTransceiver: (...args) => transceivers.push(args),
+    createOffer: async () => ({ type: 'offer', sdp: 'probe-sdp' }),
+    setLocalDescription: async () => {},
+    setRemoteDescription: async () => { remoteDescriptions++; },
+    close() { closed++; this.connectionState = 'closed'; this.onconnectionstatechange?.(); },
+  };
+  const controller = new AbortController();
+  const result = testRealtimeConnection(options.config ?? config, controller.signal, {
+    peer: () => peer, timeoutMs: options.timeoutMs ?? 1000,
+    fetch: async (...args) => { requests.push(args); return options.fetch ? options.fetch(...args) : new Response('probe-answer', { status: 201 }); },
+  });
+  const event = (e) => channel.onmessage?.({ data: JSON.stringify(e) });
+  return { result, controller, requests, transceivers, peer, channel, event,
+    counts: () => ({ remoteDescriptions, closed, stopped }),
+    track: () => peer.ontrack?.({ track: { stop: () => stopped++ } }),
+  };
+}
+
+test('connection probe validates offline and unsupported routes never create transport', async () => {
+  for (const c of [EMPTY_REALTIME, { ...config, protocol: 'nvidia-voicechat' }, { ...config, endpoint: 'http://voice.test' }]) {
+    const h = probeHarness({ config: c }); assert.equal((await h.result).ok, false);
+    assert.equal(h.requests.length, 0); assert.equal(h.transceivers.length, 0);
+  }
+});
+
+test('probe negotiates configured protocol with recvonly audio, never microphone/playback/page/tools; HTTP alone is insufficient', async () => {
+  const h = probeHarness({ config: { ...config, model: 'brand-new-model-with-no-allowlist' } });
+  let resolved = false; void h.result.then(() => resolved = true);
+  await tick(); assert.equal(resolved, false);
+  assert.deepEqual(h.transceivers, [['audio', { direction: 'recvonly' }]]);
+  const [url, request] = h.requests[0]; assert.equal(url, config.endpoint);
+  assert.equal(request.headers.Authorization, `Bearer ${config.credential}`);
+  assert.equal(request.redirect, 'error'); assert.equal(request.credentials, 'omit'); assert.equal(request.referrerPolicy, 'no-referrer');
+  const session = JSON.parse(request.body.get('session'));
+  assert.equal(session.model, 'brand-new-model-with-no-allowlist'); assert.deepEqual(session.tools, []);
+  assert.equal(session.tool_choice, 'none'); assert.equal(session.audio.input.turn_detection.create_response, false);
+  h.event({ type: 'response.function_call_arguments.done', name: 'buy', arguments: '{}' });
+  h.event({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Do something' });
+  await tick(); assert.equal(resolved, false);
+  h.track(); assert.equal(h.counts().stopped, 1);
+  h.event({ type: 'session.created' }); const result = await h.result;
+  assert.equal(result.ok, true); assert.match(result.message, /NOT tested/);
+  assert.equal(h.counts().closed, 1); assert.equal(request.signal.aborted, true);
+  h.event({ type: 'error', error: { message: config.credential } }); assert.equal(h.counts().closed, 1);
+});
+
+test('probe authentication/protocol failures are redacted with no retry or fallback', async () => {
+  for (const failHttp of [true, false]) {
+    const h = probeHarness({ fetch: async () => new Response(config.credential, { status: failHttp ? 401 : 201 }) });
+    await tick(); if (!failHttp) h.event({ type: 'error', error: { message: config.credential } });
+    const result = await h.result; assert.equal(result.ok, false);
+    assert.ok(!result.message.includes(config.credential)); assert.equal(h.requests.length, 1); assert.equal(h.counts().closed, 1);
+  }
+});
+
+test('cancelling a pending probe aborts request and ignores late SDP/session events', async () => {
+  const pending = deferred(); const h = probeHarness({ fetch: () => pending.promise });
+  await tick(); h.controller.abort(); assert.equal((await h.result).ok, false);
+  assert.equal(h.requests[0][1].signal.aborted, true); assert.equal(h.counts().closed, 1);
+  pending.resolve(new Response('late-answer', { status: 201 })); await tick();
+  h.event({ type: 'session.created' }); assert.equal(h.counts().remoteDescriptions, 0); assert.equal(h.counts().closed, 1);
+});
+
+test('probe timeout tears down transport, never treating a successful HTTP response as supported voice', async () => {
+  const h = probeHarness({ timeoutMs: 10 }); const result = await h.result;
+  assert.equal(result.ok, false); assert.match(result.message, /timed out/); assert.equal(h.counts().closed, 1);
+});
+
+test('unverified voice cannot request microphone or connect, even with locally valid fields', async () => {
+  for (const flag of [undefined, false, 'true']) {
+    const h = harness({ config: { ...config, connectionVerified: flag } }); await h.voice.start();
+    assert.equal(h.counts().micCalls, 0); assert.equal(h.requests.length, 0); assert.match(h.notices[0], /Test the voice connection/);
+  }
 });

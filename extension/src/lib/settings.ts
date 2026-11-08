@@ -346,8 +346,8 @@ function storedSettings(raw: unknown): Partial<Settings> | undefined {
   if ("realtime" in known) {
     const raw = known.realtime;
     if (!isPlainObject(raw)) delete known.realtime;
-    else known.realtime = Object.fromEntries(["provider", "protocol", "endpoint", "model", "transcriptionModel", "voice", "credential"]
-      .filter((k) => typeof raw[k] === "string").map((k) => [k, raw[k]]));
+    else known.realtime = { ...Object.fromEntries(["provider", "protocol", "endpoint", "model", "transcriptionModel", "voice", "credential"]
+      .filter((k) => typeof raw[k] === "string").map((k) => [k, raw[k]])), connectionVerified: raw.connectionVerified === true };
   }
   return known as Partial<Settings>;
 }

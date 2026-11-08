@@ -4,6 +4,11 @@ Not a release announcement. Live provider/microphone validation and security/vis
 
 NVIDIA is now visible as an explicitly **unimplemented, blocked capability**, not a preset or a working adapter. See [NVIDIA-VOICECHAT.md](./NVIDIA-VOICECHAT.md) for official API findings, hosted-access blockers, Portuguese status and the safe integration requirements.
 
+Live Voice Chat is optional. Provider/endpoint/model fields are free text, not a model allowlist;
+new model IDs using the supported protocol do not require an app update. Suggestions must only
+prefill editable fields. NVIDIA is an optional future adapter, not a prerequisite for releasing
+this generic feature, per Danilo's November 8 scope clarification.
+
 ## Setup and supported protocol
 
 Settings → Model Provider Setup → **Realtime Chat**. For the implemented GA WebRTC adapter, all fields are user supplied:
@@ -25,6 +30,20 @@ local Whisper+Ollama pipeline, automatic fallback, or universal realtime compati
 **Validate configuration (offline)** validates syntax only. It does not contact any provider,
 check authentication or touch a microphone. The calls protocol cannot prove authentication
 without starting a potentially billable realtime session; the UI says this explicitly.
+**Test connection (no microphone)** performs a real, explicit, potentially billable GA WebRTC
+session negotiation with the configured endpoint/model/key. It offers recvonly audio, waits for
+`session.created` (HTTP success alone is insufficient), then closes the channel/peer and aborts
+pending work. It has no microphone, playback, page context or Act callbacks. Incoming remote
+tracks are stopped; remote tool/transcript events are ignored. Cancellation, timeout, edits,
+protocol changes, removal and leaving setup tear down pending probes and ignore late results.
+Errors never display provider responses, headers, SDP or exceptions. The UI discloses the API
+destination, provider-negotiated network metadata and possible provider charges before testing.
+
+Only a successful probe enables **Start voice** after saving. Changing any connection field
+invalidates the local tested flag; legacy configs without the flag require a new test. This flag
+is a local setup convenience, NOT a grant of browser permissions and NOT proof of physical audio,
+speech quality, current future credential validity or working browser actions. Start voice still
+requires its own explicit click and microphone permission, and can fail independently.
 No live key was supplied or used during development.
 
 ## User flow
@@ -91,7 +110,7 @@ Before release: actual supported-account authentication and WebRTC negotiation, 
 permission/capture on Windows/macOS/Linux (including the real side panel), full spoken conversation,
 remote speech playback, barge-in, Mute/End, action confirmation and Stop under latency/network loss;
 CI green; Cloak security review; Ink build visual/a11y review; Blink packaging/privacy verification.
-No version, merge, tag or release is created by this implementation PR.
+The extension version was bumped for the repository packaging gate; the public browser version is unchanged. No merge, tag or release is created by this implementation PR.
 
 ## Mocked-browser screenshots (not a live audio test)
 

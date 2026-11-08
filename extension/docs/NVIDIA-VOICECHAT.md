@@ -1,5 +1,9 @@
 # NVIDIA VoiceChat integration assessment — not implemented
 
+Scope clarification, November 8, 2026: Live Voice Chat is optional and protocol-based, with editable
+provider/endpoint/model/key. NVIDIA is an optional future adapter, not a mandatory release gate
+for the generic feature. No NVIDIA support is implied by a successful different-protocol test.
+
 This is a capability/access assessment, **not** a working adapter or a claim that NVIDIA has no
 streaming API. Selecting NVIDIA in Settings deliberately blocks Start voice before microphone,
 transport or provider creation. There is no silent OpenAI fallback. Changing protocol clears the

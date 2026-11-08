@@ -31,6 +31,7 @@ try {
         v.channels.push(channel); return channel;
       }
       addTrack() {}
+      addTransceiver() {}
       createOffer = async () => ({ type: 'offer', sdp: 'mock-offer' });
       setLocalDescription = async () => {};
       setRemoteDescription = async () => { this.channel.onmessage?.({ data: JSON.stringify({ type: 'session.created' }) }); };
@@ -39,7 +40,10 @@ try {
     const originalFetch = window.fetch.bind(window);
     window.fetch = (url, options) => {
       if (String(url).startsWith('https://voice.example.test/')) {
-        v.requests++; return Promise.resolve(new Response('mock-answer', { status: 201 }));
+        v.requests++;
+        if (v.deferProbe) return new Promise((resolve) => { v.releaseProbe = () => resolve(new Response('late-answer', { status: 201 })); });
+        if (v.failProbe) return Promise.resolve(new Response('must-not-display-test-key', { status: 401 }));
+        return Promise.resolve(new Response('mock-answer', { status: 201 }));
       }
       return originalFetch(url, options);
     };
@@ -62,10 +66,37 @@ try {
   await panel.getByText(/Configuration valid locally/).waitFor();
   assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 0]); pass('configuration validation is offline and does not claim authentication');
   await panel.getByRole('button', { name: 'Save', exact: true }).click();
+  assert.equal(await panel.getByRole('button', { name: 'Start voice', exact: true }).count(), 0);
+  assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 0]); pass('saved offline-only configuration cannot enable voice');
+  await panel.getByRole('button', { name: 'Open settings', exact: true }).click();
+  await panel.getByRole('button', { name: 'Test connection (no microphone)', exact: true }).click();
+  await panel.getByText(/Connection verified; test session closed/).waitFor();
+  assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 1]); pass('explicit connection probe verifies protocol without microphone');
+  await panel.getByLabel('Realtime model', { exact: true }).fill('new-model-with-no-fixed-list');
+  await panel.getByRole('button', { name: 'Save', exact: true }).click();
+  assert.equal(await panel.getByRole('button', { name: 'Start voice', exact: true }).count(), 0); pass('editing a tested model invalidates availability');
+  await panel.getByRole('button', { name: 'Open settings', exact: true }).click();
+  await panel.evaluate(() => __voiceTest.deferProbe = true);
+  await panel.getByRole('button', { name: 'Test connection (no microphone)', exact: true }).click();
+  await panel.waitForFunction(() => __voiceTest.requests === 2);
+  await panel.getByLabel('Realtime model', { exact: true }).fill('another-new-model');
+  await panel.evaluate(() => { __voiceTest.deferProbe = false; __voiceTest.releaseProbe(); });
+  assert.equal(await panel.getByText(/Connection verified; test session closed/).count(), 0); pass('editing cancels pending probe and ignores its late result');
+  await panel.evaluate(() => __voiceTest.failProbe = true);
+  await panel.getByRole('button', { name: 'Test connection (no microphone)', exact: true }).click();
+  await panel.getByText(/Connection test failed/).waitFor();
+  assert.ok(!(await panel.locator('body').innerText()).includes('must-not-display-test-key'));
+  await panel.getByRole('button', { name: 'Save', exact: true }).click();
+  assert.equal(await panel.getByRole('button', { name: 'Start voice', exact: true }).count(), 0); pass('failed authentication is redacted and leaves voice unavailable');
+  await panel.getByRole('button', { name: 'Open settings', exact: true }).click();
+  await panel.evaluate(() => __voiceTest.failProbe = false);
+  await panel.getByRole('button', { name: 'Test connection (no microphone)', exact: true }).click();
+  await panel.getByText(/Connection verified; test session closed/).waitFor();
+  await panel.getByRole('button', { name: 'Save', exact: true }).click();
   await panel.waitForSelector('textarea');
   assert.ok(await panel.evaluate(async () => (await chrome.storage.local.get('enki:settings'))['enki:settings'].realtime.credential.startsWith('enc:v1:'))); pass('voice credential encrypted in local storage');
   await panel.getByRole('button', { name: 'Start voice', exact: true }).waitFor();
-  assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 0]); pass('configured Chat selection still inert');
+  assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 4]); pass('configured Chat selection still inert');
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   assert.equal(await panel.getByLabel('Realtime credential', { exact: true }).inputValue(), '');
   pass('saved voice credential is not rendered into the Settings DOM');
