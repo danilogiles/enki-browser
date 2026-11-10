@@ -59,6 +59,7 @@ try {
   assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 0]); pass('Live mode hidden until voice is set up; no microphone/network');
   await mkdir('test-results', { recursive: true });
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Live voice', exact: true }).click();
   await panel.getByRole('heading', { name: 'Realtime Chat', exact: true }).scrollIntoViewIfNeeded();
   for (const [label, text] of [['Voice provider', 'Test voice provider'], ['Full HTTPS calls endpoint', 'https://voice.example.test/v1/realtime/calls'], ['Realtime model', 'configured-realtime'], ['Transcription model', 'configured-transcription'], ['Output voice', 'configured-voice'], ['Realtime credential', 'test-not-a-real-key']]) await panel.getByLabel(label, { exact: true }).fill(text);
   await panel.getByRole('button', { name: 'Validate configuration (offline)' }).click();
@@ -69,6 +70,7 @@ try {
   assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 0]); pass('saved offline-only configuration cannot enable voice');
   assert.equal(await panel.getByRole('button', { name: 'Live', exact: true }).count(), 0);
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Live voice', exact: true }).click();
   await panel.getByRole('button', { name: 'Test connection (no microphone)', exact: true }).click();
   await panel.getByText(/Connection verified; test session closed/).waitFor();
   assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 1]); pass('explicit connection probe verifies protocol without microphone');
@@ -77,6 +79,7 @@ try {
   assert.equal(await panel.getByRole('button', { name: 'Start voice', exact: true }).count(), 0); pass('editing a tested model invalidates availability');
   assert.equal(await panel.getByRole('button', { name: 'Live', exact: true }).count(), 0);
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Live voice', exact: true }).click();
   await panel.evaluate(() => __voiceTest.deferProbe = true);
   await panel.getByRole('button', { name: 'Test connection (no microphone)', exact: true }).click();
   await panel.waitForFunction(() => __voiceTest.requests === 2);
@@ -91,6 +94,7 @@ try {
   assert.equal(await panel.getByRole('button', { name: 'Start voice', exact: true }).count(), 0); pass('failed authentication is redacted and leaves voice unavailable');
   assert.equal(await panel.getByRole('button', { name: 'Live', exact: true }).count(), 0);
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Live voice', exact: true }).click();
   await panel.evaluate(() => __voiceTest.failProbe = false);
   await panel.getByRole('button', { name: 'Test connection (no microphone)', exact: true }).click();
   await panel.getByText(/Connection verified; test session closed/).waitFor();
@@ -101,6 +105,7 @@ try {
   await panel.getByRole('button', { name: 'Start voice', exact: true }).waitFor();
   assert.deepEqual(await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]), [0, 4]); pass('selecting Live is still inert until Start voice');
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Live voice', exact: true }).click();
   assert.equal(await panel.getByLabel('Realtime credential', { exact: true }).inputValue(), '');
   pass('saved voice credential is not rendered into the Settings DOM');
   await panel.getByLabel('Realtime credential', { exact: true }).scrollIntoViewIfNeeded();
@@ -150,6 +155,7 @@ try {
   await panel.waitForFunction(() => __voiceTest.mic === 3 && __voiceTest.stopped === 3);
   pass('selecting Live disposes the separate local dictation recorder');
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Live voice', exact: true }).click();
   assert.equal(await panel.getByLabel('Realtime protocol').locator('option[value="nvidia-voicechat"]').count(), 0);
   await panel.getByTitle('Back', { exact: true }).click();
   await panel.evaluate(async () => {
@@ -159,6 +165,7 @@ try {
   await panel.reload(); await panel.waitForSelector('textarea');
   const beforeNvidia = await panel.evaluate(() => [__voiceTest.mic, __voiceTest.requests]); // fresh page counters
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Live voice', exact: true }).click();
   assert.equal(await panel.getByLabel('Realtime protocol').locator('option[value="nvidia-voicechat"]').evaluate((o) => o.disabled), true);
   assert.equal(await panel.getByLabel('Realtime credential', { exact: true }).inputValue(), '');
   assert.equal(await panel.getByLabel('Endpoint (unverified; not connected)', { exact: true }).inputValue(), '');

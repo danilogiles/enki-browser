@@ -20,6 +20,7 @@ import {
   KeyRound,
   Laptop,
   LockOpen,
+  Mic,
 } from "lucide-react";
 import { maskKey, PRESETS, presetOf, THEMES, usesTextTools, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
@@ -43,16 +44,16 @@ type Props = {
   onRevokeLocalHttp?: (origin: string) => Promise<void>;
 };
 
-type TabId = "model" | "appearance" | "behavior" | "connections";
+type TabId = "model" | "live" | "appearance" | "behavior" | "connections";
 
 export function SettingsView({ settings, initialSection, onSave, onClose, onRevokeLocalHttp }: Props) {
   const realtimeHeading = useRef<HTMLHeadingElement>(null);
+  const [activeTab, setActiveTab] = useState<TabId>(initialSection === "realtime" ? "live" : "model");
   useEffect(() => {
     if (initialSection !== "realtime") return;
     realtimeHeading.current?.scrollIntoView({ block: "start" });
     realtimeHeading.current?.focus({ preventScroll: true });
   }, [initialSection]);
-  const [activeTab, setActiveTab] = useState<TabId>("model");
   const [draft, setDraft] = useState<Settings>(settings);
   const [showKey, setShowKey] = useState(false);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
@@ -183,12 +184,18 @@ export function SettingsView({ settings, initialSection, onSave, onClose, onRevo
       <SearchEngineControl settings={settings} />
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
+      <div role="tablist" aria-label="Settings sections" className="flex overflow-x-auto border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
         <TabButton
           active={activeTab === "model"}
           onClick={() => setActiveTab("model")}
           icon={<Bot size={14} />}
           label="Model"
+        />
+        <TabButton
+          active={activeTab === "live"}
+          onClick={() => setActiveTab("live")}
+          icon={<Mic size={14} />}
+          label="Live voice"
         />
         <TabButton
           active={activeTab === "appearance"}
@@ -347,6 +354,13 @@ export function SettingsView({ settings, initialSection, onSave, onClose, onRevo
             <label htmlFor="act-model" className="block text-xs text-zinc-400">Preferred Act model (optional)</label>
             <ModelPicker id="act-model" label="Preferred Act model (optional)" value={draft.actModel} models={models} onChange={(v) => set("actModel", v)} />
             <p className="text-xs text-zinc-400">Switching Ask/Act selects its preferred model on this provider. Blank keeps the current model.</p>
+            <p className="mt-3 text-xs text-zinc-400">Live voice has its own setup. <button type="button" className="text-enki-400 underline" onClick={() => setActiveTab("live")}>Set up Live voice</button></p>
+          </Section>
+        )}
+
+        {/* TAB: LIVE VOICE (separate provider, endpoint and key) */}
+        {activeTab === "live" && (
+          <Section title="Live voice">
             <RealtimeSettings headingRef={realtimeHeading} catalog={catalog} providerKey={{ baseUrl: draft.baseUrl, key: draft.apiKey }} suggestion={voiceSuggestion} value={draft.realtime} onChange={(v) => set("realtime", v)} />
           </Section>
         )}
@@ -623,8 +637,10 @@ function TabButton({
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
-      className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition ${
         active
           ? "border-enki-500 text-enki-400"
           : "border-transparent text-zinc-400 hover:text-zinc-200"
