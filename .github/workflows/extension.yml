@@ -65,6 +65,7 @@ jobs:
           cat mock.log; exit 1
       # Extensions only load in headed Chromium; xvfb gives it a display on the runner.
       - run: xvfb-run -a npm run test:e2e
+      - run: xvfb-run -a npm run test:model-catalog-ui
       - run: xvfb-run -a npm run test:realtime-ui
       - run: xvfb-run -a npm run test:home
       - run: xvfb-run -a npm run test:resilience

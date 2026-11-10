@@ -1,3 +1,4 @@
+import { normalizeCatalog, readCatalogJson, type CatalogModel } from "./model-catalog";
 import { log } from "../debug";
 import { assertEndpointAllowed } from "./endpoint-guard";
 import type {
@@ -39,17 +40,28 @@ export class OpenAICompatProvider implements ChatProvider {
     return this.opts.baseUrl.replace(/\/+$/, "") + path;
   }
 
-  async listModels(): Promise<string[]> {
-    this.guard(this.url("/models"));
-    const res = await fetch(this.url("/models"), {
-      headers: this.headers(),
-      signal: AbortSignal.timeout(15000),
-      // A redirect would skip the endpoint check (it could point at a hostname or public IP over HTTP).
-      redirect: "error",
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const body = (await res.json()) as { data?: Array<{ id: string }> };
-    return (body.data ?? []).map((m) => m.id).sort();
+  async listModels(signal?: AbortSignal): Promise<string[]> {
+    return (await this.listModelCatalog(signal)).map((m) => m.id);
+  }
+
+  async listModelCatalog(signal?: AbortSignal): Promise<CatalogModel[]> {
+    const lifetime = signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
+    const url = new URL(this.url("/models"));
+    const paged = url.origin === "https://openrouter.ai" && url.pathname === "/api/v1/models";
+    const rows: CatalogModel[] = [];
+    for (let page = 0; page < (paged ? 100 : 1); page++) {
+      if (paged) { url.searchParams.set("output_modalities", "all"); url.searchParams.set("limit", "500"); url.searchParams.set("offset", String(page * 500)); }
+      lifetime.throwIfAborted();
+      this.guard(url.href);
+      const res = await fetch(url.href, { headers: this.headers(), signal: lifetime, redirect: "error", credentials: "omit", referrerPolicy: "no-referrer" });
+      if (!res.ok) throw new Error(`Model catalog HTTP ${res.status}`);
+      const body = await readCatalogJson(res);
+      const batch = normalizeCatalog(body.data);
+      if (rows.length + batch.length > 50000) throw new Error("Model catalog too large; enter model manually");
+      rows.push(...batch);
+      if (!paged || body.data.length < 500 || (Number.isSafeInteger(body.total_count) && (page + 1) * 500 >= body.total_count)) return normalizeCatalog(rows);
+    }
+    throw new Error("Catalog exceeds safe pagination bound; enter model manually");
   }
 
   async *stream(req: ChatRequest): AsyncIterable<StreamEvent> {

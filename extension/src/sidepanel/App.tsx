@@ -1,3 +1,4 @@
+import { validateRealtimeForStart, realtimeCapability } from "../lib/voice/realtime";
 import { LiveVoice } from "./LiveVoice";
 import type { RealtimeVoice } from "../lib/voice/realtime";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -80,6 +81,9 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
   const [view, setView] = useState<"chat" | "settings" | "logs">(PAGE_OPEN_SETTINGS ? "settings" : "chat");
   const [settingsSection, setSettingsSection] = useState<"realtime" | undefined>();
   const [chatVoice, setChatVoice] = useState(false);
+  // Live appears only after voice is configured, connection-tested and saved.
+  const liveReady = !!settings?.realtime && !validateRealtimeForStart(settings.realtime) && realtimeCapability(settings.realtime.protocol).implemented;
+  useEffect(() => { if (!liveReady) setChatVoice(false); }, [liveReady]);
   const voiceRef = useRef<RealtimeVoice | null>(null);
   const setVoiceSession = useCallback((v: RealtimeVoice | null) => { voiceRef.current = v; }, []);
   const [mode, setMode] = useState<Mode>("ask");
@@ -806,7 +810,7 @@ export function App({ host = "panel", seed, chat }: { host?: Host; seed?: string
         mode={mode}
         onMode={asPage ? undefined : (m) => { setChatVoice(false); changeMode(m); }}
         chatSelected={chatVoice}
-        onChat={asPage ? undefined : () => setChatVoice(true)}
+        onChat={asPage || !liveReady ? undefined : () => setChatVoice(true)}
         suggest={(v) => suggestions(v, tasks, apps)}
         onSettings={() => setView("settings")}
       />

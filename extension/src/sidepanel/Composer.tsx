@@ -160,7 +160,7 @@ export function Composer({ disabled, running, onSend, onStop, attachScreenshot, 
             <div className="flex rounded-lg bg-ink-950/60 p-0.5">
               {modeButton("ask", <Search size={15} />, t.modeAsk)}
               {modeButton("act", <Monitor size={15} />, t.modeAct)}
-              {onChat && <button type="button" disabled={running} onClick={onChat} aria-pressed={!!chatSelected} title="Chat · Live voice" className={`rounded-md px-2 text-xs disabled:opacity-50 ${chatSelected ? "bg-ink-800 text-cyan-200" : "text-zinc-500"}`}>Chat</button>}
+              {onChat && <button type="button" disabled={running} onClick={onChat} aria-pressed={!!chatSelected} title="Live voice chat" className={`rounded-md px-2 text-xs disabled:opacity-50 ${chatSelected ? "bg-ink-800 text-cyan-200" : "text-zinc-500"}`}>Live</button>}
             </div>
           )}
           <button
