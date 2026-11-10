@@ -33,7 +33,7 @@ static class Launcher
         }
 
         // Enki Shield's "Check for updates", through native messaging (NativeHost.cs).
-        if (NativeHost.IsCall(args)) return NativeHost.Run(root, appDir);
+        if (NativeHost.IsCall(args)) return NativeHost.Run(root, appDir, args);
 
         // Check, verify and stage now, without opening a window (used by tests and scripts).
         if (args.Contains("--enki-update-check"))
@@ -58,8 +58,10 @@ static class Launcher
         // A file named "test-isolated" there makes a private test copy that leaves the real install
         // alone: its own profile, no native host, Apps entry, browser registration or updates
         // (Isolation, Common.cs). Everything else below is scoped to this copy and runs as usual.
-        bool testIsolated = Isolation.TestIsolated(root);
+        string problem = Isolation.Problem(root);
+        bool testIsolated = problem == null;
         if (testIsolated) Updater.Log(root, "test-isolated copy: own profile; no native host, registration or updates");
+        else if (problem != "no marker") Updater.Log(root, "ignored the test-isolated file (" + problem + "): this starts as a normal install, updates on");
         string userData = Install.UserData(root);
         flags.Add("--user-data-dir=" + userData);
         Migration.Run(userData, root, appDir);
@@ -76,6 +78,9 @@ static class Launcher
             Install.SyncRegistration(root, appDir);
         }
         ShellIdentity.RepairShortcuts(root);
+        // The window says it too (Chromium's --window-name: the first window's title); Shield shows
+        // "Test copy, updates off" in its panel and settings (shield/testcopy.js).
+        if (testIsolated) flags.Add("--window-name=Enki Browser (test copy, updates off)");
         if (portable)
         {
             // Saved passwords and cookies stay encrypted (Chromium's key, protected by Windows for

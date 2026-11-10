@@ -59,8 +59,9 @@ static class NativeHost
         catch (Exception e) { Updater.Log(root, "check-for-updates link skipped: " + e.Message); }
     }
 
-    /// One request, one reply (chrome.runtime.sendNativeMessage), then exit.
-    public static int Run(string root, string appDir)
+    /// One request, one reply (chrome.runtime.sendNativeMessage), then exit. `args` is the host's
+    /// command line: the caller's origin, then on Windows --parent-window=<HWND>.
+    public static int Run(string root, string appDir, string[] args)
     {
         var json = new JavaScriptSerializer();
         Dictionary<string, object> reply;
@@ -68,7 +69,14 @@ static class NativeHost
         {
             var request = json.DeserializeObject(Read(Console.OpenStandardInput())) as Dictionary<string, object>;
             string type = request != null && request.ContainsKey("type") ? request["type"] as string : null;
-            if (type == "check") reply = Check(root, appDir);
+            string refused = HostGuard.Acts(type) ? Refusal(root, args) : null;
+            if (refused != null)
+            {
+                // Shield shows "Unavailable in this copy." (shield/updates.js, widevine.js, options.js).
+                Updater.Log(root, "native host: refused " + type + ": " + refused);
+                reply = new Dictionary<string, object> { { "unavailable", true }, { "error", "unavailable in this copy" }, { "opened", false }, { "restarting", false } };
+            }
+            else if (type == "check") reply = Check(root, appDir);
             else if (type == "default-status") reply = DefaultStatus(root);
             else if (type == "open-default-apps")
             {
@@ -101,6 +109,71 @@ static class NativeHost
         catch (Exception e) { reply = new Dictionary<string, object> { { "error", e.Message } }; }
         Write(Console.OpenStandardOutput(), json.Serialize(reply));
         return 0;
+    }
+
+    /// Null when the request may act; otherwise why not. The calling browser is the process that
+    /// owns --parent-window, or else the first chrome.exe up the parent chain (Chromium starts hosts
+    /// through cmd.exe). Unknown callers are refused: these requests come from Shield's settings
+    /// page, which always has a window, and a refusal only greys out one button.
+    static string Refusal(string root, string[] args)
+    {
+        if (Isolation.TestIsolated(root)) return "this is a test-isolated copy";
+        string appFolder = Win.LongPath(Path.Combine(root, "app"));
+        string exe = null;
+        long hwnd = HostGuard.ParentWindow(args);
+        if (hwnd != 0)
+        {
+            uint pid;
+            if (GetWindowThreadProcessId(new IntPtr(hwnd), out pid) != 0 && pid != 0) exe = ExePath((int)pid);
+        }
+        if (exe == null) exe = ChromeAncestor();
+        if (exe == null) return "the calling browser could not be identified";
+        exe = Win.LongPath(exe);
+        return HostGuard.Under(exe, appFolder) ? null : "the calling browser (" + exe + ") is not this install's";
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+
+    static string ExePath(int pid)
+    {
+        try { using (var p = System.Diagnostics.Process.GetProcessById(pid)) return p.MainModule.FileName; }
+        catch { return null; }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    struct PROCESSENTRY32
+    {
+        public uint dwSize, cntUsage, th32ProcessID; public IntPtr th32DefaultHeapID; public uint th32ModuleID, cntThreads, th32ParentProcessID; public int pcPriClassBase; public uint dwFlags;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
+    }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint pid);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern bool Process32FirstW(IntPtr snap, ref PROCESSENTRY32 e);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern bool Process32NextW(IntPtr snap, ref PROCESSENTRY32 e);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+    /// The nearest chrome.exe among this process's ancestors (at most four steps up), or null.
+    static string ChromeAncestor()
+    {
+        var parents = new Dictionary<uint, uint>();
+        var names = new Dictionary<uint, string>();
+        IntPtr snap = IntPtr.Zero;
+        try
+        {
+            snap = CreateToolhelp32Snapshot(0x2 /* TH32CS_SNAPPROCESS */, 0);
+            if (snap == IntPtr.Zero || snap == new IntPtr(-1)) return null;
+            var e = new PROCESSENTRY32 { dwSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(PROCESSENTRY32)) };
+            for (bool ok = Process32FirstW(snap, ref e); ok; ok = Process32NextW(snap, ref e)) { parents[e.th32ProcessID] = e.th32ParentProcessID; names[e.th32ProcessID] = e.szExeFile; }
+        }
+        catch { return null; }
+        finally { if (snap != IntPtr.Zero && snap != new IntPtr(-1)) CloseHandle(snap); }
+        uint id = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+        for (int i = 0; i < 4 && parents.TryGetValue(id, out id) && id != 0; i++)
+        {
+            string name;
+            if (names.TryGetValue(id, out name) && string.Equals(name, "chrome.exe", StringComparison.OrdinalIgnoreCase)) return ExePath((int)id);
+        }
+        return null;
     }
 
     /// Whether this install is registered as a browser and is the user's default for links.

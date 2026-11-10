@@ -8,10 +8,15 @@ EnkiBrowser\\ (EnkiBrowser.exe, current, app\\<version>\\EnkiBrowserLauncher.exe
 Output, in DIR (default: the current folder):
     Enki-LiveChat-<id>-Windows-x64\\
         EnkiBrowser\\               the CI build, unchanged, plus two marker files:
-            test-isolated          own profile (EnkiBrowser\\User Data); no native host, Apps entry,
+            test-isolated          "enki-test-isolated/1", label= and token= (random); the launcher
+                                   honours it only if the same token is in the Shield file below.
+                                   Then: own profile (EnkiBrowser\\User Data); no native host, Apps entry,
                                    browser registration, updates, or uninstall of the real install's
                                    shortcuts/registry/profile (launcher/Common.cs, Isolation)
             no-update              belt and braces: updates off for any launcher that reads it
+            app\\<v>\\extensions\\shield\\test-copy.json
+                                   {"testCopy":true,"label":…,"token":…}: Shield never calls the native
+                                   host and shows "Test copy, updates off" (shield/testcopy.js)
         Create-Test-Shortcut.ps1   one desktop shortcut to EnkiBrowser\\EnkiBrowser.exe (Enki's
                                    name and icon, the same start path as a normal install)
         READ-ME-FIRST.txt
@@ -26,6 +31,7 @@ import argparse
 import hashlib
 import os
 import re
+import secrets
 import shutil
 import sys
 import zipfile
@@ -59,6 +65,11 @@ $root = Join-Path $PSScriptRoot 'EnkiBrowser'
 $stub = Join-Path $root 'EnkiBrowser.exe'
 if (-not (Test-Path -LiteralPath $stub)) { throw "EnkiBrowser.exe missing: $stub" }
 if (-not (Test-Path -LiteralPath (Join-Path $root 'test-isolated') -PathType Leaf)) { throw 'test-isolated marker missing; refusing (this would behave as a normal install).' }
+# The launcher honours the marker only when its token matches Shield's test-copy.json (Common.cs).
+$token = (Get-Content -LiteralPath (Join-Path $root 'test-isolated') | Where-Object { $_ -like 'token=*' } | Select-Object -First 1)
+$version = (Get-Content -LiteralPath (Join-Path $root 'current') -Raw).Trim()
+$shieldCopy = Join-Path $root "app\$version\extensions\shield\test-copy.json"
+if (-not $token -or -not (Test-Path -LiteralPath $shieldCopy) -or -not ((Get-Content -LiteralPath $shieldCopy -Raw) -like ('*"token":"' + $token.Substring(6) + '"*'))) { throw 'test-isolated marker does not match Shield''s test-copy.json; refusing (the launcher would start this as a normal install).' }
 $normal = Join-Path $env:LOCALAPPDATA 'Programs\EnkiBrowser'
 if ([IO.Path]::GetFullPath($root).TrimEnd('\') -ieq [IO.Path]::GetFullPath($normal).TrimEnd('\')) { throw "This is the normal install's folder ($normal); extract the test copy elsewhere." }
 $desktop = [Environment]::GetFolderPath('Desktop')
@@ -99,9 +110,11 @@ Setup: extract this folder somewhere writable and separate from Enki (NOT
 %LOCALAPPDATA%\\Programs\\EnkiBrowser). Verify SHA256SUMS. Run Create-Test-Shortcut.ps1 normally
 in PowerShell (no admin, no policy change). Open the desktop shortcut "{name}".
 
-Do NOT use these in this copy's Enki Shield settings: "Check for updates", "Restart to update",
-default browser, protected video (Widevine). The copy does not register its own native host, so
-Chromium would reach the REAL install's host (same extension id) and act on the real install.
+Shield in this copy knows it is a test copy (extensions\\shield\\test-copy.json): it never talks to
+the native host, hides "Check for updates", "Restart to update", default browser and protected
+video, and shows "Test copy, updates off" instead. The first window's title says so too.
+Do not edit or delete test-isolated or test-copy.json: without both (same token), the launcher
+starts this folder as a normal install.
 
 Unsigned by the release signing workflow; Windows may warn. If it blocks, stop and report the exact
 text; do not disable protections. Not launched on Windows by its assembler unless stated otherwise.
@@ -144,6 +157,10 @@ def main():
         missing = [r for r in required if r not in names]
         if missing:
             fail("the build is incomplete: " + ", ".join(missing))
+        if app + "extensions/shield/manifest.json" not in names:
+            fail("the build has no Shield at " + app + "extensions/shield/")
+        if app + "extensions/shield/testcopy.js" not in names:
+            fail("Shield in this build predates test copies (no testcopy.js): refusing, it would reach the real install's host")
         for exe in (TOP + "EnkiBrowser.exe", app + "EnkiBrowserLauncher.exe", app + "EnkiBrowser.exe"):
             if exe in names and not knows_marker(z.read(exe)):
                 fail("%s does not know the %s marker (a build from before this change): refusing, it would "
@@ -152,8 +169,12 @@ def main():
         z.extractall(folder)
 
     root = os.path.join(folder, "EnkiBrowser")
-    for marker, text in ((MARKER, "Private test copy: own profile, no native host, registration or updates (launcher/Common.cs).\n"),
-                         ("no-update", "Updates off for this test copy.\n")):
+    token = secrets.token_hex(16)
+    shield_file = os.path.join(root, "app", version, "extensions", "shield", "test-copy.json")
+    with open(shield_file, "w", newline="\n") as f:
+        f.write('{"testCopy":true,"label":"%s","token":"%s"}\n' % (a.label, token))
+    marker_text = "enki-test-isolated/1\nlabel=%s\ntoken=%s\n" % (a.label, token)
+    for marker, text in ((MARKER, marker_text), ("no-update", "Updates off for this test copy.\n")):
         with open(os.path.join(root, marker), "w", newline="\r\n") as f:
             f.write(text)
     for stray in ("portable",):  # portable mode adds --disable-machine-id; not wanted here

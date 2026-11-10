@@ -4,6 +4,7 @@ import { AUTO_BURN, BADGE, LEVELS, applySites, blocker, forgetList, setForget, s
 import { DOWNLOAD, check, compare, native, restart, restartWithFallback, status } from "./updates.js";
 import { defaultStatus, openDefaultApps } from "./default-browser.js";
 import { showWidevine } from "./widevine.js";
+import { TEST_COPY, UNAVAILABLE } from "./testcopy.js";
 import { GPC, gpcOn } from "./gpc.js";
 import { renderNotices, renderSettings } from "./webstore-ui.js";
 
@@ -96,7 +97,12 @@ function showUpdates(s, checked) {
   restartUpdate.hidden = true;
   $("restart-help").hidden = true;
   downloadUpdate.hidden = true;
-  if (s.updater && s.ready) {
+  if (s.testCopy) { // testcopy.js: no host, no GitHub; the button goes, the label says why
+    updateState.textContent = t("testCopy", TEST_COPY);
+    checkUpdates.hidden = true;
+  } else if (s.unavailable) {
+    updateState.textContent = t("unavailableHere", UNAVAILABLE);
+  } else if (s.updater && s.ready) {
     updateState.textContent = t("upReady", `Enki Browser ${s.ready} is downloaded and verified. Restart to use it; every window and tab comes back.`, s.ready);
     restartUpdate.hidden = false;
   } else if (s.error) {

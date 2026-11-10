@@ -2,6 +2,7 @@
 import { t } from "./i18n.js";
 import { BADGE, LEVELS, blocker, blockerId, forgetList, inIncognito, setDown, setForget, setSite, sites } from "./sites.js";
 import { renderNotices } from "./webstore-ui.js";
+import { TEST_COPY, testCopy } from "./testcopy.js";
 
 const $ = (id) => document.getElementById(id);
 const DOCS = "https://github.com/danilogiles/enki-browser/blob/main/";
@@ -22,6 +23,8 @@ const open = (url) => chrome.tabs.create({ url, index: (tab?.index ?? 0) + 1 });
 $("terms").onclick = (e) => { e.preventDefault(); void open(DOCS + "TERMS.md"); };
 $("privacy").onclick = (e) => { e.preventDefault(); void open(DOCS + "PRIVACY.md"); };
 $("updates").onclick = (e) => { e.preventDefault(); void chrome.tabs.create({ url: chrome.runtime.getURL("options.html#check-updates") }); };
+// A test copy (testcopy.js) says so where "Check for updates" was.
+if (await testCopy()) $("updates").replaceWith(Object.assign(document.createElement("span"), { id: "test-copy", textContent: t("testCopy", TEST_COPY) }));
 
 if (!host) {
   $("app").hidden = true;

@@ -461,16 +461,36 @@ static class LauncherTests
     static void IsolationTests()
     {
         string root = Path.Combine(Path.GetTempPath(), "enki-isolated-" + Guid.NewGuid().ToString("N"));
+        const string token = "0123456789abcdef0123456789abcdef";
+        string marker = Path.Combine(root, Isolation.Marker);
+        string shield = Path.Combine(root, "app", "0.8.16", "extensions", "shield");
+        string good = Isolation.Header + "\nlabel=abc1234\ntoken=" + token + "\n";
         try
         {
-            Directory.CreateDirectory(root);
-            Check("isolation: a normal install (no marker) is not test-isolated", !Isolation.TestIsolated(root));
+            Directory.CreateDirectory(shield);
+            File.WriteAllText(Path.Combine(root, "current"), "0.8.16");
+            Check("isolation: a normal install (no marker) is not test-isolated", !Isolation.TestIsolated(root) && Isolation.Problem(root) == "no marker");
             File.WriteAllText(Path.Combine(root, "portable"), "");
             Check("isolation: a portable copy alone is not test-isolated", !Isolation.TestIsolated(root));
-            File.WriteAllText(Path.Combine(root, Isolation.Marker), "");
-            Check("isolation: the marker is named test-isolated and turns it on", Isolation.Marker == "test-isolated" && Isolation.TestIsolated(root));
-            File.Delete(Path.Combine(root, Isolation.Marker));
-            Directory.CreateDirectory(Path.Combine(root, Isolation.Marker));
+            File.WriteAllText(marker, "");
+            Check("isolation: an empty stray marker is ignored, with a reason", !Isolation.TestIsolated(root) && Isolation.Problem(root) != "no marker", Isolation.Problem(root));
+            File.WriteAllText(marker, good);
+            Check("isolation: a well-formed marker without Shield's test-copy.json is ignored", !Isolation.TestIsolated(root), Isolation.Problem(root));
+            File.WriteAllText(Path.Combine(shield, Isolation.ShieldFile), "{\"testCopy\":true,\"label\":\"abc1234\",\"token\":\"ffffffffffffffffffffffffffffffff\"}");
+            Check("isolation: a token that differs from Shield's is ignored", !Isolation.TestIsolated(root), Isolation.Problem(root));
+            File.WriteAllText(Path.Combine(shield, Isolation.ShieldFile), "{\"testCopy\":true,\"label\":\"abc1234\",\"token\":\"" + token + "\"}\n");
+            Check("isolation: the package script's marker and Shield file together turn it on", Isolation.TestIsolated(root), Isolation.Problem(root) ?? "");
+            File.WriteAllText(marker, good.Replace("label=abc1234\n", ""));
+            Check("isolation: a marker without a label is ignored", !Isolation.TestIsolated(root));
+            File.WriteAllText(marker, good.Replace(token, "xyz"));
+            Check("isolation: a marker with a malformed token is ignored", !Isolation.TestIsolated(root));
+            File.WriteAllText(marker, good);
+            File.WriteAllText(Path.Combine(root, "current"), "0.8.17");
+            Check("isolation: Shield of another version than current does not count", !Isolation.TestIsolated(root));
+            File.WriteAllText(Path.Combine(root, "current"), "..");
+            Check("isolation: current cannot point outside app\\", !Isolation.TestIsolated(root));
+            File.Delete(marker);
+            Directory.CreateDirectory(marker);
             Check("isolation: a folder named test-isolated is not the marker", !Isolation.TestIsolated(root));
             Check("isolation: no root, no isolation (and no exception)", !Isolation.TestIsolated(null) && !Isolation.TestIsolated(""));
         }
@@ -478,5 +498,23 @@ static class LauncherTests
         {
             try { Directory.Delete(root, true); } catch { }
         }
+
+        // The native host's guard (HostGuard, used by NativeHost.Run).
+        Check("host guard: update, restart, default browser and Widevine changes act; status reads do not",
+            HostGuard.Acts("check") && HostGuard.Acts("restart") && HostGuard.Acts("open-default-apps") && HostGuard.Acts("widevine-install") && HostGuard.Acts("widevine-remove")
+            && !HostGuard.Acts("status") && !HostGuard.Acts("default-status") && !HostGuard.Acts("widevine-status") && !HostGuard.Acts(null));
+        Check("host guard: --parent-window is read; absent, zero or junk is 0",
+            HostGuard.ParentWindow(new[] { "chrome-extension://abc/", "--parent-window=132456" }) == 132456
+            && HostGuard.ParentWindow(new[] { "chrome-extension://abc/" }) == 0 && HostGuard.ParentWindow(new[] { "--parent-window=0" }) == 0
+            && HostGuard.ParentWindow(new[] { "--parent-window=x" }) == 0 && HostGuard.ParentWindow(null) == 0);
+        string app = @"C:\Users\d\AppData\Local\Programs\EnkiBrowser\app";
+        Check("host guard: this install's chrome.exe is its own", HostGuard.Under(app + @"\0.8.16\chromium\chrome.exe", app) && HostGuard.Under(app.ToUpperInvariant() + @"\0.8.16\CHROMIUM\chrome.exe", app));
+        Check("host guard: a test copy's or another program's browser is not",
+            !HostGuard.Under(@"C:\Users\d\AppData\Local\EnkiLiveChatTest-x\EnkiBrowser\app\0.8.16\chromium\chrome.exe", app)
+            && !HostGuard.Under(@"C:\Users\d\AppData\Local\Programs\EnkiBrowser\app2\0.8.16\chromium\chrome.exe", app)
+            && !HostGuard.Under(app + @"\0.8.16\chromium\notchrome.exe", app)
+            && !HostGuard.Under(app + @"\..\..\Other\chromium\chrome.exe", app)
+            && !HostGuard.Under(@"C:\Program Files\Google\Chrome\Application\chrome.exe", app)
+            && !HostGuard.Under(null, app) && !HostGuard.Under(app + @"\0.8.16\chromium\chrome.exe", null));
     }
 }

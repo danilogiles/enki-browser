@@ -100,8 +100,15 @@ static class Win
 }
 
 // Test-isolated mode: a private test copy that must never touch the Enki Browser already installed
-// on the same computer. A file named "test-isolated" next to EnkiBrowser.exe turns it on. Normal
-// installs (no such file) behave exactly as before.
+// on the same computer. Normal installs (no marker) behave exactly as before.
+//
+// The marker is a file named "test-isolated" next to EnkiBrowser.exe, and it only counts when it is
+// what scripts/windows-test-package.py writes: a first line "enki-test-isolated/1", a "label=" and a
+// "token=" (32 hex digits), the same token as in the test-copy.json the script writes into the
+// Shield of the version `current` names (app\<version>\extensions\shield). That file is also how
+// Shield knows to hide everything that needs the native host (shield/testcopy.js), so a valid
+// marker always comes with Shield's visible "Test copy, updates off". A stray or hand-made file next
+// to a real install is ignored (Problem says why; the launcher logs it) and updates go on.
 //
 // Most of what the launcher writes is scoped to its own folder, but some of it is per user and
 // shared by every copy: the "Check for updates" native messaging host (one HKCU key that names
@@ -121,10 +128,66 @@ static class Win
 static class Isolation
 {
     public const string Marker = "test-isolated";
+    public const string Header = "enki-test-isolated/1";
+    public const string ShieldFile = "test-copy.json";
 
-    public static bool TestIsolated(string root)
+    public static bool TestIsolated(string root) { return Problem(root) == null; }
+
+    /// Null when root holds a valid test-isolated marker; otherwise why not ("no marker" when there
+    /// is none, which is every normal install).
+    public static string Problem(string root)
     {
-        try { return !string.IsNullOrEmpty(root) && File.Exists(Path.Combine(root, Marker)); }
-        catch { return false; }
+        try
+        {
+            if (string.IsNullOrEmpty(root) || !File.Exists(Path.Combine(root, Marker))) return "no marker";
+            string[] lines = File.ReadAllLines(Path.Combine(root, Marker)).Select(l => l.Trim()).Where(l => l.Length > 0).ToArray();
+            if (lines.Length == 0 || lines[0] != Header) return "the marker is not one the test package script wrote";
+            string label = lines.Where(l => l.StartsWith("label=")).Select(l => l.Substring(6)).FirstOrDefault();
+            string token = lines.Where(l => l.StartsWith("token=")).Select(l => l.Substring(6)).FirstOrDefault();
+            if (string.IsNullOrEmpty(label)) return "the marker has no label";
+            if (token == null || token.Length != 32 || !token.All(Uri.IsHexDigit)) return "the marker has no valid token";
+            string version = File.ReadAllText(Path.Combine(root, "current")).Trim();
+            if (version.Length == 0 || version.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || version.Contains("..")) return "current names no version";
+            string shield = Path.Combine(root, "app", version, "extensions", "shield", ShieldFile);
+            if (!File.Exists(shield)) return "Shield in " + version + " has no " + ShieldFile;
+            string json = File.ReadAllText(shield).Replace(" ", "");
+            if (json.IndexOf("\"token\":\"" + token.ToLowerInvariant() + "\"", StringComparison.Ordinal) < 0) return "the token does not match Shield's " + ShieldFile;
+            return null;
+        }
+        catch (Exception e) { return "the marker could not be read: " + e.Message; }
+    }
+}
+
+// Who may make the native host act (NativeHost.cs). Chromium finds the host by name in HKCU, so a
+// browser from another copy (a test copy, a portable one) reaches whichever copy registered last.
+// Requests that change something (update, restart, default browser, protected video) are only
+// carried out for a browser running from this install's own app\ folder; read-only status still
+// answers anyone. The pure parts are here so the unit tests can reach them.
+static class HostGuard
+{
+    /// The requests that act; every other type only reads.
+    public static readonly string[] Acting = { "check", "restart", "open-default-apps", "widevine-install", "widevine-remove" };
+
+    public static bool Acts(string type) { return type != null && Acting.Contains(type); }
+
+    /// The window handle Chromium passes on Windows as --parent-window=<HWND>; 0 when absent.
+    public static long ParentWindow(IEnumerable<string> args)
+    {
+        foreach (string a in args ?? new string[0])
+        {
+            long v;
+            if (a != null && a.StartsWith("--parent-window=", StringComparison.Ordinal) && long.TryParse(a.Substring("--parent-window=".Length), out v) && v > 0) return v;
+        }
+        return 0;
+    }
+
+    /// Whether `exe` (already a long, full path) is a chrome.exe inside `appFolder` (<root>\app).
+    public static bool Under(string exe, string appFolder)
+    {
+        if (string.IsNullOrEmpty(exe) || string.IsNullOrEmpty(appFolder)) return false;
+        string prefix = appFolder.TrimEnd('\\') + "\\";
+        return exe.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && exe.EndsWith("\\chromium\\chrome.exe", StringComparison.OrdinalIgnoreCase)
+            && exe.IndexOf("\\..\\", StringComparison.Ordinal) < 0;
     }
 }
