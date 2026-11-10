@@ -1,6 +1,6 @@
 // Unit tests for the launcher's 0.8.6 pieces: argument passthrough (Args.cs), the browser
 // registration (DefaultBrowser.cs) against a throwaway registry key, and the import dialog
-// defaults (Migration.cs). Compiled and run by test/launcher-unit.mjs: with the .NET Framework
+// defaults (Migration.cs), and the test-isolated marker (Common.cs). Compiled and run by test/launcher-unit.mjs: with the .NET Framework
 // csc on Windows, with Mono's mcs elsewhere (Mono keeps a file-backed registry, so the registry
 // tests run there too). C# 5, like the launcher.
 using System;
@@ -34,6 +34,7 @@ static class LauncherTests
         RegistryTests();
         MigrationTests();
         WidevineTrustTests();
+        IsolationTests();
         Console.WriteLine();
         Console.WriteLine(passed + "/" + (passed + failed) + " checks passed");
         return failed == 0 ? 0 : 1;
@@ -453,5 +454,29 @@ static class LauncherTests
         Check("Widevine: test downloads: HTTPS, or HTTP to this computer only", WidevineTrust.DownloadAllowed("http://127.0.0.1:5555/pkg/", true)
             && !WidevineTrust.DownloadAllowed("http://dl.google.com/x/", true));
         Check("Widevine: these unit tests run a release build of WidevineTrust", !WidevineTrust.TestBuild);
+    }
+
+    // ------------------------------------------------------------------ test-isolated copies (Common.cs)
+
+    static void IsolationTests()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "enki-isolated-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            Check("isolation: a normal install (no marker) is not test-isolated", !Isolation.TestIsolated(root));
+            File.WriteAllText(Path.Combine(root, "portable"), "");
+            Check("isolation: a portable copy alone is not test-isolated", !Isolation.TestIsolated(root));
+            File.WriteAllText(Path.Combine(root, Isolation.Marker), "");
+            Check("isolation: the marker is named test-isolated and turns it on", Isolation.Marker == "test-isolated" && Isolation.TestIsolated(root));
+            File.Delete(Path.Combine(root, Isolation.Marker));
+            Directory.CreateDirectory(Path.Combine(root, Isolation.Marker));
+            Check("isolation: a folder named test-isolated is not the marker", !Isolation.TestIsolated(root));
+            Check("isolation: no root, no isolation (and no exception)", !Isolation.TestIsolated(null) && !Isolation.TestIsolated(""));
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
+        }
     }
 }

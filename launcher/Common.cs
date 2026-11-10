@@ -98,3 +98,33 @@ static class Win
     /// Portuguese, Spanish or English, following Windows' display language.
     public static string T(string pt, string es, string en) { return Lang == "pt" ? pt : Lang == "es" ? es : en; }
 }
+
+// Test-isolated mode: a private test copy that must never touch the Enki Browser already installed
+// on the same computer. A file named "test-isolated" next to EnkiBrowser.exe turns it on. Normal
+// installs (no such file) behave exactly as before.
+//
+// Most of what the launcher writes is scoped to its own folder, but some of it is per user and
+// shared by every copy: the "Check for updates" native messaging host (one HKCU key that names
+// whichever copy started last), the Apps entry and browser registration (DefaultBrowser.cs), the
+// updater's machine-wide "EnkiBrowserUpdater" mutex and its update staging, and the uninstaller's
+// shortcuts, HKCU entries and %LOCALAPPDATA%\EnkiBrowser profile. A test copy skips all of them:
+//  - the profile lives beside the program (<root>\User Data), as for a portable copy;
+//  - NativeHost.Register, Install.SyncRegistration (and with it DefaultBrowser.Register/Repair) do not run;
+//  - updates are off (Updater.Disabled): no check, download, staging, `current` rewrite,
+//    restart offer, or Widevine refresh;
+//  - --uninstall removes only the copy's own folder (its profile is inside it), never the real
+//    install's shortcuts, registry entries or profile.
+// What still runs is scoped to this copy: Migration and Widevine.Tidy on the copy's own profile,
+// the Watcher (per-root mutex, tidies only this root's app\ folder and stub) and ShellIdentity
+// (repairs only shortcuts that open this root's own chrome.exe). Process identity is unchanged:
+// the browser still starts through EnkiBrowser.exe → EnkiBrowserLauncher.exe → chrome.exe.
+static class Isolation
+{
+    public const string Marker = "test-isolated";
+
+    public static bool TestIsolated(string root)
+    {
+        try { return !string.IsNullOrEmpty(root) && File.Exists(Path.Combine(root, Marker)); }
+        catch { return false; }
+    }
+}

@@ -55,6 +55,11 @@ static class Launcher
         // USB stick, a synced folder). Chromium ties the profile to this machine with a machine id,
         // which portable mode turns off; its encryption of passwords and cookies stays on.
         bool portable = File.Exists(Path.Combine(root, "portable"));
+        // A file named "test-isolated" there makes a private test copy that leaves the real install
+        // alone: its own profile, no native host, Apps entry, browser registration or updates
+        // (Isolation, Common.cs). Everything else below is scoped to this copy and runs as usual.
+        bool testIsolated = Isolation.TestIsolated(root);
+        if (testIsolated) Updater.Log(root, "test-isolated copy: own profile; no native host, registration or updates");
         string userData = Install.UserData(root);
         flags.Add("--user-data-dir=" + userData);
         Migration.Run(userData, root, appDir);
@@ -62,10 +67,14 @@ static class Launcher
         Widevine.Tidy(userData);
         // "Check for updates" in Shields' settings reaches this copy, portable ones included (the
         // registry entry names whichever copy started last, and the uninstaller removes it).
-        NativeHost.Register(root, appDir);
-        // After an update, Settings → Apps and `winget list` show the version that now runs, and
-        // Windows knows Enki Browser as a browser (DefaultBrowser.cs).
-        Install.SyncRegistration(root, appDir);
+        // Both are shared per user, so a test-isolated copy skips them (each also checks itself).
+        if (!testIsolated)
+        {
+            NativeHost.Register(root, appDir);
+            // After an update, Settings → Apps and `winget list` show the version that now runs, and
+            // Windows knows Enki Browser as a browser (DefaultBrowser.cs).
+            Install.SyncRegistration(root, appDir);
+        }
         ShellIdentity.RepairShortcuts(root);
         if (portable)
         {

@@ -35,6 +35,8 @@ static class NativeHost
     /// Makes this launcher the host Enki Shield talks to.
     public static void Register(string root, string appDir)
     {
+        // The HKCU key is shared by every copy: a test-isolated one must leave the real install's in place.
+        if (Isolation.TestIsolated(root)) return;
         try
         {
             var json = new JavaScriptSerializer();
@@ -110,6 +112,7 @@ static class NativeHost
             { "registered", DefaultBrowser.IsRegistered(Registry.CurrentUser, root) },
             { "isDefault", DefaultBrowser.IsDefault(Registry.CurrentUser) },
             { "portable", File.Exists(Path.Combine(root, "portable")) },
+            { "testIsolated", Isolation.TestIsolated(root) },
         };
     }
 
