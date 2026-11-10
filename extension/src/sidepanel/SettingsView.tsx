@@ -195,7 +195,7 @@ export function SettingsView({ settings, initialSection, onSave, onClose, onRevo
           active={activeTab === "live"}
           onClick={() => setActiveTab("live")}
           icon={<Mic size={14} />}
-          label="Live voice"
+          label="Live Voice"
         />
         <TabButton
           active={activeTab === "appearance"}
@@ -354,13 +354,13 @@ export function SettingsView({ settings, initialSection, onSave, onClose, onRevo
             <label htmlFor="act-model" className="block text-xs text-zinc-400">Preferred Act model (optional)</label>
             <ModelPicker id="act-model" label="Preferred Act model (optional)" value={draft.actModel} models={models} onChange={(v) => set("actModel", v)} />
             <p className="text-xs text-zinc-400">Switching Ask/Act selects its preferred model on this provider. Blank keeps the current model.</p>
-            <p className="mt-3 text-xs text-zinc-400">Live voice has its own setup. <button type="button" className="text-enki-400 underline" onClick={() => setActiveTab("live")}>Set up Live voice</button></p>
+            <p className="mt-3 text-xs text-zinc-400">Live Voice has its own tab. <button type="button" className="text-enki-400 underline" onClick={() => setActiveTab("live")}>Set up Live Voice</button></p>
           </Section>
         )}
 
         {/* TAB: LIVE VOICE (separate provider, endpoint and key) */}
         {activeTab === "live" && (
-          <Section title="Live voice">
+          <Section title="Live Voice">
             <RealtimeSettings headingRef={realtimeHeading} catalog={catalog} providerKey={{ baseUrl: draft.baseUrl, key: draft.apiKey }} suggestion={voiceSuggestion} value={draft.realtime} onChange={(v) => set("realtime", v)} />
           </Section>
         )}
