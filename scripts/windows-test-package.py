@@ -29,6 +29,7 @@ signs, uploads, tags or publishes anything.
 """
 import argparse
 import hashlib
+import json
 import os
 import re
 import secrets
@@ -37,6 +38,9 @@ import sys
 import zipfile
 
 MARKER = "test-isolated"
+# The label lands in test-copy.json, the marker file, the .ps1 (inside single quotes) and the notes:
+# letters, digits, '.', '_' and '-' only, so none of them can be broken out of.
+LABEL = re.compile(r"[A-Za-z0-9._-]{1,40}")
 TOP = "EnkiBrowser/"
 
 
@@ -123,6 +127,18 @@ saved voice configuration first, since the profile holds your locally encrypted 
 """
 
 
+def shield_json(label, token):
+    """Shield's test-copy.json. Compact separators: the launcher looks for "token":"<token>" (Common.cs)."""
+    return json.dumps({"testCopy": True, "label": label, "token": token}, separators=(",", ":")) + "\n"
+
+
+def marker_text_for(label, token):
+    """The test-isolated marker; refuses values that could add or split its lines."""
+    if not LABEL.fullmatch(label) or not re.fullmatch(r"[0-9a-f]{32}", token):
+        raise ValueError("bad label or token")
+    return "enki-test-isolated/1\nlabel=%s\ntoken=%s\n" % (label, token)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("zip", help="EnkiBrowser-<version>-windows-x64.zip from the Windows build")
@@ -130,8 +146,10 @@ def main():
     ap.add_argument("--source", default="", help="source commit / CI run, written to the notes")
     ap.add_argument("--out", default=".", help="output folder")
     a = ap.parse_args()
-    if not re.fullmatch(r"[A-Za-z0-9.\-]{1,40}", a.label):
-        fail("--label may contain only letters, digits, '-' and '.'")
+    if not LABEL.fullmatch(a.label):
+        fail("--label may contain only letters, digits, '.', '_' and '-' (at most 40)")
+    if any(c in (a.source or "") for c in "\r\n"):
+        fail("--source must be one line")
 
     base = "Enki-LiveChat-%s-Windows-x64" % a.label
     name = "Enki Live Chat TEST %s" % a.label
@@ -172,8 +190,8 @@ def main():
     token = secrets.token_hex(16)
     shield_file = os.path.join(root, "app", version, "extensions", "shield", "test-copy.json")
     with open(shield_file, "w", newline="\n") as f:
-        f.write('{"testCopy":true,"label":"%s","token":"%s"}\n' % (a.label, token))
-    marker_text = "enki-test-isolated/1\nlabel=%s\ntoken=%s\n" % (a.label, token)
+        f.write(shield_json(a.label, token))
+    marker_text = marker_text_for(a.label, token)
     for marker, text in ((MARKER, marker_text), ("no-update", "Updates off for this test copy.\n")):
         with open(os.path.join(root, marker), "w", newline="\r\n") as f:
             f.write(text)
@@ -182,7 +200,9 @@ def main():
         if os.path.exists(p):
             os.remove(p)
     with open(os.path.join(folder, "Create-Test-Shortcut.ps1"), "w", newline="\r\n") as f:
-        f.write(SHORTCUT_PS1.replace("@@NAME@@", name).replace("@@LABEL@@", a.label))
+        # Both go inside single-quoted PowerShell strings; doubling ' is PowerShell's escape (the
+        # label check already rules it out).
+        f.write(SHORTCUT_PS1.replace("@@NAME@@", name.replace("'", "''")).replace("@@LABEL@@", a.label.replace("'", "''")))
     with open(os.path.join(folder, "READ-ME-FIRST.txt"), "w", newline="\r\n") as f:
         f.write(README.format(label=a.label, source=a.source or "(not given)", version=version, name=name))
 
