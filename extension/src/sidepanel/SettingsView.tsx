@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ModelPicker } from "./ModelPicker";
+import { normalizeCatalog, suggestedRealtimeEndpoint, catalogIdentity, cachedCatalog, cacheCatalog, type CatalogModel } from "../lib/providers/model-catalog";
+import { RealtimeSettings } from "./RealtimeSettings";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Bot,
@@ -17,12 +20,12 @@ import {
   KeyRound,
   Laptop,
   LockOpen,
+  Mic,
 } from "lucide-react";
 import { maskKey, PRESETS, presetOf, THEMES, usesTextTools, type PresetId, type Settings } from "../lib/settings";
 import { createProvider } from "../lib/providers";
 import { addException, evaluateEndpoint, removeException, type EndpointVerdict } from "../lib/providers/endpoint-policy";
 import { ENDPOINT_STRINGS as E, revokeLabel } from "../lib/providers/endpoint-strings";
-import { log } from "../lib/debug";
 import { diagnoseProvider, type Diagnostic } from "../lib/providers/diagnose";
 import { applyTheme, contrast, DEFAULT_CUSTOM_THEME, type CustomTheme } from "../lib/theme";
 import { ConnectionsTab } from "./ConnectionsTab";
@@ -33,19 +36,34 @@ import { chooseDdgEngine, chooseEnkiEngine, chooseOtherEngine, enkiOptionText, p
 
 type Props = {
   settings: Settings;
+  /** Voice warning deep link; normal Settings navigation remains unchanged. */
+  initialSection?: "realtime";
   onSave: (s: Settings) => Promise<void>;
   onClose: () => void;
   /** Revoke deletes the saved HTTP exception for that origin right away (not on Save). */
   onRevokeLocalHttp?: (origin: string) => Promise<void>;
 };
 
-type TabId = "model" | "appearance" | "behavior" | "connections";
+type TabId = "model" | "live" | "appearance" | "behavior" | "connections";
 
-export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>("model");
+export function SettingsView({ settings, initialSection, onSave, onClose, onRevokeLocalHttp }: Props) {
+  const realtimeHeading = useRef<HTMLHeadingElement>(null);
+  const [activeTab, setActiveTab] = useState<TabId>(initialSection === "realtime" ? "live" : "model");
+  useEffect(() => {
+    if (initialSection !== "realtime") return;
+    realtimeHeading.current?.scrollIntoView({ block: "start" });
+    realtimeHeading.current?.focus({ preventScroll: true });
+  }, [initialSection]);
   const [draft, setDraft] = useState<Settings>(settings);
   const [showKey, setShowKey] = useState(false);
-  const [models, setModels] = useState<string[]>([]);
+  const [catalog, setCatalog] = useState<CatalogModel[]>([]);
+  const models = useMemo(() => catalog.map((m) => m.id), [catalog]);
+  const catalogScope = useMemo(() => ({ preset: draft.preset, baseUrl: draft.baseUrl.trim(), key: draft.apiKey.trim(), exceptions: JSON.stringify(draft.localHttpOrigins ?? []) }), [draft.preset, draft.baseUrl, draft.apiKey, JSON.stringify(draft.localHttpOrigins ?? [])]);
+  const currentCatalogScope = useRef(catalogScope); currentCatalogScope.current = catalogScope;
+  const catalogRequest = useRef<AbortController | null>(null);
+  const autoAttempt = useRef<typeof catalogScope | undefined>(undefined);
+  const keyEdited = useRef(false);
+  const endpointEdited = useRef(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -68,6 +86,12 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
   const savedKey = !replacingKey && draft.apiKey && draft.apiKey === (settings.apiKeys ?? {})[draft.preset] ? draft.apiKey : "";
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
+  useEffect(() => {
+    catalogRequest.current?.abort(); autoAttempt.current = undefined;
+    setCatalog([]); setLoadingModels(false); setStatus(null);
+    return () => catalogRequest.current?.abort();
+  }, [catalogScope]);
+
   const choosePreset = (id: PresetId) => {
     const p = presetOf(id);
     // Each provider keeps its own key: park this one's, bring the other's back.
@@ -76,46 +100,50 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
       return { ...d, apiKeys, apiKey: apiKeys[id] ?? "", preset: id, baseUrl: p.baseUrl, model: p.defaultModel, vision: !p.noVision, textTools: undefined, favoriteModels: [], askModel: "", actModel: "" };
     });
     setReplacingKey(false);
-    setModels([]);
+    setCatalog([]);
     setStatus(null);
   };
 
-  const loadModels = async () => {
-    setLoadingModels(true);
-    setStatus(null);
+  const loadModels = async (force = false) => {
+    const scope = catalogScope;
+    const allowed = evaluateEndpoint(scope.baseUrl, { hasKey: !!scope.key, exceptions: draft.localHttpOrigins });
+    if (!allowed.allowed || (!scope.key && !preset.keyOptional)) return;
+    if (!force && autoAttempt.current === scope) return;
+    autoAttempt.current = scope;
+    catalogRequest.current?.abort(); const controller = new AbortController(); catalogRequest.current = controller;
+    setLoadingModels(true); setStatus(null);
     try {
-      log.info("settings", `Testing ${draft.baseUrl}`, { preset: draft.preset, hasKey: !!draft.apiKey });
-      const list = await createProvider(draft).listModels();
-      setModels(list);
-      log.info("settings", `Connected, ${list.length} models`, { sample: list.slice(0, 15) });
-      setStatus({ kind: "ok", text: `Model list reachable: ${list.length} models. Run diagnostics to verify chat and Act support.` });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.error("settings", "Model listing failed", { error: msg });
-      // Some gateways (OmniRoute in Docker, for one) require a key to list models but serve
-      // chat without one. A failed listing is not proof the endpoint is unusable, so ask the
-      // model directly before declaring it broken.
-      if (/\b(401|403)\b/.test(msg) && draft.model.trim()) {
-        if (await chatWorks(draft)) {
-          log.info("settings", "Model listing is gated but chat works");
-          setStatus({
-            kind: "ok",
-            text: "Chat works. This endpoint needs a key only to list models — type the model id by hand.",
-          });
-          return;
-        }
-      }
-      const offline = /Failed to fetch|NetworkError|ECONNREFUSED/i.test(msg) && preset.setupUrl;
-      setStatus({
-        kind: "error",
-        text: offline
-          ? `Could not reach ${draft.baseUrl}. Make sure ${preset.label.replace(/\s*\(.*\)\s*$/, "")} is installed and running — see the install instructions above.`
-          : msg,
-      });
+      const cacheId = await catalogIdentity(scope);
+      if (controller.signal.aborted || currentCatalogScope.current !== scope) return;
+      const cached = !force && cachedCatalog(cacheId);
+      if (cached) { setCatalog(cached); setStatus({ kind: "ok", text: `Cached model catalog: ${cached.length} models. Refresh to query the provider; compatibility is not verified.` }); return; }
+      const provider = createProvider({ ...draft, baseUrl: scope.baseUrl, apiKey: scope.key });
+      const list = normalizeCatalog(provider.listModelCatalog ? await provider.listModelCatalog(controller.signal) : await provider.listModels(controller.signal));
+      if (controller.signal.aborted || currentCatalogScope.current !== scope) return;
+      cacheCatalog(cacheId, list); setCatalog(list);
+      setStatus({ kind: "ok", text: `Model list reachable: ${list.length} models. Catalog entries are not tested chat, Act or voice connections.` });
+
+    } catch {
+      if (controller.signal.aborted || currentCatalogScope.current !== scope) return;
+      // No provider body/error text, synthetic chat fallback, voice session or microphone on catalog failure.
+      setStatus({ kind: "error", text: "Could not load the model catalog. Check the provider/key and retry Refresh models, or enter any model ID manually. Chat and voice are not tested." });
     } finally {
-      setLoadingModels(false);
+      if (currentCatalogScope.current === scope && catalogRequest.current === controller) setLoadingModels(false);
     }
   };
+
+  useEffect(() => {
+    // Initial/saved connection or an explicit preset selection, not key/endpoint typing.
+    if (preset.keyOptional || (catalogScope.key && catalogScope.key === (draft.apiKeys?.[draft.preset] ?? settings.apiKey)?.trim())) void loadModels();
+  }, [draft.preset]);
+
+  const voiceSuggestion = useMemo(() => {
+    const candidate = catalog.find((m) => m.realtime);
+    if (!candidate) return undefined;
+    const endpoint = suggestedRealtimeEndpoint(draft.baseUrl, candidate.id);
+    return { provider: preset.label, endpoint, model: candidate.id,
+      transcriptionModel: catalog.find((m) => /transcrib/i.test(m.id))?.id ?? "", voice: endpoint ? "marin" : "" };
+  }, [catalog, draft.baseUrl, preset.label]);
 
   const save = async () => {
     setSaving(true);
@@ -156,12 +184,18 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
       <SearchEngineControl settings={settings} />
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
+      <div role="tablist" aria-label="Settings sections" className="flex overflow-x-auto border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
         <TabButton
           active={activeTab === "model"}
           onClick={() => setActiveTab("model")}
           icon={<Bot size={14} />}
           label="Model"
+        />
+        <TabButton
+          active={activeTab === "live"}
+          onClick={() => setActiveTab("live")}
+          icon={<Mic size={14} />}
+          label="Live Voice"
         />
         <TabButton
           active={activeTab === "appearance"}
@@ -236,7 +270,8 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
                 <input
                   type={showKey ? "text" : "password"}
                   value={draft.apiKey}
-                  onChange={(e) => set("apiKey", e.target.value)}
+                  onChange={(e) => { keyEdited.current = true; set("apiKey", e.target.value); }}
+                  onBlur={() => { if (keyEdited.current) { keyEdited.current = false; void loadModels(); } }}
                   placeholder={preset.keyOptional ? "Leave empty if not needed" : preset.keyPlaceholder ?? "sk-…"}
                   autoComplete="off"
                   spellCheck={false}
@@ -254,7 +289,7 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
               </a>
             )}
             <p className="text-xs text-zinc-500">
-              Keys are stored locally in this browser and sent only to the provider above.
+              Keys are stored locally in this browser and sent only to the provider above. Finishing a new key or endpoint loads its model catalog once; typing and searching do not send requests.
             </p>
 
             {preset.editableBaseUrl && (
@@ -263,7 +298,8 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
                 <input
                   type="text"
                   value={draft.baseUrl}
-                  onChange={(e) => set("baseUrl", e.target.value)}
+                  onChange={(e) => { endpointEdited.current = true; set("baseUrl", e.target.value); }}
+                  onBlur={() => { if (endpointEdited.current) { endpointEdited.current = false; void loadModels(); } }}
                   placeholder="https://host/v1"
                   spellCheck={false}
                   aria-label="Base URL"
@@ -292,34 +328,18 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
               </select>
             )}
             <div className="flex gap-1">
-              <input
-                type="text"
-                list="enki-models"
-                value={draft.model}
-                onChange={(e) => set("model", e.target.value)}
-                placeholder={preset.defaultModel || "model id"}
-                spellCheck={false}
-                className={inputCls}
-              />
-              <datalist id="enki-models">
-                {/* Recommended first, so they show before the refresh and on top after it. */}
-                {preset.recommended?.map((r) => (
-                  <option key={`rec:${r.id}`} value={r.id} label={`★ ${r.note}`} />
-                ))}
-                {models.filter((m) => !preset.recommended?.some((r) => r.id === m)).map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-              <button type="button" onClick={loadModels} disabled={loadingModels || !endpoint.allowed} className={iconBtn} title="Test connection and list models">
+              <ModelPicker label="Model" value={draft.model} models={[...new Set([...(preset.recommended?.map((m) => m.id) ?? []), ...models])]} onChange={(v) => set("model", v)} placeholder={preset.defaultModel || "model id"} />
+              <button type="button" onClick={() => void loadModels(true)} disabled={loadingModels || !endpoint.allowed} className={iconBtn} title="Refresh models" aria-label="Refresh models">
                 {loadingModels ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
               </button>
             </div>
+            {loadingModels && <p role="status" className="text-xs text-zinc-400">Loading model catalog…</p>}
             {status && (
-              <p className={`text-xs ${status.kind === "ok" ? "text-enki-400" : "text-red-300"}`}>{status.text}</p>
+              <p role="status" className={`text-xs ${status.kind === "ok" ? "text-enki-400" : "text-red-300"}`}>{status.text}</p>
             )}
             <p className="text-xs text-zinc-500">
               {preset.recommended?.length ? "Start with a recommended model. For anything else, pick" : "Pick"} a model that
-              supports tool calling{draft.vision ? " and images" : ""}. Press the refresh button to list what your key can access.
+              supports tool calling{draft.vision ? " and images" : ""}. Refresh loads the provider catalog; it does not prove account access to each model. Manual IDs remain allowed.
             </p>
             <div className="border-t border-ink-700 pt-3">
               <button type="button" disabled={probing || !canSave} onClick={diagnose} className="rounded border border-ink-700 px-3 py-2 text-enki-400 disabled:opacity-50">{probing ? "Testing gateway and model…" : "Run connection diagnostics"}</button>
@@ -330,10 +350,18 @@ export function SettingsView({ settings, onSave, onClose, onRevokeLocalHttp }: P
             <label className="mt-3 block text-xs text-zinc-400" htmlFor="favorite-models">Favorite models (one per line)</label>
             <textarea id="favorite-models" rows={3} value={draft.favoriteModels.join("\n")} onChange={(e) => set("favoriteModels", e.target.value.split("\n"))} className={inputCls} />
             <label htmlFor="ask-model" className="block text-xs text-zinc-400">Preferred Ask model (optional)</label>
-            <input id="ask-model" list="enki-models" value={draft.askModel} onChange={(e) => set("askModel", e.target.value)} className={inputCls} />
+            <ModelPicker id="ask-model" label="Preferred Ask model (optional)" value={draft.askModel} models={models} onChange={(v) => set("askModel", v)} />
             <label htmlFor="act-model" className="block text-xs text-zinc-400">Preferred Act model (optional)</label>
-            <input id="act-model" list="enki-models" value={draft.actModel} onChange={(e) => set("actModel", e.target.value)} className={inputCls} />
+            <ModelPicker id="act-model" label="Preferred Act model (optional)" value={draft.actModel} models={models} onChange={(v) => set("actModel", v)} />
             <p className="text-xs text-zinc-400">Switching Ask/Act selects its preferred model on this provider. Blank keeps the current model.</p>
+            <p className="mt-3 text-xs text-zinc-400">Live Voice has its own tab. <button type="button" className="text-enki-400 underline" onClick={() => setActiveTab("live")}>Set up Live Voice</button></p>
+          </Section>
+        )}
+
+        {/* TAB: LIVE VOICE (separate provider, endpoint and key) */}
+        {activeTab === "live" && (
+          <Section title="Live Voice">
+            <RealtimeSettings headingRef={realtimeHeading} catalog={catalog} providerKey={{ baseUrl: draft.baseUrl, key: draft.apiKey }} suggestion={voiceSuggestion} value={draft.realtime} onChange={(v) => set("realtime", v)} />
           </Section>
         )}
 
@@ -609,8 +637,10 @@ function TabButton({
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
-      className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition ${
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition ${
         active
           ? "border-enki-500 text-enki-400"
           : "border-transparent text-zinc-400 hover:text-zinc-200"
@@ -620,26 +650,6 @@ function TabButton({
       {label}
     </button>
   );
-}
-
-/** Sends the smallest possible request to see whether the endpoint answers at all. */
-async function chatWorks(draft: Settings): Promise<boolean> {
-  try {
-    for await (const ev of createProvider(draft).stream({
-      model: draft.model.trim(),
-      system: "Reply with the single word: ok",
-      messages: [{ role: "user", parts: [{ type: "text", text: "ok" }] }],
-      tools: [],
-      maxTokens: 16,
-    })) {
-      if (ev.type === "text_delta" || ev.type === "thinking_delta" || ev.type === "tool_call") return true;
-      if (ev.type === "done") return false;
-    }
-    return false;
-  } catch (e) {
-    log.error("settings", "Chat probe failed", { error: e instanceof Error ? e.message : String(e) });
-    return false;
-  }
 }
 
 const inputCls =

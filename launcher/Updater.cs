@@ -30,9 +30,12 @@ static class Updater
 
     static string UpdateDir(string root) { return Path.Combine(root, ".update"); }
 
+    /// Off with a "no-update" file, ENKI_BROWSER_NO_UPDATE=1, or in a test-isolated copy (Common.cs),
+    /// which must not take the shared updater mutex or stage, install or restart into anything.
     public static bool Disabled(string root)
     {
         return File.Exists(Path.Combine(root, "no-update"))
+            || Isolation.TestIsolated(root)
             || Environment.GetEnvironmentVariable("ENKI_BROWSER_NO_UPDATE") == "1";
     }
 

@@ -7,6 +7,7 @@
 // to the download.
 
 import { t } from "./i18n.js";
+import { UNAVAILABLE, testCopy } from "./testcopy.js";
 const HOST = "io.github.danilogiles.enki_browser";
 const LATEST = "https://api.github.com/repos/danilogiles/enki-browser/releases/latest";
 export const DOWNLOAD = "https://github.com/danilogiles/enki-browser/releases/latest";
@@ -17,8 +18,9 @@ export async function shippedVersion() {
   return typeof ids.browser === "string" ? ids.browser : null;
 }
 
-/** One request to the launcher; null when there is none to ask (not Windows). */
-export function native(message) {
+/** One request to the launcher; null when there is none to ask (not Windows, or a test copy). */
+export async function native(message) {
+  if (await testCopy()) return null; // never reach another install's host (testcopy.js)
   return new Promise((resolve) => {
     try {
       chrome.runtime.sendNativeMessage(HOST, message, (reply) => resolve(chrome.runtime.lastError ? null : reply ?? null));
@@ -38,6 +40,7 @@ export function compare(a, b) {
 
 /** What the page shows before anyone clicks: the running version and an update already waiting. */
 export async function status() {
+  if (await testCopy()) return { updater: false, testCopy: true, running: await shippedVersion() };
   const reply = await native({ type: "status" });
   if (reply && !reply.error) return { updater: true, ...reply };
   return { updater: false, running: await shippedVersion() };
@@ -49,6 +52,7 @@ export async function status() {
  * `running` means a download is available.
  */
 export async function check() {
+  if (await testCopy()) return { updater: false, testCopy: true, running: await shippedVersion() }; // nor GitHub
   const reply = await native({ type: "check" });
   if (reply) return { updater: true, ...reply };
   const running = await shippedVersion();
@@ -94,6 +98,13 @@ export function restartWithFallback(els, ask = restart, ms = RESTART_FALLBACK_MS
       resolve("fallback");
     };
     timer(fallback, ms);
-    Promise.resolve(ask()).then((reply) => { if (!reply?.restarting) fallback(); }, fallback);
+    Promise.resolve(ask()).then((reply) => {
+      if (reply?.unavailable && !done) { // the host refused: another copy's browser (NativeHost.cs)
+        done = true;
+        state.textContent = t("unavailableHere", UNAVAILABLE);
+        button.disabled = false;
+        resolve("unavailable");
+      } else if (!reply?.restarting) fallback();
+    }, fallback);
   });
 }

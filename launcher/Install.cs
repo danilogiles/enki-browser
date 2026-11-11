@@ -28,13 +28,15 @@ static class Install
     }
 
     /// The browser's profile folder for the install at `root`: beside the program for a portable
-    /// copy (a file named "portable" next to EnkiBrowser.exe), else under DataDir;
-    /// ENKI_BROWSER_USER_DATA overrides both (tests).
+    /// copy (a file named "portable" next to EnkiBrowser.exe) or a test-isolated one ("test-isolated",
+    /// Common.cs: never the real install's profile), else under DataDir;
+    /// ENKI_BROWSER_USER_DATA overrides all of them (tests).
     public static string UserData(string root)
     {
         string over = Environment.GetEnvironmentVariable("ENKI_BROWSER_USER_DATA");
         if (!string.IsNullOrEmpty(over)) return over;
-        return File.Exists(Path.Combine(root, "portable")) ? Path.Combine(root, "User Data") : Path.Combine(DataDir, "User Data");
+        bool beside = File.Exists(Path.Combine(root, "portable")) || Isolation.TestIsolated(root);
+        return beside ? Path.Combine(root, "User Data") : Path.Combine(DataDir, "User Data");
     }
 
     public static string ShortcutPath(Environment.SpecialFolder folder)
@@ -139,6 +141,8 @@ static class Install
     /// differs, or there is no entry) gets nothing.
     public static void SyncRegistration(string root, string appDir)
     {
+        // A test-isolated copy never writes the Apps entry or the browser registration (Common.cs).
+        if (Isolation.TestIsolated(root)) return;
         string version = Path.GetFileName(appDir);
         try
         {

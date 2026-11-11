@@ -1,3 +1,4 @@
+import type { RealtimeConfig } from "./voice/realtime";
 import type { CustomTheme } from "./theme";
 import { decrypt, encrypt, isEncrypted } from "./secrets";
 import { migrateEndpoint, removeException, sanitizeExceptions, type EndpointNotice } from "./providers/endpoint-policy";
@@ -266,6 +267,8 @@ export type Settings = {
    * no exception, and host names and public IPs never get one.
    */
   localHttpOrigins?: string[];
+  /** Separate realtime audio route. No implicit reuse of the text provider or its key. */
+  realtime?: RealtimeConfig;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -324,7 +327,7 @@ export function usesTextTools(settings: Settings): boolean {
 const SETTINGS_KEYS: ReadonlySet<string> = new Set<string>([
   ...Object.keys(DEFAULT_SETTINGS),
   "apiKeys", "customTheme", "textTools", "unfiltered", "acceptedTerms", "settingsVersion",
-  "localHttpOrigins",
+  "localHttpOrigins", "realtime",
 ]);
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
@@ -340,6 +343,12 @@ function storedSettings(raw: unknown): Partial<Settings> | undefined {
   for (const [k, v] of Object.entries(raw)) if (SETTINGS_KEYS.has(k)) known[k] = v;
   if ("apiKeys" in known && !isPlainObject(known.apiKeys)) delete known.apiKeys;
   if ("localHttpOrigins" in known) known.localHttpOrigins = sanitizeExceptions(known.localHttpOrigins);
+  if ("realtime" in known) {
+    const raw = known.realtime;
+    if (!isPlainObject(raw)) delete known.realtime;
+    else known.realtime = { ...Object.fromEntries(["provider", "protocol", "endpoint", "model", "transcriptionModel", "voice", "credential"]
+      .filter((k) => typeof raw[k] === "string").map((k) => [k, raw[k]])), connectionVerified: raw.connectionVerified === true };
+  }
   return known as Partial<Settings>;
 }
 
@@ -380,6 +389,10 @@ async function fromStored(input: unknown): Promise<{ settings: Settings; hadPlai
     if (!value) continue;
     if (!isEncrypted(value)) hadPlainKeys = true;
     keys[preset] = await decrypt(value);
+  }
+  if (s.realtime && typeof s.realtime.credential === "string") {
+    if (s.realtime.credential && !isEncrypted(s.realtime.credential)) hadPlainKeys = true;
+    s.realtime = { ...s.realtime, credential: await decrypt(s.realtime.credential) };
   }
   s.apiKeys = keys;
   s.apiKey = keys[s.preset] ?? "";
@@ -471,7 +484,8 @@ async function writeSettingsUnlocked(settings: Settings): Promise<void> {
   for (const [preset, value] of Object.entries(keys) as Array<[PresetId, string | undefined]>) {
     if (value) apiKeys[preset] = await encrypt(value);
   }
-  await chrome.storage.local.set({ [KEY]: { ...settings, apiKey: "", apiKeys } });
+  const realtime = settings.realtime ? { ...settings.realtime, credential: await encrypt(settings.realtime.credential || "") } : undefined;
+  await chrome.storage.local.set({ [KEY]: { ...settings, realtime, apiKey: "", apiKeys } });
 }
 
 export function onSettingsChange(cb: (s: Settings) => void): () => void {

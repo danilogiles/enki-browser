@@ -100,6 +100,11 @@ static class Uninstaller
     /// and removing them would remove the real install's.
     public static int Run(string root, bool silent, bool integrate)
     {
+        // A test-isolated copy (Common.cs) made no shortcuts or registry entries of its own and keeps
+        // its profile inside root: removing the shared ones, or %LOCALAPPDATA%\EnkiBrowser, would
+        // remove the real install's.
+        bool testIsolated = Isolation.TestIsolated(root);
+        if (testIsolated) integrate = false;
         bool removeData = false;
         if (!silent)
         {
@@ -120,7 +125,7 @@ static class Uninstaller
             Install.Unregister(root);
         }
         Win.DeleteTree(root);
-        if (removeData) Win.DeleteTree(Install.DataDir);
+        if (removeData && !testIsolated) Win.DeleteTree(Install.DataDir);
         if (!silent)
             MessageBox.Show(Win.T("O Enki Browser foi removido.", "Enki Browser se ha quitado.", "Enki Browser has been removed."),
                 "Enki Browser", MessageBoxButtons.OK, MessageBoxIcon.Information);

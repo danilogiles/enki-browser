@@ -124,7 +124,10 @@ export async function runTurn(o: RunOptions): Promise<void> {
       let out: ToolOutput;
       let moved: OtherWindowStop | null = null;
       let carded = false;
-      try { out = await plan.run(); }
+      try {
+        if (o.signal.aborted) throw new DOMException("Aborted", "AbortError");
+        out = await plan.run();
+      }
       catch (e) {
         moved = otherWindowOf(e);
         if (moved) {
@@ -392,6 +395,8 @@ export async function runTurn(o: RunOptions): Promise<void> {
           let out: ToolOutput;
           onEvent({ type: "status", message: `Executing ${call.name}`, step: step + 1 });
           try {
+            // prepare() and approval are asynchronous: a voice interruption can race either.
+            if (o.signal.aborted) throw new DOMException("Aborted", "AbortError");
             out = await plan.run();
           } catch (e) {
             if (o.signal.aborted) throw e;

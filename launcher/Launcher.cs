@@ -33,7 +33,7 @@ static class Launcher
         }
 
         // Enki Shield's "Check for updates", through native messaging (NativeHost.cs).
-        if (NativeHost.IsCall(args)) return NativeHost.Run(root, appDir);
+        if (NativeHost.IsCall(args)) return NativeHost.Run(root, appDir, args);
 
         // Check, verify and stage now, without opening a window (used by tests and scripts).
         if (args.Contains("--enki-update-check"))
@@ -55,6 +55,13 @@ static class Launcher
         // USB stick, a synced folder). Chromium ties the profile to this machine with a machine id,
         // which portable mode turns off; its encryption of passwords and cookies stays on.
         bool portable = File.Exists(Path.Combine(root, "portable"));
+        // A file named "test-isolated" there makes a private test copy that leaves the real install
+        // alone: its own profile, no native host, Apps entry, browser registration or updates
+        // (Isolation, Common.cs). Everything else below is scoped to this copy and runs as usual.
+        string problem = Isolation.Problem(root);
+        bool testIsolated = problem == null;
+        if (testIsolated) Updater.Log(root, "test-isolated copy: own profile; no native host, registration or updates");
+        else if (problem != "no marker") Updater.Log(root, "ignored the test-isolated file (" + problem + "): this starts as a normal install, updates on");
         string userData = Install.UserData(root);
         flags.Add("--user-data-dir=" + userData);
         Migration.Run(userData, root, appDir);
@@ -62,11 +69,18 @@ static class Launcher
         Widevine.Tidy(userData);
         // "Check for updates" in Shields' settings reaches this copy, portable ones included (the
         // registry entry names whichever copy started last, and the uninstaller removes it).
-        NativeHost.Register(root, appDir);
-        // After an update, Settings → Apps and `winget list` show the version that now runs, and
-        // Windows knows Enki Browser as a browser (DefaultBrowser.cs).
-        Install.SyncRegistration(root, appDir);
+        // Both are shared per user, so a test-isolated copy skips them (each also checks itself).
+        if (!testIsolated)
+        {
+            NativeHost.Register(root, appDir);
+            // After an update, Settings → Apps and `winget list` show the version that now runs, and
+            // Windows knows Enki Browser as a browser (DefaultBrowser.cs).
+            Install.SyncRegistration(root, appDir);
+        }
         ShellIdentity.RepairShortcuts(root);
+        // The window says it too (Chromium's --window-name: the first window's title); Shield shows
+        // "Test copy, updates off" in its panel and settings (shield/testcopy.js).
+        if (testIsolated) flags.Add("--window-name=Enki Browser (test copy, updates off)");
         if (portable)
         {
             // Saved passwords and cookies stay encrypted (Chromium's key, protected by Windows for

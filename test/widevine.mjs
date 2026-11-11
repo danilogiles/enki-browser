@@ -5,10 +5,16 @@
 //
 // Runs a test build of the launcher (ENKI_TEST) in a copy of out/EnkiBrowser; see below.
 //
-// Checks: a package whose hash differs from the service's answer is refused; a module not signed by
-// Google is refused; the genuine one installs into <User Data>\WidevineCdm\<version>; turning it off
-// removes it; and in the browser, "Turn on" → "Download from Google" → restart makes the browser
-// offer Widevine to pages (navigator.requestMediaKeySystemAccess), which it did not before.
+// Checks: a widevine-install with no calling browser is refused (HostGuard); a package whose hash
+// differs from the service's answer is refused; a module not signed by Google is refused; the
+// genuine one installs into <User Data>\WidevineCdm\<version>; turning it off removes it; and in
+// the browser, "Turn on" → "Download from Google" → restart makes the browser offer Widevine to
+// pages (navigator.requestMediaKeySystemAccess), which it did not before.
+//
+// HostGuard (NativeHost.Refusal) allows acting requests only from this install's
+// chromium\chrome.exe, identified by --parent-window. The hash, signature, install and remove
+// checks talk to the launcher directly, so they pass a window of that chrome.exe the way Chromium
+// does. They do not skip the guard.
 //
 //   node test/widevine.mjs            Windows, after npm run build (out/EnkiBrowser)
 import { execFileSync, spawn } from "node:child_process";
@@ -93,9 +99,12 @@ const appDir = path.join(install, "app", readFileSync(path.join(install, "curren
 const shieldId = JSON.parse(readFileSync(path.join(appDir, "version.json"), "utf8")).shieldExtensionId;
 const env = (userData) => ({ ...process.env, ENKI_BROWSER_USER_DATA: userData, ENKI_WIDEVINE_SERVICE: `${base}/service` });
 
-/** One native-messaging request to the launcher, as Chromium makes it. */
-const ask = (userData, message) => new Promise((resolve, reject) => {
-  const p = spawn(path.join(appDir, "EnkiBrowserLauncher.exe"), [`chrome-extension://${shieldId}/`], { env: env(userData) });
+/** One native-messaging request to the launcher, as Chromium makes it.
+ *  `hwnd` is the --parent-window value Chromium passes on Windows; omit it to send no window. */
+const ask = (userData, message, hwnd) => new Promise((resolve, reject) => {
+  const args = [`chrome-extension://${shieldId}/`];
+  if (hwnd) args.push(`--parent-window=${hwnd}`);
+  const p = spawn(path.join(appDir, "EnkiBrowserLauncher.exe"), args, { env: env(userData) });
   const chunks = [];
   p.stdout.on("data", (c) => chunks.push(c));
   p.on("error", reject);
@@ -140,26 +149,89 @@ const drm = (page) => page.evaluate(async () => {
   } catch { return false; }
 });
 
+const stopInstallBrowsers = () => {
+  try {
+    execFileSync("powershell.exe", ["-NoProfile", "-Command", `Get-Process chrome,EnkiBrowser,EnkiBrowserLauncher -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${install}\\*' } | Stop-Process -Force`], { stdio: "ignore" });
+  } catch { /* nothing left */ }
+};
+
+// A window belonging to this install's chromium\chrome.exe, for --parent-window. HostGuard
+// identifies the caller from that handle; the script waits up to 30s for Chrome to create one.
+const chromeExe = path.join(appDir, "chromium", "chrome.exe");
+const hwndScript = path.join(tmp, "parent-hwnd.ps1");
+writeFileSync(hwndScript, `param([Parameter(Mandatory=$true)][string]$ChromeExe)
+$ProgressPreference = 'SilentlyContinue'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class EnkiHwnd {
+  public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+  public static long First(int[] ids) {
+    long found = 0;
+    EnumWindows((h, l) => {
+      uint pid;
+      if (GetWindowThreadProcessId(h, out pid) != 0) {
+        for (int i = 0; i < ids.Length; i++) if (ids[i] == (int)pid) { found = h.ToInt64(); return false; }
+      }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+}
+'@
+$deadline = (Get-Date).AddSeconds(30)
+do {
+  $ids = @(Get-CimInstance Win32_Process -Filter "name='chrome.exe'" |
+    Where-Object { $_.ExecutablePath -and $_.ExecutablePath.Equals($ChromeExe, [System.StringComparison]::OrdinalIgnoreCase) } |
+    ForEach-Object { [int]$_.ProcessId })
+  if ($ids.Count -gt 0) {
+    $h = [EnkiHwnd]::First($ids)
+    if ($h -ne 0) { Write-Output $h; exit 0 }
+  }
+  Start-Sleep -Milliseconds 250
+} while ((Get-Date) -lt $deadline)
+exit 1
+`);
+
 try {
-  // ---- the launcher alone (native messaging, no browser)
+  // ---- the launcher alone (native messaging, no Shield UI)
   const data = path.join(tmp, "host");
   check("off at first: nothing installed", (await ask(data, { type: "widevine-status" }))?.installed === null);
 
-  serving = { body: genuine, hash: "0".repeat(64) };
   let r = await ask(data, { type: "widevine-install" });
+  check("a widevine-install with no calling browser is refused", r?.unavailable === true && r?.error === "unavailable in this copy" && !existsSync(path.join(data, "WidevineCdm", version)), r?.error);
+
+  const parentDir = path.join(tmp, "parent-chrome");
+  spawn(chromeExe, [`--user-data-dir=${parentDir}`, "--no-first-run", "--no-default-browser-check", "--disable-extensions", "about:blank"], { stdio: "ignore" });
+  let hwnd;
+  try {
+    hwnd = execFileSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", hwndScript, chromeExe], { encoding: "utf8", timeout: 40000 }).trim();
+  } catch {
+    throw new Error("this install's chrome.exe did not open a window");
+  }
+  if (!/^[1-9][0-9]*$/.test(hwnd)) throw new Error("parent-window handle was not a positive integer: " + hwnd);
+
+  serving = { body: genuine, hash: "0".repeat(64) };
+  r = await ask(data, { type: "widevine-install" }, hwnd);
   check("a package whose hash differs from Google's answer is refused", /does not match/.test(r?.error ?? "") && !existsSync(path.join(data, "WidevineCdm", version)), r?.error);
 
   serving = { body: unsigned, hash: sha(unsigned) };
-  r = await ask(data, { type: "widevine-install" });
+  r = await ask(data, { type: "widevine-install" }, hwnd);
   check("a module not signed by Google is refused", /not validly signed by Google/.test(r?.error ?? "") && !existsSync(path.join(data, "WidevineCdm", version)), r?.error);
 
   serving = { body: genuine, hash: sha(genuine) };
-  r = await ask(data, { type: "widevine-install" });
+  r = await ask(data, { type: "widevine-install" }, hwnd);
   check("the genuine module installs into WidevineCdm\\<version>", r?.installed === version && r?.managed === true
     && existsSync(path.join(data, "WidevineCdm", version, "_platform_specific", "win_x64", "widevinecdm.dll")), JSON.stringify(r));
 
-  r = await ask(data, { type: "widevine-remove" });
+  r = await ask(data, { type: "widevine-remove" }, hwnd);
   check("turning it off removes it", r?.installed === null && !existsSync(path.join(data, "WidevineCdm", version)), JSON.stringify(r));
+
+  // Drop the parent chrome.exe so the Shields UI path starts from a clean process list.
+  stopInstallBrowsers();
+  await sleep(1000);
 
   // ---- in the browser, from Shields' settings
   const profile = path.join(tmp, "browser");
@@ -195,7 +267,7 @@ try {
   restoreHost();
   server.close();
   try {
-    execFileSync("powershell.exe", ["-NoProfile", "-Command", `Get-Process chrome,EnkiBrowserLauncher -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${install}\\*' } | Stop-Process -Force`], { stdio: "ignore" });
+    stopInstallBrowsers();
   } catch { /* nothing left */ }
   await sleep(1000);
   try { rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); } catch { console.log(`(left ${tmp})`); }

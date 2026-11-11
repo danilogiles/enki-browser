@@ -21,8 +21,12 @@ export class TextToolsProvider implements ChatProvider {
     this.id = `${inner.id}+text-tools`;
   }
 
-  listModels(): Promise<string[]> {
-    return this.inner.listModels();
+  listModels(signal?: AbortSignal): Promise<string[]> {
+    return this.inner.listModels(signal);
+  }
+  async listModelCatalog(signal?: AbortSignal) {
+    if (this.inner.listModelCatalog) return this.inner.listModelCatalog(signal);
+    return (await this.inner.listModels(signal)).map((id) => ({ id }));
   }
 
   stream(req: ChatRequest): AsyncIterable<StreamEvent> {
