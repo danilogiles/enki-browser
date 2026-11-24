@@ -35,10 +35,16 @@ static class DefaultBrowser
     public const string ClassesKey = @"Software\Classes";
     public const string HtmlProgId = "EnkiHTML", UrlProgId = "EnkiURL", PdfProgId = "EnkiPDF";
     public static readonly string[] Schemes = { "http", "https" };
-    public static readonly string[] HtmlFiles = { ".htm", ".html", ".shtml", ".xhtml", ".svg", ".webp" };
+    // Web documents only. 0.8.15 and earlier also listed .svg and .webp; those are image types
+    // and are dropped below. .xht is in Chromium's list but was never in Enki's, so it is not added.
+    public static readonly string[] HtmlFiles = { ".htm", ".html", ".shtml", ".xhtml" };
     public const string PdfFile = ".pdf";
     /// File types Chromium's own registration may have claimed (shell_util.h kPotentialFileAssociations, and .pdf).
     static readonly string[] ChromiumFiles = { ".htm", ".html", ".mhtml", ".shtml", ".svg", ".xht", ".xhtml", ".webp", ".pdf" };
+    /// Image types Enki must not claim. 0.8.15 wrote .svg and .webp under Enki's capabilities and
+    /// OpenWithProgids; the rest are listed so a leftover or a future Chromium default is scrubbed
+    /// the same way. UserChoice (the user's default) is never touched.
+    static readonly string[] ImageFiles = { ".svg", ".svgz", ".webp", ".png", ".gif", ".jpg", ".jpeg", ".bmp", ".ico", ".avif" };
 
     public sealed class Entry
     {
@@ -104,11 +110,44 @@ static class DefaultBrowser
     }
 
     /// Writes the registration under `hive` (HKCU, or a test key standing in for it). Only values
-    /// that differ are written, so a start with everything in place only reads. True if anything changed.
+    /// that differ are written, so a start with everything in place only reads. Also removes leftover
+    /// image-type claims from earlier versions (ScrubDroppedFileAssociations). True if anything changed.
     public static bool Register(RegistryKey hive, string root)
     {
         bool changed = false;
         foreach (var entry in Entries(root)) changed |= Set(hive, entry.Key, entry.Name, entry.Value, entry.Kind);
+        changed |= ScrubDroppedFileAssociations(hive);
+        return changed;
+    }
+
+    /// Removes Enki's leftover image-type claims from an earlier version: values on this install's
+    /// Capabilities\FileAssociations, and Enki's own ProgId under OpenWithProgids (both Classes
+    /// and Explorer\FileExts). Another app's ProgId and every UserChoice / UserChoiceLatest key
+    /// are left alone, including when the user's default for an image type is still Enki.
+    static bool ScrubDroppedFileAssociations(RegistryKey hive)
+    {
+        bool changed = false;
+        using (var fa = hive.OpenSubKey(CapabilitiesKey + @"\FileAssociations", true))
+        {
+            if (fa != null)
+                foreach (string ext in ImageFiles)
+                    if (fa.GetValue(ext) != null) { fa.DeleteValue(ext, false); changed = true; }
+        }
+        string[] ownProgIds = { HtmlProgId, PdfProgId, UrlProgId };
+        foreach (string ext in ImageFiles)
+        {
+            foreach (string openPath in new[] {
+                ClassesKey + @"\" + ext + @"\OpenWithProgids",
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + ext + @"\OpenWithProgids" })
+            {
+                using (var open = hive.OpenSubKey(openPath, true))
+                {
+                    if (open == null) continue;
+                    foreach (string progId in ownProgIds)
+                        if (open.GetValue(progId) != null) { open.DeleteValue(progId, false); changed = true; }
+                }
+            }
+        }
         return changed;
     }
 
@@ -265,7 +304,7 @@ static class DefaultBrowser
                     using (var t = hive.OpenSubKey(target)) if (t == null) apps.DeleteValue(name, false);
                 }
         }
-        foreach (string ext in ChromiumFiles)
+        foreach (string ext in ChromiumFiles.Concat(ImageFiles).Distinct())
         {
             using (var open = hive.OpenSubKey(ClassesKey + @"\" + ext + @"\OpenWithProgids", true))
                 if (open != null)

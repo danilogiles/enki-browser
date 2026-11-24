@@ -17,6 +17,7 @@ import { chromium } from "playwright-core";
 import { checkComponents } from "./components.mjs";
 import { judgeThirdPartyCookies, waitForProfileCookieMode } from "./cookie-3p.mjs";
 import { checkWebstoreUnit } from "./shield-webstore-unit.mjs";
+import { claimedImageDocumentTypes, hasWebDocumentClaims } from "../build/scrub-mac-document-types.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const linux = process.platform === "linux";
@@ -383,6 +384,11 @@ try {
     const info = path.join(macApp, "Contents", "Info.plist");
     const read = (key) => { try { return execFileSync("plutil", ["-extract", key, "raw", info]).toString().trim(); } catch { return ""; } };
     check("the app is called Enki Browser, with its own bundle id", read("CFBundleName") === "Enki Browser" && read("CFBundleIdentifier") === "io.github.danilogiles.EnkiBrowser", `${read("CFBundleName")} · ${read("CFBundleIdentifier")}`);
+    const extract = (key) => { try { return JSON.parse(execFileSync("plutil", ["-extract", key, "json", "-o", "-", info]).toString()); } catch { return []; } };
+    const infoJson = { CFBundleDocumentTypes: extract("CFBundleDocumentTypes"), CFBundleURLTypes: extract("CFBundleURLTypes") };
+    const images = claimedImageDocumentTypes(infoJson);
+    check("Info.plist does not claim SVG or other image file types", images.length === 0, images.join(", "));
+    check("Info.plist still claims HTML, XHTML, PDF, and http(s)", hasWebDocumentClaims(infoJson));
     let signed = "";
     try { execFileSync("codesign", ["--verify", "--deep", "--strict", macApp], { stdio: "pipe" }); } catch (e) { signed = e.stderr?.toString().trim() || "invalid"; }
     check("the app's signature is intact (nothing was changed after signing)", signed === "", signed);

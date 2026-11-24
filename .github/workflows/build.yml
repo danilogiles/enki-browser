@@ -41,6 +41,7 @@ jobs:
       # Unit tests: argument passthrough, the browser registration (in a throwaway HKCU key) and the
       # import defaults, compiled with the same csc as the build; the one-time default browser page.
       - run: node test/launcher-unit.mjs
+      - run: node test/mac-document-types.mjs
       - run: node test/shield-welcome.mjs
       - run: node test/restart-fallback.mjs
       # The address-bar rule checks (0.8.9); the cases that type into the real address bar need
@@ -129,7 +130,7 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin '+refs/tags/v*:refs/tags/v*'
           node test/extension-versions.mjs
-      - run: node test/ico.mjs && node test/shield-welcome.mjs
+      - run: node test/ico.mjs && node test/shield-welcome.mjs && node test/mac-document-types.mjs
       - run: node build/build-linux.mjs
       # Installed the way a user would, without root, plus the AppArmor profile Ubuntu 24.04 needs;
       # then verified with Chromium's sandbox on, as on a real desktop.
@@ -208,6 +209,7 @@ jobs:
         with:
           path: cache/*.dmg
           key: upstream-mac-${{ matrix.arch }}-${{ hashFiles('upstream.json') }}
+      - run: node test/mac-document-types.mjs
       - run: node build/build-mac.mjs --arch=${{ matrix.arch }}
       # Installed the way a user would, from the .dmg into an Applications folder, and verified on
       # the architecture it was built for. The mock keychain only spares the unattended runner a

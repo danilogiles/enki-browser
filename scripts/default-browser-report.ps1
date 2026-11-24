@@ -110,6 +110,7 @@ foreach ($scheme in @('http', 'https')) {
 ''
 
 '== Web files: Open with lists and choices =='
+# .svg and .webp are listed so an upgrade can be checked for leftover Enki entries; Enki no longer claims them.
 foreach ($ext in @('.htm', '.html', '.shtml', '.xhtml', '.pdf', '.svg', '.webp', '.mhtml')) {
   $fileExts = "$hkcu\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$ext"
   $progIds = (Get-Item -LiteralPath "$classes\$ext\OpenWithProgids").GetValueNames() -join ', '
