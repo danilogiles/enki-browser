@@ -17,12 +17,12 @@ export function microphoneDisclosure(purpose: ReturnType<typeof microphonePurpos
   if (purpose === "realtime" && config && !validateRealtime(config)) {
     const provider = config.provider.replaceAll(config.credential, "[redacted]").slice(0, 160);
     return { enabled: true, destination: `${provider} · ${audioDestination(config)}`,
-      description: "Realtime Chat is separate from local dictation. After you return and press Start voice, microphone audio leaves this computer for the configured provider and its negotiated media servers. Granting permission here sends no audio to that provider and does not start a connection.",
+      description: "Live Voice is separate from local dictation. After you return and press Start voice, microphone audio leaves this computer for the configured provider and its negotiated media servers. Granting permission here sends no audio to that provider and does not start a connection.",
       next: "Return to Enki and press Start voice. No voice session has started.",
     };
   }
   return { enabled: false, destination: "Microphone off",
-    description: purpose === "realtime" && config ? realtimeCapability(config.protocol).reason ?? "Realtime Chat isn’t configured. Return to Enki and review Settings." : "No usable microphone route is configured. Return to Enki and review Settings.",
+    description: purpose === "realtime" && config ? realtimeCapability(config.protocol).reason ?? "Live Voice isn’t configured. Return to Enki and review Settings." : "No usable microphone route is configured. Return to Enki and review Settings.",
     next: "Return to Enki and review Settings. No microphone or provider connection has started.",
   };
 }

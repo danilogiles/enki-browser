@@ -26,11 +26,11 @@ export function realtimeCapability(protocol: string | undefined): { implemented:
 
 /** Local shape checks only; the explicit connection probe may create a billable session. */
 export function validateRealtime(c: RealtimeConfig | undefined): string | null {
-  if (!c || typeof c !== "object") return "Realtime Chat isn’t configured";
+  if (!c || typeof c !== "object") return "Live Voice isn’t configured";
   const capability = realtimeCapability(c.protocol);
   if (!capability.implemented) return capability.reason!;
   for (const k of ["provider", "endpoint", "model", "transcriptionModel", "voice", "credential"] as const) {
-    if (typeof c[k] !== "string" || !c[k].trim()) return `Enter ${k} in Realtime Chat settings`;
+    if (typeof c[k] !== "string" || !c[k].trim()) return `Enter ${k} in Live Voice settings`;
     if (/[\r\n\x00-\x1f\x7f]/.test(c[k])) return "Configuration must not contain control characters";
   }
   if (c.endpoint.includes(c.credential) || c.endpoint.includes(encodeURIComponent(c.credential))) return "Credential must not appear in the endpoint";

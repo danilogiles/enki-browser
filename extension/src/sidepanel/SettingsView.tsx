@@ -184,7 +184,16 @@ export function SettingsView({ settings, initialSection, onSave, onClose, onRevo
       <SearchEngineControl settings={settings} />
 
       {/* Navigation Tabs */}
-      <div role="tablist" aria-label="Settings sections" className="flex overflow-x-auto border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
+      <div role="tablist" aria-label="Settings sections" onKeyDown={(e) => {
+        const order: TabId[] = ["model", "live", "appearance", "behavior", "connections"];
+        const i = order.indexOf(activeTab);
+        const next = e.key === "ArrowRight" ? order[(i + 1) % order.length] : e.key === "ArrowLeft" ? order[(i - 1 + order.length) % order.length] : e.key === "Home" ? order[0] : e.key === "End" ? order[order.length - 1] : undefined;
+        if (!next) return;
+        e.preventDefault();
+        const list = e.currentTarget;
+        setActiveTab(next);
+        list.querySelectorAll<HTMLElement>('[role="tab"]')[order.indexOf(next)]?.focus();
+      }} className="flex overflow-x-auto border-b border-ink-700 bg-ink-900/60 px-3 pt-1">
         <TabButton
           active={activeTab === "model"}
           onClick={() => setActiveTab("model")}
@@ -360,9 +369,9 @@ export function SettingsView({ settings, initialSection, onSave, onClose, onRevo
 
         {/* TAB: LIVE VOICE (separate provider, endpoint and key) */}
         {activeTab === "live" && (
-          <Section title="Live Voice">
+          <section role="tabpanel" aria-label="Live Voice" className="space-y-2">
             <RealtimeSettings headingRef={realtimeHeading} catalog={catalog} providerKey={{ baseUrl: draft.baseUrl, key: draft.apiKey }} suggestion={voiceSuggestion} value={draft.realtime} onChange={(v) => set("realtime", v)} />
-          </Section>
+          </section>
         )}
 
         {/* TAB 2: APPEARANCE & THEMES */}
@@ -639,6 +648,7 @@ function TabButton({
       type="button"
       role="tab"
       aria-selected={active}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition ${
         active

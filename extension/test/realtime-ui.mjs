@@ -60,7 +60,17 @@ try {
   await mkdir('test-results', { recursive: true });
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: 'Live Voice', exact: true }).click();
-  await panel.getByRole('heading', { name: 'Realtime Chat', exact: true }).scrollIntoViewIfNeeded();
+  await panel.getByRole('heading', { name: 'Live Voice', exact: true }).scrollIntoViewIfNeeded();
+  await panel.getByRole('tab', { name: 'Live Voice', exact: true }).focus();
+  await panel.keyboard.press('Tab');
+  assert.equal(await panel.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Voice provider');
+  await panel.getByRole('tab', { name: 'Live Voice', exact: true }).focus();
+  await panel.keyboard.press('ArrowLeft');
+  assert.equal(await panel.evaluate(() => document.activeElement?.textContent), 'Model');
+  await panel.keyboard.press('ArrowRight');
+  assert.equal(await panel.evaluate(() => document.activeElement?.textContent), 'Live Voice');
+  assert.equal(await panel.getByLabel('Realtime protocol').evaluate((el) => el.scrollWidth <= el.clientWidth + 1), true);
+  pass('Live Voice heading; Tab from the tab reaches Provider; arrow keys move between tabs; protocol label fits');
   for (const [label, text] of [['Voice provider', 'Test voice provider'], ['Full HTTPS calls endpoint', 'https://voice.example.test/v1/realtime/calls'], ['Realtime model', 'configured-realtime'], ['Transcription model', 'configured-transcription'], ['Output voice', 'configured-voice'], ['Realtime credential', 'test-not-a-real-key']]) await panel.getByLabel(label, { exact: true }).fill(text);
   await panel.getByRole('button', { name: 'Validate configuration (offline)' }).click();
   await panel.getByText(/Configuration valid locally/).waitFor();
