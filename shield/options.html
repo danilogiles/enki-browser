@@ -33,6 +33,16 @@
     .modal .buttons { gap: 10px; }
     .modal .buttons .pill { padding: 10px; }
     .modal .hint { color: var(--muted); font-size: 11.5px; text-align: center; margin: 10px 0 0; }
+    /* Passwords, the one row that can move (post-0.8.15, Ink's 0.8.15-burn-optional). */
+    .list li.mv { align-items: center; margin: 2px -6px; padding: 4px 6px; border-radius: 8px; border: 1px dashed var(--line); }
+    .list.del li.mv { border: 1px solid rgba(232, 89, 12, .55); background: rgba(232, 89, 12, .1); color: var(--text); }
+    .list.keep li.mv { border-color: rgba(56, 189, 248, .45); }
+    .mvbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font: 600 11.5px ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; border-radius: 999px; padding: 2px 9px; background: none; cursor: pointer; }
+    .list.keep .mvbtn { color: #f08c4a; border: 1px solid rgba(232, 89, 12, .55); }
+    .list.del .mvbtn { color: var(--accent); border: 1px solid rgba(56, 189, 248, .45); }
+    .mvbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .mvnote { color: var(--muted); font-size: 11.5px; margin: -8px 0 16px; text-align: center; }
+    .mvnote b { color: var(--text); }
     kbd { font: 11px ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
   </style>
 </head>
@@ -96,11 +106,13 @@
   <p class="note links"><a href="https://github.com/danilogiles/enki-browser/blob/main/TERMS.md" target="_blank" data-i18n="terms">Terms</a> · <a href="https://github.com/danilogiles/enki-browser/blob/main/PRIVACY.md" target="_blank" data-i18n="privacy">Privacy</a></p>
   <!-- Burn cannot be undone, so it asks first, here and in the Shields panel (popup.html). The
        lists match burn.js: browsingData deletes websites' data only, so extensions' storage
-       (Enki's chats, settings and API keys; these Shields settings) is kept. -->
+       (Enki's chats, settings and API keys; these Shields settings) is kept; Enki's Allowed
+       sites are wiped (#114); Passwords only when moved to Deletes for this burn. -->
   <div id="burn-confirm" class="scrim" hidden>
-    <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="burn-title" aria-describedby="burn-text">
+    <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="burn-title" aria-describedby="burn-question">
       <div class="m-head"><span class="m-ico" aria-hidden="true">🔥</span><h2 id="burn-title" class="m-title" style="color:var(--text);text-transform:none;letter-spacing:0" data-i18n="burnAskPlain">Burn everything now?</h2></div>
       <p id="burn-text" class="m-sub"><span data-i18n="burnTextLead">Every tab closes and this browsing data is deleted. </span><strong data-i18n="cannotUndo">This cannot be undone.</strong></p>
+      <p id="burn-question" hidden></p>
       <div class="lists">
         <div class="list del">
           <h3 data-i18n="deletes">Deletes</h3>
@@ -111,20 +123,22 @@
             <li><i aria-hidden="true">✕</i><span data-i18n="dCache">Cache</span></li>
             <li><i aria-hidden="true">✕</i><span data-i18n="dDownloads">Download history</span></li>
             <li><i aria-hidden="true">✕</i><span data-i18n="dAutofill">Autofill (saved addresses &amp; cards)</span></li>
+            <li><i aria-hidden="true">✕</i><span data-i18n="dAllowed">Enki Allowed sites</span></li>
           </ul>
         </div>
         <div class="list keep">
           <h3 data-i18n="kept">Kept</h3>
           <ul>
-            <li><i aria-hidden="true">✓</i><span data-i18n="kPasswords">Passwords</span></li>
+            <li id="burn-pw" class="mv"><i aria-hidden="true">✓</i><span data-i18n="kPasswords">Passwords</span><button id="burn-pw-move" type="button" class="mvbtn" aria-label="Move Passwords to Deletes">Delete →</button></li>
             <li><i aria-hidden="true">✓</i><span data-i18n="kBookmarks">Bookmarks</span></li>
             <li><i aria-hidden="true">✓</i><span data-i18n="kEnki">Enki chats, settings, and API keys</span></li>
             <li><i aria-hidden="true">✓</i><span data-i18n="kShields">Shields settings</span></li>
           </ul>
         </div>
       </div>
-      <!-- Later (Spark, after 0.8.4): an "Also delete Enki chats" checkbox goes here, unchecked by
-           default; checked, it moves "Enki chats" from Kept to Deletes. Not in this version. -->
+      <!-- Only Passwords moves (burn-passwords.js); the other rows are fixed. Later (Spark): an
+           "Also delete Enki chats" choice, off by default. Not in this version. -->
+      <p id="burn-pw-note" class="mvnote"></p>
       <div class="buttons">
         <button id="burn-cancel" type="button" class="pill quiet" data-i18n="cancel">Cancel</button>
         <button id="burn-go" type="button" class="pill fire" data-i18n="burn">Burn</button>

@@ -69,14 +69,20 @@
       <button id="burn" class="pill fire" title="Close every tab and delete history, cookies, site data and cache" data-i18n-title="burnTitleAttr" data-i18n="burnBtn">🔥 Burn all data</button>
     </div>
     <!-- Burn and Shred ask here first, Cancel focused. Burn's lists match burn.js and Shields'
-         settings page (options.html): browsingData keeps extensions' storage. -->
+         settings page (options.html): browsingData keeps extensions' storage; Enki's Allowed sites
+         are wiped (#114); Passwords only when moved to Deletes for this burn. -->
     <div id="burn-confirm" class="confirm" role="alertdialog" aria-labelledby="burn-title" aria-describedby="burn-text" hidden>
       <div id="burn-title" class="confirm-title" data-i18n="burnAsk">🔥 Burn everything now?</div>
       <p id="burn-text" class="confirm-sub"></p>
       <div id="burn-lists">
-        <div class="confirm-list del"><h3 data-i18n="deletesHead">✕ Deletes</h3><p data-i18n="deletesList">History, cookies and site data, cache, download history, autofill (saved addresses &amp; cards)</p></div>
-        <div class="confirm-list keep"><h3 data-i18n="keptHead">✓ Kept</h3><p data-i18n="keptList">Passwords, bookmarks, and Enki chats, settings, and API keys. Shields settings too.</p></div>
-        <!-- Later (Spark, after 0.8.4): "Also delete Enki chats", unchecked by default. -->
+        <div class="confirm-list del"><h3 data-i18n="deletesHead">✕ Deletes</h3><p data-i18n="deletesListAllowed">History, cookies and site data, cache, download history, autofill (saved addresses &amp; cards), Enki Allowed sites</p></div>
+        <div class="confirm-list keep"><h3 data-i18n="keptHead">✓ Kept</h3>
+          <div id="burn-pw" class="mvrow"><i aria-hidden="true">✓</i><span data-i18n="kPasswords">Passwords</span><button id="burn-pw-move" type="button" class="mvbtn" aria-label="Move Passwords to Deletes">Delete →</button></div>
+          <p data-i18n="keptListRest">Bookmarks, and Enki chats, settings, and API keys. Shields settings too.</p>
+        </div>
+        <p id="burn-pw-note" class="mvnote"></p>
+        <p id="burn-question" hidden></p>
+        <!-- Only Passwords moves (burn-passwords.js). Later (Spark): "Also delete Enki chats", off by default. -->
       </div>
       <div class="buttons">
         <button id="burn-cancel" type="button" class="pill quiet" data-i18n="cancel">Cancel</button>

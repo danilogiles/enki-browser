@@ -53,6 +53,15 @@ select { background: var(--card); color: var(--text); border: 1px solid var(--li
 .confirm-list.keep h3 { color: var(--accent); }
 .confirm .confirm-list p { font-size: 12.5px; margin: 0; }
 .confirm .buttons { margin-top: 12px; }
+/* Passwords, the one row that can move (post-0.8.15, Ink's 0.8.15-burn-optional). */
+.mvrow { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, .45); font-size: 12.5px; }
+.mvrow i { font-style: normal; color: var(--accent); }
+.mvbtn { margin-left: auto; font: 600 11px ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; border-radius: 999px; padding: 1px 8px; background: none; cursor: pointer; color: #f08c4a; border: 1px solid rgba(232, 89, 12, .55); }
+.mvbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.confirm-list.del .mvrow { margin: 6px 0 2px; border-color: rgba(232, 89, 12, .55); background: rgba(232, 89, 12, .1); color: var(--text); }
+.confirm-list.del .mvrow .mvbtn { color: var(--accent); border-color: rgba(56, 189, 248, .45); }
+.confirm .mvnote { color: var(--muted); font-size: 11px; text-align: center; margin: 2px 0 0; }
+.mvnote b { color: var(--text); }
 .confirm .confirm-hint { color: var(--muted); font-size: 11px; text-align: center; margin: 8px 0 0; }
 .burn.dim { opacity: .45; }
 /* Cancel is the default: it shows it has the focus even after a mouse click opened the question. */

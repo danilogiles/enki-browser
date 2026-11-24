@@ -225,7 +225,8 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
   {
     // Act never reaches a browser-internal page: not Enki Shields' settings (Burn all data), not its
     // panel, not chrome://. Every tool that acts on the page is refused before the content script,
-    // scripting or the debugger is touched, so nothing on the page can be clicked or pressed.
+    // scripting or the debugger is touched, so nothing on the page can be clicked or pressed:
+    // not Burn, and not the "Delete →" arrow that moves Passwords to Deletes (post-0.8.15).
     const { BrowserExecutor, isRestrictedUrl } = require('../src/lib/tools/executor.ts');
     const realChrome = global.chrome;
     const touched = [];
@@ -257,9 +258,12 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
       const ex = new BrowserExecutor(1);
       const tries = [
         { name: 'click', input: { x: 120, y: 80 } },
-        { name: 'click', input: { ref: 'ref_1' } },
+        { name: 'click', input: { ref: 'ref_1' } }, // Burn
+        { name: 'click', input: { ref: 'ref_2' } }, // the Passwords "Delete →" arrow
         { name: 'press_key', input: { key: 'Enter' } },
         { name: 'press_key', input: { key: 'Tab' } },
+        { name: 'press_key', input: { key: 'Shift+Tab' } }, // Cancel → the arrow
+        { name: 'press_key', input: { key: 'space' } },
         { name: 'type', input: { text: 'x', submit: true } },
         { name: 'scroll', input: { direction: 'down' } },
         { name: 'read_page', input: {} },
@@ -279,7 +283,7 @@ check('legacy ?q= in Incognito goes straight to DuckDuckGo, before render or sto
     }
     assert.ok(isRestrictedUrl('chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html'));
     global.chrome = realChrome;
-    checks++; console.log('PASS', "Act cannot click, type, press keys on or navigate to Shields' settings, its panel or chrome:// pages");
+    checks++; console.log('PASS', "Act cannot click, type, press keys on or navigate to Shields' settings, its panel or chrome:// pages (Burn, Delete →)");
   }
   {
     // Empty new_tab opens the browser new-tab page, never a search engine.

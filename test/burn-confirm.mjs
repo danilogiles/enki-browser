@@ -4,6 +4,10 @@
 // on another extension's pages (Enki's own executor refuses first: extension/test/unit.cjs).
 // Loads shield/ from this checkout into Chromium with a throwaway profile and uses it the way a
 // person would: clicks, and keys on whatever has the focus.
+// Post-0.8.15 (Ink's 0.8.15-burn-optional): Passwords is the one row that can move to Deletes,
+// with its "Delete →" / "← Keep" arrow; off on every open, Cancel keeps the focus after a move,
+// and Burn then deletes saved passwords too (browsingData's passwords). Act cannot press the
+// arrow either.
 //
 //   xvfb-run -a node test/burn-confirm.mjs        Playwright's Chromium (npx playwright install chromium)
 //   ENKI_LINUX_DIR=… xvfb-run -a node test/…      an installed Enki Browser's own Chromium
@@ -28,17 +32,28 @@ const executablePath = process.env.ENKI_CHROMIUM ?? (enkiChrome && existsSync(en
 const SETTINGS_COPY = {
   title: "Burn everything now?",
   sub: "Every tab closes and this browsing data is deleted. This cannot be undone.",
-  deletes: ["Every open tab (closed)", "History", "Cookies and site data", "Cache", "Download history", "Autofill (saved addresses & cards)"],
+  deletes: ["Every open tab (closed)", "History", "Cookies and site data", "Cache", "Download history", "Autofill (saved addresses & cards)", "Enki Allowed sites"],
   kept: ["Passwords", "Bookmarks", "Enki chats, settings, and API keys", "Shields settings"],
   hint: "Enter or Esc cancels",
 };
 const PANEL_COPY = {
   title: "🔥 Burn everything now?",
   sub: "Every tab closes. This cannot be undone.",
-  deletes: "History, cookies and site data, cache, download history, autofill (saved addresses & cards)",
-  kept: "Passwords, bookmarks, and Enki chats, settings, and API keys. Shields settings too.",
+  deletes: "History, cookies and site data, cache, download history, autofill (saved addresses & cards), Enki Allowed sites",
+  kept: "Bookmarks, and Enki chats, settings, and API keys. Shields settings too.",
   hint: "Enter cancels",
 };
+
+// Passwords, the one movable row (Ink's 0.8.15-burn-optional).
+const PW = {
+  off: { where: "keep", icon: "✓", button: "Delete →", aria: "Move Passwords to Deletes" },
+  on: { where: "del", icon: "🔥", button: "← Keep", aria: "Keep Passwords", note: "Passwords will be deleted in this burn. ← Keep moves them back." },
+  noteOff: "Only Passwords can move — off by default, this burn only.",
+  noteOffPanel: "Only Passwords can move — this burn only.",
+  question: "Close every tab and delete history, cookies and site data, cache, download history, autofill (saved addresses and cards), and Enki Allowed sites? Kept: passwords, bookmarks, and Enki chats, settings, and API keys, plus Shields settings. This cannot be undone.",
+  questionOn: "Close every tab and delete history, cookies and site data, cache, download history, autofill (saved addresses and cards), Enki Allowed sites, and saved passwords? Kept: bookmarks, Enki chats, settings, and API keys, plus Shields settings. This cannot be undone.",
+};
+const pwIs = (pw, want, note, question) => pw.where === want.where && pw.icon === want.icon && pw.button === want.button && pw.aria === want.aria && pw.note === note && pw.question === question;
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -106,24 +121,40 @@ try {
     window.__confirms = [];
     window.confirm = (text) => { window.__confirms.push(String(text)); return true; };
     window.__sent = [];
+    window.__msgs = [];
     const send = chrome.runtime.sendMessage.bind(chrome.runtime);
-    chrome.runtime.sendMessage = (...args) => { window.__sent.push(args.find((a) => a && typeof a === "object")?.type ?? null); return send(...args); };
+    chrome.runtime.sendMessage = (...args) => { const m = args.find((a) => a && typeof a === "object"); window.__msgs.push(m); window.__sent.push(m?.type ?? null); return send(...args); };
   });
   const state = (page) => page.evaluate(() => {
     const box = document.getElementById("burn-confirm");
-    const t = (sel) => [...box.querySelectorAll(sel)].map((el) => el.textContent.replace(/\s+/g, " ").trim());
+    // Row text without the arrow button, the way it reads.
+    const text = (el) => { const c = el.cloneNode(true); c.querySelectorAll("button").forEach((b) => b.remove()); return c.textContent.replace(/\s+/g, " ").trim(); };
+    const t = (sel) => [...box.querySelectorAll(sel)].map(text);
+    const row = document.getElementById("burn-pw");
+    const btn = document.getElementById("burn-pw-move");
     return {
       shown: !box.hidden && getComputedStyle(box).display !== "none",
       focused: document.activeElement?.id ?? null,
       title: document.getElementById("burn-title").textContent.trim(),
       sub: document.getElementById("burn-text").textContent.replace(/\s+/g, " ").trim(),
-      deletes: t(".del li").length ? t(".del li").map((s) => s.replace(/^✕/, "")) : t(".del p")[0],
+      deletes: t(".del li").length ? t(".del li").map((s) => s.replace(/^(✕|🔥)/, "")) : t(".del p")[0],
       kept: t(".keep li").length ? t(".keep li").map((s) => s.replace(/^✓/, "")) : t(".keep p")[0],
+      pw: {
+        where: row.closest(".del") ? "del" : row.closest(".keep") ? "keep" : null,
+        first: row.parentElement.querySelector(":scope > li, :scope > .mvrow") === row,
+        last: row.parentElement.lastElementChild === row,
+        icon: row.querySelector("i").textContent,
+        button: btn.textContent, aria: btn.getAttribute("aria-label"), type: btn.type,
+        note: document.getElementById("burn-pw-note").textContent.replace(/\s+/g, " ").trim(),
+        question: document.getElementById("burn-question").textContent,
+        described: box.querySelector("[aria-describedby]")?.getAttribute("aria-describedby") ?? box.getAttribute("aria-describedby"),
+      },
       hint: t(".hint, .confirm-hint")[0],
       go: document.getElementById("burn-go").textContent,
       checkbox: !!box.querySelector("input[type=checkbox]"),
       confirms: window.__confirms.length,
       burns: window.__sent.filter((x) => x === "shields:burn" || x === "shields:shred").length,
+      msgs: window.__msgs,
     };
   });
   const tabsOpen = async () => ctx.pages().filter((p) => !p.isClosed()).length;
@@ -150,6 +181,44 @@ try {
   const inert = await options.evaluate(() => ({ behind: [...document.body.children].filter((el) => el.id !== "burn-confirm" && el.tagName !== "SCRIPT").every((el) => el.inert), modal: !document.getElementById("burn-confirm").inert }));
   check("settings: the page behind the question cannot be reached", inert.behind && inert.modal, JSON.stringify(inert));
   check("settings: nothing burns while it asks", s.burns === 0 && await siteIntact());
+  check("settings: Passwords opens under Kept (first), with a Delete → arrow", pwIs(s.pw, PW.off, PW.noteOff, PW.question) && s.pw.first && s.pw.type === "button" && s.pw.described === "burn-question", JSON.stringify(s.pw));
+
+  // Keyboard: Shift+Tab from Cancel reaches the arrow; Enter on it moves Passwords, focus back on Cancel.
+  await options.keyboard.press("Shift+Tab");
+  s = await state(options);
+  check("settings: the arrow is reachable by keyboard", s.focused === "burn-pw-move", `focused: ${s.focused}`);
+  await options.keyboard.press("Enter");
+  await pause(200);
+  s = await state(options);
+  check("settings: Delete → moves Passwords to Deletes (last), Cancel keeps the focus", s.shown && pwIs(s.pw, PW.on, PW.on.note, PW.questionOn) && s.pw.last && s.focused === "burn-cancel" && s.deletes.at(-1) === "Passwords" && !s.kept.includes("Passwords"), JSON.stringify({ pw: s.pw, focused: s.focused, deletes: s.deletes }));
+  check("settings: moving Passwords burns nothing", s.burns === 0 && await siteIntact());
+  await options.keyboard.press("Enter");
+  await pause(400);
+  s = await state(options);
+  check("settings: with Passwords moved, Enter still cancels (no burn)", !s.shown && s.burns === 0 && await siteIntact(), `focused: ${s.focused}`);
+  await options.click("#burn-now");
+  await pause(200);
+  s = await state(options);
+  check("settings: the next confirm opens with Passwords kept again (not remembered)", s.shown && pwIs(s.pw, PW.off, PW.noteOff, PW.question) && s.focused === "burn-cancel" && same(s.kept, SETTINGS_COPY.kept), JSON.stringify(s.pw));
+  await options.click("#burn-pw-move");
+  await pause(150);
+  s = await state(options);
+  const movedByClick = s.pw.where === "del" && s.focused === "burn-cancel";
+  await options.click("#burn-pw-move");
+  await pause(150);
+  s = await state(options);
+  check("settings: clicks move it there and back (← Keep), Cancel focused each time", movedByClick && pwIs(s.pw, PW.off, PW.noteOff, PW.question) && s.focused === "burn-cancel", JSON.stringify({ movedByClick, pw: s.pw, focused: s.focused }));
+  await options.click("#burn-pw-move");
+  await options.evaluate(() => document.getElementById("burn-go").click()); // a script, not a person
+  await pause(400);
+  s = await state(options);
+  check("settings: a script's click on Burn burns nothing", s.shown && s.burns === 0 && await siteIntact(), JSON.stringify({ shown: s.shown, burns: s.burns }));
+  await options.keyboard.press("Escape");
+  await pause(300);
+  await options.click("#burn-now");
+  await pause(200);
+  s = await state(options);
+  check("settings: Esc after moving cancels, and the next open is reset", s.shown && s.pw.where === "keep" && s.burns === 0 && await siteIntact(), JSON.stringify(s.pw));
 
   await options.keyboard.press("Enter");
   await pause(400);
@@ -184,6 +253,21 @@ try {
   check("panel: the question says exactly what goes and what stays",
     p.title === PANEL_COPY.title && p.sub === PANEL_COPY.sub && p.deletes === PANEL_COPY.deletes && p.kept === PANEL_COPY.kept && p.hint === PANEL_COPY.hint && !p.checkbox,
     JSON.stringify({ title: p.title, sub: p.sub, deletes: p.deletes, kept: p.kept, hint: p.hint }));
+  check("panel: Passwords has its own row under Kept, with a Delete → arrow", pwIs(p.pw, PW.off, PW.noteOffPanel, PW.question) && p.pw.first && p.pw.described === "burn-question", JSON.stringify(p.pw));
+  await panel.keyboard.press("Shift+Tab");
+  const reach = (await state(panel)).focused;
+  await panel.keyboard.press("Enter");
+  await pause(200);
+  p = await state(panel);
+  check("panel: Delete → (by keyboard) moves Passwords to Deletes, Cancel keeps the focus", reach === "burn-pw-move" && pwIs(p.pw, PW.on, PW.on.note, PW.questionOn) && p.pw.last && p.focused === "burn-cancel" && p.burns === 0, JSON.stringify({ reach, pw: p.pw, focused: p.focused }));
+  await panel.keyboard.press("Enter");
+  await pause(300);
+  p = await state(panel);
+  check("panel: with Passwords moved, Enter still cancels (no burn)", !p.shown && p.burns === 0 && await siteIntact());
+  await panel.click("#burn");
+  await pause(200);
+  p = await state(panel);
+  check("panel: the next confirm opens with Passwords kept again", p.shown && pwIs(p.pw, PW.off, PW.noteOffPanel, PW.question) && p.focused === "burn-cancel", JSON.stringify(p.pw));
   await panel.keyboard.press("Enter");
   await pause(300);
   p = await state(panel);
@@ -198,14 +282,15 @@ try {
   await pause(300);
   p = await state(panel);
   const shredLists = await panel.evaluate(() => document.getElementById("burn-lists").hidden && document.getElementById("burn-title").hidden);
-  check("panel: Shred asks first, with Cancel focused (and without Burn's lists)", p.shown && p.go === "Shred" && p.focused === "burn-cancel" && shredLists, `focused: ${p.focused} · ${p.sub}`);
+  check("panel: Shred asks first, with Cancel focused (and without Burn's lists)", p.shown && p.go === "Shred" && p.focused === "burn-cancel" && shredLists && p.pw.where === "keep" && p.pw.described === "burn-text", `focused: ${p.focused} · ${p.sub}`);
   await panel.click("#burn-cancel");
   await pause(300);
   p = await state(panel);
   check("panel: Cancel shreds nothing", !p.shown && p.burns === 0 && await siteIntact());
 
-  // ---- Act cannot press it: with the question open in the settings and the panel, an extension
-  // with Act's permissions can neither drive the page (debugger) nor run code in it (scripting).
+  // ---- Act cannot press it, nor the Delete → arrow: with the question open in the settings and
+  // the panel, an extension with Act's permissions can neither drive the page (debugger) nor run
+  // code in it (scripting).
   await options.click("#burn-now");
   await panel.click("#burn");
   await pause(300);
@@ -218,14 +303,16 @@ try {
       let attached = "attached";
       try {
         await chrome.debugger.attach({ tabId }, "1.3");
-        // Were it allowed: Enter on the focused button, then a click where Burn would be.
+        // Were it allowed: Shift+Tab to the arrow and Enter (Passwords to Deletes), Tab to Burn, Enter.
+        await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, modifiers: 8 });
+        await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
         await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
         await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
         await chrome.debugger.detach({ tabId }).catch(() => {});
       } catch (e) { attached = `refused: ${e?.message ?? e}`; }
       let scripted = "ran";
       try {
-        await chrome.scripting.executeScript({ target: { tabId }, func: () => document.getElementById("burn-go")?.click() });
+        await chrome.scripting.executeScript({ target: { tabId }, func: () => { document.getElementById("burn-pw-move")?.click(); document.getElementById("burn-go")?.click(); } });
       } catch (e) { scripted = `refused: ${e?.message ?? e}`; }
       out[name] = { url: tab.url, attached, scripted };
     }
@@ -236,10 +323,22 @@ try {
   check("Act's permissions cannot drive or script Shields' settings or panel", actRefused, JSON.stringify(tries));
   s = await state(options);
   check("…and nothing burned", s.burns === 0 && await siteIntact() && !options.isClosed());
+  const panelAfterAct = await state(panel);
+  check("…and Passwords did not move (settings or panel)", s.pw.where === "keep" && panelAfterAct.pw.where === "keep" && s.focused === "burn-cancel", JSON.stringify({ settings: s.pw.where, panel: panelAfterAct.pw.where, focused: s.focused }));
   await panel.click("#burn-cancel");
   await panel.close();
 
-  // ---- Settings: Burn, confirmed, burns.
+  // ---- Settings: Passwords moved, then Burn, confirmed, burns, passwords included. Shield's
+  // worker records what browsingData is asked to delete.
+  await workers.shield.evaluate(() => {
+    self.__sets = [];
+    const remove = chrome.browsingData.remove.bind(chrome.browsingData);
+    chrome.browsingData.remove = (o, set) => { self.__sets.push({ all: !o.origins, passwords: set.passwords === true }); return remove(o, set); };
+  });
+  await options.click("#burn-pw-move");
+  await pause(150);
+  s = await state(options);
+  check("settings: Burn is still not the default after moving Passwords", s.focused === "burn-cancel" && s.pw.where === "del", `focused: ${s.focused}`);
   await options.click("#burn-go");
   // Burn closes every tab (this page too) and leaves one new tab, then deletes the data.
   const allTabs = () => workers.act.evaluate(async () => (await chrome.tabs.query({})).map((t) => t.pendingUrl || t.url));
@@ -254,6 +353,8 @@ try {
   server.once("request", (req) => { sentCookie = req.headers.cookie ?? ""; });
   await after.goto(site);
   const burned = await after.evaluate(() => localStorage.getItem("burn-test"));
+  const sets = await workers.shield.evaluate(() => self.__sets);
+  check("settings: Burn with Passwords moved asks browsingData to delete passwords too (once)", sets.length === 1 && sets[0].all && sets[0].passwords === true, JSON.stringify(sets));
   check("settings: Burn, confirmed, deletes the site's cookies and storage", burned === null && sentCookie === "", JSON.stringify({ storage: burned, cookieSent: sentCookie }));
   exitCode = results.every((r) => r.ok) ? 0 : 1;
 } catch (e) {

@@ -6,6 +6,7 @@ import { defaultStatus, openDefaultApps } from "./default-browser.js";
 import { showWidevine } from "./widevine.js";
 import { GPC, gpcOn } from "./gpc.js";
 import { renderNotices, renderSettings } from "./webstore-ui.js";
+import { movablePasswords } from "./burn-passwords.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,7 +68,12 @@ const burnConfirm = $("burn-confirm");
 const burnCancel = $("burn-cancel");
 const burnGo = $("burn-go");
 const behind = () => [...document.body.children].filter((el) => el !== burnConfirm && el.tagName !== "SCRIPT");
+const pw = movablePasswords({
+  row: $("burn-pw"), del: burnConfirm.querySelector(".list.del ul"), keep: burnConfirm.querySelector(".list.keep ul"),
+  note: $("burn-pw-note"), question: $("burn-question"), cancel: burnCancel,
+});
 function askBurn(open) {
+  if (open) pw.reset(); // every confirm starts with Passwords kept; the last choice is not reused
   burnConfirm.hidden = !open;
   for (const el of behind()) el.inert = open; // the page behind the modal cannot be reached
   if (open) burnCancel.focus();
@@ -78,11 +84,14 @@ burnCancel.onclick = () => askBurn(false);
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !burnConfirm.hidden && !burnGo.disabled) { e.preventDefault(); askBurn(false); }
 });
-// (An "Also delete Enki chats" choice would be read here and sent with the message; not in 0.8.4.)
-burnGo.onclick = async () => {
+// Only a real click or key press burns (a script's .click() is ignored), with this burn's
+// Passwords choice. (An "Also delete Enki chats" choice is not in this version.)
+burnGo.onclick = async (e) => {
+  if (!e.isTrusted || burnGo.disabled) return;
   burnGo.disabled = burnCancel.disabled = true;
+  pw.lock(true);
   burnGo.textContent = t("burning", "Burning…");
-  await chrome.runtime.sendMessage({ type: "shields:burn" }); // closes every tab, this one too
+  await chrome.runtime.sendMessage({ type: "shields:burn", passwords: pw.passwords() }); // closes every tab, this one too
 };
 
 // Enki Browser: its version, and "Check for updates" (updates.js).
