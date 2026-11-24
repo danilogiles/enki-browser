@@ -271,16 +271,50 @@ static class LauncherTests
 
                 string caps = DefaultBrowser.CapabilitiesKey;
                 bool urls = Value(hive, caps + @"\URLAssociations", "http") == "EnkiURL" && Value(hive, caps + @"\URLAssociations", "https") == "EnkiURL";
-                bool files = new[] { ".htm", ".html", ".shtml", ".xhtml", ".svg", ".webp" }.All(e => Value(hive, caps + @"\FileAssociations", e) == "EnkiHTML")
+                bool files = new[] { ".htm", ".html", ".shtml", ".xhtml" }.All(e => Value(hive, caps + @"\FileAssociations", e) == "EnkiHTML")
                     && Value(hive, caps + @"\FileAssociations", ".pdf") == "EnkiPDF";
+                var images = new[] { ".svg", ".svgz", ".webp", ".png", ".gif", ".jpg", ".jpeg", ".bmp", ".ico", ".avif" };
                 using (var fa = hive.OpenSubKey(caps + @"\FileAssociations"))
-                    files &= fa.GetValueNames().Length == 7;
-                Check("capabilities: http and https, and .htm .html .shtml .xhtml .pdf .svg .webp", urls && files);
+                    files &= fa.GetValueNames().Length == 5 && images.All(e => fa.GetValue(e) == null);
+                Check("capabilities: http and https, and .htm .html .shtml .xhtml .pdf, not images", urls && files);
+                Check("HtmlFiles is web documents only (.xht was never claimed and is not added)",
+                    DefaultBrowser.HtmlFiles.SequenceEqual(new[] { ".htm", ".html", ".shtml", ".xhtml" }));
                 Check("RegisteredApplications names the capabilities", Value(hive, DefaultBrowser.RegisteredApplicationsKey, "EnkiBrowser") == @"Software\Clients\StartMenuInternet\EnkiBrowser\Capabilities");
                 Check("StartMenuInternet\\EnkiBrowser is named Enki Browser", Value(hive, DefaultBrowser.ClientKey, "") == "Enki Browser" && Value(hive, caps, "ApplicationName") == "Enki Browser");
                 Check("EnkiURL is a URL protocol class", Value(hive, @"Software\Classes\EnkiURL", "URL Protocol") == "");
                 Check("\"Open with\" lists Enki Browser for web pages and PDFs",
                     Value(hive, @"Software\Classes\.html\OpenWithProgids", "EnkiHTML") == "" && Value(hive, @"Software\Classes\.pdf\OpenWithProgids", "EnkiPDF") == "");
+                Check("\"Open with\" does not list Enki Browser for SVG or WebP",
+                    Value(hive, @"Software\Classes\.svg\OpenWithProgids", "EnkiHTML") == null && Value(hive, @"Software\Classes\.webp\OpenWithProgids", "EnkiHTML") == null);
+
+                // Leftovers a 0.8.15 install would have left: Enki claimed .svg and .webp, and the
+                // user may also have picked Enki as the SVG default (UserChoice) or have another
+                // app on the Open with list.
+                const string fileExtsSvg = @"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.svg\";
+                Put(hive, caps + @"\FileAssociations", ".svg", "EnkiHTML");
+                Put(hive, caps + @"\FileAssociations", ".webp", "EnkiHTML");
+                Put(hive, @"Software\Classes\.svg\OpenWithProgids", "EnkiHTML", "");
+                Put(hive, @"Software\Classes\.svg\OpenWithProgids", "MSPaint", "");
+                Put(hive, @"Software\Classes\.webp\OpenWithProgids", "EnkiHTML", "");
+                Put(hive, fileExtsSvg + @"OpenWithProgids", "EnkiHTML", "");
+                Put(hive, fileExtsSvg + "UserChoice", "ProgId", "EnkiHTML");
+                Put(hive, fileExtsSvg + @"UserChoiceLatest\ProgId", "ProgId", "EnkiHTML");
+                bool scrubbed = DefaultBrowser.Register(hive, root), scrubbedAgain = DefaultBrowser.Register(hive, root);
+                Check("upgrade drops Enki's leftover SVG and WebP claims, then only reads", scrubbed && !scrubbedAgain);
+                Check("upgrade removes Enki from image FileAssociations and OpenWithProgids",
+                    Value(hive, caps + @"\FileAssociations", ".svg") == null && Value(hive, caps + @"\FileAssociations", ".webp") == null
+                    && Value(hive, @"Software\Classes\.svg\OpenWithProgids", "EnkiHTML") == null
+                    && Value(hive, @"Software\Classes\.webp\OpenWithProgids", "EnkiHTML") == null
+                    && Value(hive, fileExtsSvg + @"OpenWithProgids", "EnkiHTML") == null);
+                Check("upgrade keeps another app's Open with entry and does not touch UserChoice",
+                    Value(hive, @"Software\Classes\.svg\OpenWithProgids", "MSPaint") == ""
+                    && Value(hive, fileExtsSvg + "UserChoice", "ProgId") == "EnkiHTML"
+                    && Value(hive, fileExtsSvg + @"UserChoiceLatest\ProgId", "ProgId") == "EnkiHTML");
+                Check("upgrade leaves HTML, PDF, http and https in place",
+                    Value(hive, caps + @"\FileAssociations", ".html") == "EnkiHTML" && Value(hive, caps + @"\FileAssociations", ".pdf") == "EnkiPDF"
+                    && Value(hive, caps + @"\URLAssociations", "https") == "EnkiURL"
+                    && Value(hive, @"Software\Classes\.html\OpenWithProgids", "EnkiHTML") == "");
+
                 Check("registered for this install, not another", DefaultBrowser.IsRegistered(hive, root) && !DefaultBrowser.IsRegistered(hive, @"D:\Portable\Enki"));
 
                 const string assoc = @"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\";

@@ -18,6 +18,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import sharp from "sharp";
 import { addExtensions, fetchPinned, hash, out, pkg, rebrand, replaceLogos, root, run, step, upstream, versionInfo, writeDefaults } from "./common.mjs";
+import { scrubMacInfoPlist } from "./scrub-mac-document-types.mjs";
 
 if (process.platform !== "darwin") throw new Error("build-mac.mjs builds the macOS edition and runs on macOS (CI, or a Mac).");
 
@@ -114,7 +115,15 @@ for (const d of readdirSync(path.join(contents, "Resources")).filter((d) => d.en
     if (plistHas(strings, key)) { plist(strings, "-replace", key, "-string", NAME); localized++; }
   }
 }
-console.log(`  Info.plist: ${NAME}, ${BUNDLE_ID}; ${localized} localized names`);
+// Chromium's Info.plist lists Enki as a Viewer for SVG and other images (GIF, JPEG, PNG, WebP,
+// AVIF). Drop those document types so Finder does not offer Enki as an opener or show its icon
+// on those files. HTTP(S), HTML, XHTML and PDF stay. Must run before signing.
+// Only CFBundleDocumentTypes is rewritten (plutil -extract / -replace -json), so the rest of the
+// plist keeps its types.
+const infoDocs = { CFBundleDocumentTypes: JSON.parse(execFileSync("plutil", ["-extract", "CFBundleDocumentTypes", "json", "-o", "-", infoPlist]).toString()) };
+const scrub = scrubMacInfoPlist(infoDocs);
+plist(infoPlist, "-replace", "CFBundleDocumentTypes", "-json", JSON.stringify(infoDocs.CFBundleDocumentTypes));
+console.log(`  Info.plist: ${NAME}, ${BUNDLE_ID}; ${localized} localized names; dropped ${scrub.removed} image document types, kept ${scrub.kept}`);
 
 step("Launcher and defaults");
 run("clang", ["-O2", "-Wall", "-Werror", "-arch", arch === "arm64" ? "arm64" : "x86_64", "-mmacosx-version-min=12.0",
