@@ -64,7 +64,8 @@ export type ChatRequest = {
 export interface ChatProvider {
   readonly id: string;
   stream(req: ChatRequest): AsyncIterable<StreamEvent>;
-  listModels(): Promise<string[]>;
+  listModels(signal?: AbortSignal): Promise<string[]>;
+  listModelCatalog?(signal?: AbortSignal): Promise<import("./providers/model-catalog").CatalogModel[]>;
 }
 
 export function textOf(parts: Array<{ type: string; text?: string }>): string {

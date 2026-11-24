@@ -17,8 +17,11 @@
   <body>
     <main>
       <h1>Let Enki hear you</h1>
-      <p>Allow the microphone in the prompt above. Your voice is turned into text on this computer; the audio is never sent anywhere.</p>
-      <p id="status">Waiting for your answer…</p>
+      <p id="description">Microphone off. Loading the selected audio route…</p>
+      <p id="destination"></p>
+      <p id="status" role="status">No microphone or provider connection has started.</p>
+      <button id="grant" type="button" disabled>Allow microphone permission</button>
+      <button id="return" type="button">Return to Enki</button>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

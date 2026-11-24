@@ -47,10 +47,24 @@ We believe privacy is a fundamental human right. Enki operates on a **Local-Firs
 - With "Save conversations on this device" on (the default), your chats are kept in `chrome.storage.local` so you can reopen them, **encrypted (AES-256-GCM)** like your keys, list of chats and saved tasks included; screenshots and model reasoning are not saved. Turning the setting off deletes every saved chat.
 
 
-### 2.7 Voice Input
+### 2.7 Dictation Voice Input
 - The microphone button turns speech into text **on your computer**, with OpenAI's Whisper model running inside the browser. The recording is never sent anywhere — not to your AI provider, not to the Enki project — and is discarded once it becomes text, which you can edit before sending.
 - The first time you use it, the model (about 80 MB) is downloaded once from Hugging Face (`huggingface.co`) and kept in the browser's cache; that request carries no audio and nothing about you. The program that runs it ships inside the extension.
 - The browser asks your permission for the microphone once; you can revoke it in the browser's site settings.
+
+### 2.8 Realtime Chat (development implementation)
+- This is separate from local dictation. Selecting Chat does not connect or open the microphone.
+  Explicit **Start voice** streams microphone audio to the separately configured realtime provider
+  and its negotiated WebRTC media servers. The configured endpoint must use HTTPS.
+- Committed transcripts enter the existing Act agent: the existing AI provider receives that text
+  and the page context needed by normal Act tools. The final answer also goes to the voice provider
+  for speech. No full browser-history upload or page-audio capture is added.
+- Mute, Stop and End stop actual microphone tracks, discard buffered audio, close the transport and
+  abort pending actions. No automatic reconnect/provider fallback and no default audio recording.
+- Keys use the same encrypted local storage as AI keys. Saved transcripts follow Save conversations.
+  Voice cannot approve sensitive actions: only the trusted on-screen approval UI can.
+- Authentication/live-audio validation and review remain pending; see [REALTIME.md](./REALTIME.md).
+
 
 ---
 

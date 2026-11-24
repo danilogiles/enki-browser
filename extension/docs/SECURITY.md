@@ -54,6 +54,21 @@ Multilingual keyword heuristics (`buy`, `pay`, `delete`, `send`, `publish`, `che
 
 ---
 
+### Realtime Chat (development; review pending)
+
+The separate [Realtime Chat implementation](./REALTIME.md) requires explicit Start voice after
+showing the selected destination. Selecting Chat and offline configuration validation are inert.
+Only HTTPS GA Realtime WebRTC calls endpoints are accepted; Bearer credentials stay in the
+trusted extension panel and encrypted local storage, never URLs/content scripts/logs. Redirects
+are refused. The remote voice peer receives no browser tools; completed input transcripts enter
+the existing Act loop, preserving untrusted-page fences and password/payment blocks. Voice turns
+force sensitive-action auto-approve off; spoken yes cannot resolve a trusted-UI confirmation.
+Mute/End/Stop close tracks and transport, discard buffers and abort queued actions. Ended peers
+cannot reconnect or replay actions automatically. Already submitted browser commands cannot be undone.
+Microphone speaker identity is not verified; page playback is never approval. No audio is recorded
+by Enki; providers may have their own retention. The final Act answer also goes to the voice provider.
+The microphone permission tab distinguishes realtime egress from local dictation, takes only a purpose identifier in its URL, requests permission only after a click and stops all granted tracks immediately without contacting a provider. NVIDIA selection is explicitly blocked before mic/transport creation until its hosted contract and safe adapter are verified; see [NVIDIA-VOICECHAT.md](./NVIDIA-VOICECHAT.md). Live-account, actual microphone, media playback, packaging, security and visual review remain release gates.
+
 ## 3. AI egress rules (non-negotiable)
 
 1. Page DOM text, accessibility snapshots, and screenshots leave the device **only** when the user starts an **Ask** or **Act** turn (or another feature that has explicit, documented consent).

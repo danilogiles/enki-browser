@@ -618,5 +618,11 @@
   "update_later": {
     "message": "Más tarde",
     "description": "Install in Enki (Ink, strings.json; pending Danilo's approval)."
+  },
+  "testCopy": {
+    "message": "Copia de prueba, actualizaciones desactivadas"
+  },
+  "unavailableHere": {
+    "message": "No disponible en esta copia."
   }
 }

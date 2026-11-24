@@ -17,7 +17,7 @@ Works in Chrome, Edge, Brave, Arc, Vivaldi, Opera and any other Chromium-based b
 - **Unfiltered tone** (developer mode): Enki's own tone rules off, so the model's policy is the only filter. The browser safety rules stay on.
 - **Enki Home** (Enki Browser's new tab): one box to ask or search; answers appear right on the page, and your conversations are listed on the left, as in Comet, to reopen, start anew or delete.
 - **Answer page**: `src/sidepanel/index.html?q=…` answers a question in a full tab, which is how Enki Browser makes Enki its address bar search.
-- **Voice input**: press the microphone and speak instead of typing. Whisper runs on your computer, inside the browser; the audio never leaves it. The model (~80 MB) downloads once from Hugging Face the first time.
+- **Dictation voice input**: press the microphone and speak instead of typing. Whisper runs on your computer, inside the browser; the audio never leaves it. The model (~80 MB) downloads once from Hugging Face the first time. Realtime Chat is a separate, explicitly started audio route; see [protocol, data flows and pending validation](docs/REALTIME.md).
 - **Bring your own model**: Anthropic Claude, OpenAI, Google Gemini, Groq, OpenRouter, Ollama (local), or any OpenAI-compatible endpoint.
 - **Safety first**: sensitive clicks (send, buy, delete, publish...) show a confirmation card before they run. Enki never types passwords or payment details, never solves CAPTCHAs, and treats page text as data, not instructions.
 - **Private**: your API keys, connected-app tokens and saved chats are encrypted (AES-256-GCM) in the browser's local extension storage; a key is sent only to the provider you chose. No backend, no telemetry.

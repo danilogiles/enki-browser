@@ -32,10 +32,14 @@ export class AnthropicProvider implements ChatProvider {
     });
   }
 
-  async listModels(): Promise<string[]> {
+  async listModels(signal?: AbortSignal): Promise<string[]> {
     this.guard();
     const ids: string[] = [];
-    for await (const m of this.client.models.list()) ids.push(m.id);
+    const lifetime = signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
+    for await (const m of this.client.models.list({}, { signal: lifetime, maxRetries: 0 })) {
+      ids.push(m.id);
+      if (ids.length > 50000) throw new Error("Model catalog too large");
+    }
     return ids;
   }
 

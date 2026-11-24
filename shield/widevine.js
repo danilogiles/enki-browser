@@ -7,6 +7,7 @@
 // and Linux have no launcher to ask yet; they get the row with that said.
 
 import { t } from "./i18n.js";
+import { UNAVAILABLE, testCopy } from "./testcopy.js";
 /** Shows the row and wires its buttons. `native` asks the launcher; `restart` restarts the browser. */
 export async function showWidevine($, native, restart) {
   const state = $("widevine-state");
@@ -16,6 +17,7 @@ export async function showWidevine($, native, restart) {
   const render = (s, note) => {
     on.hidden = off.hidden = again.hidden = true;
     consent.hidden = true;
+    if (s && s.unavailable) { state.textContent = t("unavailableHere", UNAVAILABLE); return; } // NativeHost.cs refused
     if (!s) {
       state.textContent = t("wvUnsupported", "Can be turned on in Enki Browser for Windows; macOS and Linux come next.");
       return;
@@ -32,9 +34,10 @@ export async function showWidevine($, native, restart) {
     off.hidden = !s.installed;
   };
 
+  if (await testCopy()) { render({ unavailable: true }); return; } // testcopy.js: buttons stay hidden
   const current = await native({ type: "widevine-status" });
   // An older launcher answers anything it does not know with its update status: no "installed" key.
-  const known = (s) => (s && ("installed" in s || s.error) ? s : null);
+  const known = (s) => (s && ("installed" in s || s.error || s.unavailable) ? s : null);
   render(known(current));
 
   on.onclick = () => { consent.hidden = false; cancel.focus(); };

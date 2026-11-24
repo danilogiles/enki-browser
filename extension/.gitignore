@@ -6,3 +6,6 @@ release/
 .env
 .vite/
 test/.out/
+
+# Realtime browser test evidence is copied explicitly into docs/images when reviewed.
+test-results/

@@ -5,6 +5,8 @@
 // reliably for extensions loaded from the command line, so the item is (re)made whenever the
 // worker starts: removed first, then created, so it never fails as a duplicate.
 
+import { TEST_COPY, testCopy } from "./testcopy.js";
+
 const MENU = { id: "shield-check-updates", title: "Check for updates", contexts: ["action"] };
 const UPDATES_URL = "options.html#check-updates";
 
@@ -16,6 +18,8 @@ let making = null;
 export function makeMenu() {
   making ??= (async () => {
     await call(chrome.contextMenus.remove.bind(chrome.contextMenus), MENU.id); // absent is fine
+    // A test copy (testcopy.js) has no update check; its title says so, and does nothing.
+    if (await testCopy()) { await call(chrome.contextMenus.create.bind(chrome.contextMenus), { ...MENU, title: TEST_COPY, enabled: false }); return; }
     const error = await call(chrome.contextMenus.create.bind(chrome.contextMenus), { ...MENU });
     if (error) console.warn("Shields menu:", error.message);
   })().finally(() => { making = null; });
