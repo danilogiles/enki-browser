@@ -650,8 +650,7 @@ function TabButton({
     <button
       type="button"
       role="tab"
-      aria-label={label}
-      aria-description={beta ? "Beta" : undefined}
+      aria-label={beta ? `${label} (Beta)` : label}
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
@@ -663,7 +662,7 @@ function TabButton({
     >
       {icon}
       {label}
-      {beta && <span aria-hidden="true" className="ml-1 rounded border border-cyan-400/40 px-1 text-[9px] font-semibold uppercase leading-none tracking-wide text-cyan-300/90">Beta</span>}
+      {beta && <span aria-hidden="true" className="enki-beta">Beta</span>}
     </button>
   );
 }
