@@ -205,6 +205,7 @@ export function SettingsView({ settings, initialSection, onSave, onClose, onRevo
           onClick={() => setActiveTab("live")}
           icon={<Mic size={14} />}
           label="Live Voice"
+          beta
         />
         <TabButton
           active={activeTab === "appearance"}
@@ -637,16 +638,20 @@ function TabButton({
   onClick,
   icon,
   label,
+  beta,
 }: {
   active: boolean;
   onClick: () => void;
   icon: ReactNode;
   label: string;
+  beta?: boolean;
 }) {
   return (
     <button
       type="button"
       role="tab"
+      aria-label={label}
+      aria-description={beta ? "Beta" : undefined}
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
@@ -658,6 +663,7 @@ function TabButton({
     >
       {icon}
       {label}
+      {beta && <span aria-hidden="true" className="ml-1 rounded border border-cyan-400/40 px-1 text-[9px] font-semibold uppercase leading-none tracking-wide text-cyan-300/90">Beta</span>}
     </button>
   );
 }

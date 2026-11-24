@@ -66,9 +66,11 @@ try {
   assert.equal(await panel.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Voice provider');
   await panel.getByRole('tab', { name: 'Live Voice', exact: true }).focus();
   await panel.keyboard.press('ArrowLeft');
-  assert.equal(await panel.evaluate(() => document.activeElement?.textContent), 'Model');
+  assert.equal(await panel.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Model');
   await panel.keyboard.press('ArrowRight');
-  assert.equal(await panel.evaluate(() => document.activeElement?.textContent), 'Live Voice');
+  assert.equal(await panel.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Live Voice');
+  assert.equal(await panel.getByRole('tab', { name: 'Live Voice', exact: true }).getAttribute('aria-description'), 'Beta');
+  assert.equal(await panel.getByText(/^Beta\. Optional Live Voice Chat/).count(), 1);
   assert.equal(await panel.getByLabel('Realtime protocol').evaluate((el) => el.scrollWidth <= el.clientWidth + 1), true);
   pass('Live Voice heading; Tab from the tab reaches Provider; arrow keys move between tabs; protocol label fits');
   for (const [label, text] of [['Voice provider', 'Test voice provider'], ['Full HTTPS calls endpoint', 'https://voice.example.test/v1/realtime/calls'], ['Realtime model', 'configured-realtime'], ['Transcription model', 'configured-transcription'], ['Output voice', 'configured-voice'], ['Realtime credential', 'test-not-a-real-key']]) await panel.getByLabel(label, { exact: true }).fill(text);
@@ -110,6 +112,7 @@ try {
   await panel.getByText(/Connection verified; test session closed/).waitFor();
   await panel.getByRole('button', { name: 'Save', exact: true }).click();
   await panel.waitForSelector('textarea');
+  assert.equal(await panel.getByRole('button', { name: 'Live', exact: true }).getAttribute('title'), 'Live voice chat (Beta)');
   await panel.getByRole('button', { name: 'Live', exact: true }).click(); pass('Live mode appears only after a tested, saved voice setup');
   assert.ok(await panel.evaluate(async () => (await chrome.storage.local.get('enki:settings'))['enki:settings'].realtime.credential.startsWith('enc:v1:'))); pass('voice credential encrypted in local storage');
   await panel.getByRole('button', { name: 'Start voice', exact: true }).waitFor();
